@@ -553,7 +553,8 @@ def create_Schematic_ladderFilter_BVDlossy(library: de.Library, library_name: st
 
                 inst = design.add_instance("ads_rflib:GROUND", name="G"+str(xstep), origin=(xpos, ypos), angle=-90.0, ads_annot=False)
                 ypos += 1.0
-                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos_max + max_size_output, y=ypos)])
+                
+                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos + 1.0, y=ypos)])
 
             else:
                 #  Condensador Shunt (Cfini1) seguido de Bobina Serie (lfini2)
