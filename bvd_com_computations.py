@@ -52,7 +52,6 @@ R_SERIE = 0.1
 NR = 40
 
 def create_list_BVD(parametersBVD: dict) -> list[BVD]:
-    """Crea la lista de valores para el bloque BVD a partir de los parámetros leídos."""
     list_BVD: list[BVD] = []
 
     startBVD_type = parametersBVD["typeseriesshunt_ini"]
@@ -71,11 +70,11 @@ def create_list_BVD(parametersBVD: dict) -> list[BVD]:
     cadd_shu = parametersBVD["cadd_shu_vals"]           #float[]
     ladd_ground = parametersBVD["ladd_ground_vals"]     #float[]
 
-    rs = parametersBVD["rs"]
-    rp = parametersBVD["rp"]
-    ql = parametersBVD["ql"]
-    qc = parametersBVD["qc"]
-    qa = parametersBVD["qa"]
+    rs = float(parametersBVD["rs"])
+    rp = float(parametersBVD["rp"])
+    ql = float(parametersBVD["ql"])
+    qc = float(parametersBVD["qc"])
+    qa = float(parametersBVD["qa"])
 
     currentType = startBVD_type
     
@@ -92,8 +91,56 @@ def create_list_BVD(parametersBVD: dict) -> list[BVD]:
 
     return list_BVD
 
+def compute_admitance_BVD(list_BVD: list[BVD], parameters: dict) -> list[BVD]:
+
+    fstart = float(parameters["fstart1"])
+    fstop = float(parameters["fstop1"])
+    npoints = int(parameters["npoints1"])
+
+    f = np.linspace(fstart, fstop, npoints)
+
+    for bvd in list_BVD:
+        z_la = Zl(f, bvd.la)
+        z_cp = Zc(f, bvd.cp)
+        z_ca = Zc(f, bvd.ca)
+        z_ra = 2*np.pi*f*bvd.la/bvd.qa
+
+        z_cadd_shu = Zc(f, bvd.cadd_shu, bvd.qc)
+        z_ladd_shu = Zl(f, bvd.ladd_shu, bvd.ql)
+
+        z_cadd_ser = Zc(f, bvd.cadd_ser, bvd.qc)
+        z_ladd_ser = Zl(f, bvd.ladd_ser, bvd.ql)
+
+        z_ladd_gnd = Zl(f, bvd.ladd_ground, bvd.ql)
+
+        y_core = (1/z_cadd_shu + 1/(bvd.rp + z_cp) + 1/(z_la + z_ca + z_ra) + 1/z_ladd_shu )
+        z_core = 1/y_core
+
+        Z_bvd = bvd.rs + z_core + z_ladd_ser + z_cadd_ser + z_ladd_gnd
+        Y_bvd = np.nan_to_num(1/Z_bvd)
+
+        bvd.Y = Y_bvd
+        bvd.f = f
+
+    return list_BVD
+
+def Zc(f, C, Q=None):
+    if C == 0:
+        return np.full_like(f, np.inf, dtype=complex)
+    jw = 1j * 2 * np.pi * f
+    if Q is None:
+        return 1/(jw*C)
+    return 1 / (jw*C + 1/(2*np.pi*f*C/Q))
+
+def Zl(f, L, Q=None):
+    if L == 0:
+        return np.zeros_like(f, dtype=complex)
+    jw = 1j * 2 * np.pi * f
+    if Q is None:
+        return jw*L
+    return jw*L + 2*np.pi*f*L/Q
+
 def compute_list_COM(list_BVD: list[BVD]) -> list[COM]:
-    """Computa la lista de valores para el bloque COM a partir de los parámetros leídos."""
     list_COM: list[COM] = []
 
     # Aquí se pueden agregar cálculos adicionales para obtener los parámetros necesarios para el bloque COM

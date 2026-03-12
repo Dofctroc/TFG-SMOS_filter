@@ -147,7 +147,7 @@ def create_SchematicAndSymbol_lossyBVD(library: de.Library, library_name: str) -
         inst.update_item_annotation()
 
         inst = design.add_instance("ads_rflib:R", name="R1", origin=(1.0, 2.5))
-        inst.parameters["R"].value = "2*pi*fs*Cadd_ser/qc Ohm"
+        inst.parameters["R"].value = "2*pi*fs*Cadd_shu/qc Ohm"
         inst.update_item_annotation()
 
         inst = design.add_instance("ads_rflib:R", name="R2", origin=(6.0, 1.0))

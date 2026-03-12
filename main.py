@@ -251,16 +251,16 @@ class MainWindow(QMainWindow):
             inp.setStyleSheet("background-color: #f0f0f0; color: #555;")
 
         # Añadimos al layout del formulario
-        self.form_layout_BVD.addRow("C0 (pF):", self.input_c0)
-        self.form_layout_BVD.addRow("Ca (pF):", self.input_ca)
-        self.form_layout_BVD.addRow("La (nH):", self.input_la)
-        self.form_layout_BVD.addRow("fs (GHz):", self.input_fs)
-        self.form_layout_BVD.addRow("fp (GHz):", self.input_fp)
-        self.form_layout_BVD.addRow("Ladd_ser (nH):", self.input_ladd_ser)
-        self.form_layout_BVD.addRow("Ladd_shu (nH):", self.input_ladd_shu)
-        self.form_layout_BVD.addRow("Cadd_ser (pF):", self.input_cadd_ser)
-        self.form_layout_BVD.addRow("Cadd_shu (pF):", self.input_cadd_shu)
-        self.form_layout_BVD.addRow("Ladd_gnd (nH):", self.input_ladd_ground)
+        self.form_layout_BVD.addRow("C0 (F):", self.input_c0)
+        self.form_layout_BVD.addRow("Ca (F):", self.input_ca)
+        self.form_layout_BVD.addRow("La (H):", self.input_la)
+        self.form_layout_BVD.addRow("fs (Hz):", self.input_fs)
+        self.form_layout_BVD.addRow("fp (Hz):", self.input_fp)
+        self.form_layout_BVD.addRow("Ladd_ser (H):", self.input_ladd_ser)
+        self.form_layout_BVD.addRow("Ladd_shu (H):", self.input_ladd_shu)
+        self.form_layout_BVD.addRow("Cadd_ser (F):", self.input_cadd_ser)
+        self.form_layout_BVD.addRow("Cadd_shu (F):", self.input_cadd_shu)
+        self.form_layout_BVD.addRow("Ladd_gnd (H):", self.input_ladd_ground)
 
         # Añadir parámetros generales (rs, rp, ql, qc, qa) al formulario de BVD
         self.form_layout_BVD_general = QFormLayout()
@@ -439,7 +439,7 @@ class MainWindow(QMainWindow):
         idx = self.combo_elemento_graf.currentIndex()
     
         # Verificaciones de seguridad
-        if idx < 0 or not self.list_BVD or not self.list_COM:
+        if idx < 0:
             return
 
         # Decidir qué fuente usar
@@ -492,6 +492,10 @@ class MainWindow(QMainWindow):
 
                 # Crear la lista de BVDs a partir de los parámetros leídos
                 self.list_BVD = mat_bvd_com.create_list_BVD(self.network_parameters)
+                self.list_BVD = mat_bvd_com.compute_admitance_BVD(self.list_BVD, self.network_parameters)
+
+                msg = "\n".join([f"{i}: {v:.4e}" for i, v in enumerate(self.list_BVD[0].Y[:20])])
+                QMessageBox.information(None, "f Values", msg)  
                 
                 # Rellenar los campos de Matching Network y Lossy BVD con los parámetros leídos
                 self.combo_bvd.clear() # Borra el "Archivo no leído"
