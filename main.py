@@ -17,13 +17,14 @@ import fs_utils as fs
 import bvd_com_computations as mat_bvd_com
 
 from PySide6.QtWidgets import (QApplication, QMainWindow, QPushButton, QWidget, QVBoxLayout, QHBoxLayout, 
-                               QLabel, QLineEdit, QMessageBox, QGroupBox, QGridLayout, QScrollArea, QFrame,
+                               QLabel, QLineEdit, QMessageBox, QGroupBox, QSizePolicy, QRadioButton, QButtonGroup,
                                QComboBox, QFormLayout)
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QCursor
 
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 from matplotlib.figure import Figure
 import numpy as np
 
@@ -34,9 +35,9 @@ importlib.reload(mat_bvd_com)
 # ============= VARIABLES GLOBALES ==============
 class MplCanvas(FigureCanvas):
     def __init__(self, parent=None, width=5, height=4, dpi=100):
-        # Creamos la figura de Matplotlib
-        self.fig = Figure(figsize=(width, height), dpi=dpi)
-        self.axes = self.fig.add_subplot(111) # Un solo eje
+        # Usamos layout='constrained' o llamamos a tight_layout()
+        self.fig = Figure(figsize=(width, height), dpi=dpi, layout='constrained')
+        self.axes = self.fig.add_subplot(111)
         super().__init__(self.fig)
 
 # ============= CLASE PRINCIPAL DE LA APLICACIÓN ==============
@@ -134,13 +135,10 @@ class MainWindow(QMainWindow):
         """)
 
         self.layout_grafico = QVBoxLayout(self.bloque_grafico)
-        self.label_graf = QLabel("VISUALIZACIÓN IMPEDANCIA")
-        self.label_graf.setStyleSheet("color: #0f0;") # Verde tipo osciloscopio
-        self.layout_grafico.addWidget(self.label_graf, alignment=Qt.AlignCenter)
-        self.layout_grafico.addStretch()
+        self.setup_graph_panel()
 
         # Añadimos los sub-bloques al panel derecho
-        self.layout_derecha_total.addWidget(self.bloque_com, stretch=1)
+        self.layout_derecha_total.addWidget(self.bloque_com, stretch=0)
         self.layout_derecha_total.addWidget(self.bloque_grafico, stretch=1)
 
         # --- 4. ENSAMBLAJE CUERPO ---
@@ -168,7 +166,12 @@ class MainWindow(QMainWindow):
             combo.setCursor(Qt.PointingHandCursor)
             # Opcional: Esto asegura que la lista desplegable también tenga el cursor
             combo.view().viewport().setCursor(Qt.PointingHandCursor)
-
+        
+        # 2. Buscamos todos los combobox
+        radio_btns = self.findChildren(QRadioButton)
+        for radio_btn in radio_btns:
+            radio_btn.setCursor(Qt.PointingHandCursor)
+            
     def setup_header(self):
         self.barra_superior = QHBoxLayout()
 
@@ -290,7 +293,6 @@ class MainWindow(QMainWindow):
         self.layout_bvd.addLayout(self.form_layout_BVD)
 
         self.layout_bvd.addSpacing(20) # Espacio visual
-        self.layout_bvd.addStretch()
         bvd_general_label=QLabel("Parámetros Resonador:")
         bvd_general_label.setStyleSheet("font-weight: bold; color: darkgray;")
         self.layout_bvd.addWidget(bvd_general_label)
@@ -376,6 +378,109 @@ class MainWindow(QMainWindow):
         self.input_digitsREFL.setText(str(com_seleccionado.NR))
         self.input_alpha.setText(str(com_seleccionado.alpha))
 
+    def setup_graph_panel(self):
+        # Usamos el layout que ya definiste en el __init__
+        # Si no lo definiste allí, asegúrate de que esta línea sea la única que crea el QVBoxLayout
+        if self.bloque_grafico.layout() is None:
+            self.layout_grafico = QVBoxLayout(self.bloque_grafico)
+        else:
+            self.layout_grafico = self.bloque_grafico.layout()
+            
+        self.layout_grafico.setContentsMargins(10, 20, 10, 10)
+        self.layout_grafico.setSpacing(5)
+
+        # --- BARRA DE CONTROL DEL GRÁFICO (Horizontal) ---
+        barra_filtros = QHBoxLayout()
+        
+        # 1. Selector de Elemento
+        label_el = QLabel("Elemento:")
+        label_el.setStyleSheet("font-weight: bold;")
+        self.combo_elemento_graf = QComboBox()
+        self.combo_elemento_graf.addItem("Sin datos")
+        self.combo_elemento_graf.setFixedWidth(120)
+        
+        # 2. Botones de Radio (BVD vs COM)
+        self.radio_bvd = QRadioButton("BVD")
+        self.radio_com = QRadioButton("COM")
+        self.radio_bvd.setChecked(True) # BVD por defecto
+        
+        # Agrupamos los radios para que sean mutuamente excluyentes
+        self.grupo_tipo = QButtonGroup(self)
+        self.grupo_tipo.addButton(self.radio_bvd)
+        self.grupo_tipo.addButton(self.radio_com)
+        self.radio_bvd.setEnabled(False)
+        self.radio_com.setEnabled(False)
+
+        # Montamos la barrita de control
+        barra_filtros.addWidget(label_el)
+        barra_filtros.addWidget(self.combo_elemento_graf)
+        barra_filtros.addSpacing(20)
+        barra_filtros.addWidget(self.radio_bvd)
+        barra_filtros.addWidget(self.radio_com)
+        barra_filtros.addStretch() # Empuja todo a la izquierda
+
+        # 3. Canvas y Toolbar
+        self.canvas = MplCanvas(self, width=5, height=4, dpi=100)
+        self.toolbar = NavigationToolbar(self.canvas, self)
+        # Hacer la toolbar más discreta
+        self.toolbar.setStyleSheet("background-color: transparent; border: none;")
+
+        # --- AÑADIR TODO AL LAYOUT PRINCIPAL DEL BLOQUE ---
+        self.layout_grafico.addLayout(barra_filtros)
+        self.layout_grafico.addWidget(self.canvas)
+        self.layout_grafico.addWidget(self.toolbar)
+
+        # --- CONEXIONES ---
+        self.combo_elemento_graf.currentIndexChanged.connect(self.plot_admitancia)
+        self.radio_bvd.toggled.connect(self.plot_admitancia)
+        self.radio_com.toggled.connect(self.plot_admitancia)
+
+    def plot_admitancia(self):
+        idx = self.combo_elemento_graf.currentIndex()
+    
+        # Verificaciones de seguridad
+        if idx < 0 or not self.list_BVD or not self.list_COM:
+            return
+
+        # Decidir qué fuente usar
+        if self.radio_bvd.isChecked():
+            # Suponiendo que tu clase BVD tiene .Y y .f calculados
+            data = self.list_BVD[idx]
+            color_plot = 'red'
+            label_plot = f"BVD - Elemento {idx+1}"
+        else:
+            data = self.list_COM[idx]
+            color_plot = 'blue'
+            label_plot = f"COM - Elemento {idx+1}"
+
+        # Verificamos que el objeto seleccionado tenga los datos
+        if not hasattr(data, 'Y') or data.Y is None:
+            return
+        if not hasattr(data, 'f') or data.f is None:
+            return
+
+        # CONVERSIÓN A dB
+        # Usamos 20*log10 porque la admitancia es una magnitud de "voltaje/corriente"
+        # Añadimos un pequeño valor (1e-20) para evitar log(0) si hubiera ceros
+        magnitud_Y_dB = 20 * np.log10(np.abs(data.Y) + 1e-20)
+
+        self.canvas.axes.cla()
+        
+        # Ploteamos f (log) vs Y (dB lineal)
+        self.canvas.axes.plot(data.f, magnitud_Y_dB, label=label_plot, color=color_plot)
+        
+        self.canvas.axes.set_title("Respuesta en Frecuencia (Magnitud)")
+        self.canvas.axes.set_xlabel("Frecuencia (Hz)")
+        self.canvas.axes.set_ylabel("Admitancia (dB)")
+        
+        # La escala Y ahora es lineal porque los datos YA están en dB
+        self.canvas.axes.set_yscale('linear') 
+        
+        self.canvas.axes.grid(True, which="both", linestyle='--', alpha=0.5)
+        self.canvas.axes.legend()
+        
+        self.canvas.draw()
+
     def btn_readNetworkFile_clicked(self):
         try:
             file_path = fs.select_file_to_read("Network files (*.ntw)|*.ntw|Text Files (*.txt)|*.txt|All Files (*.*)|*.*")
@@ -383,21 +488,32 @@ class MainWindow(QMainWindow):
                 self.network_file_path = file_path
                 self.label_network_file.setText(f"Selected: {file_path}")
                 self.label_network_file.setStyleSheet("color: green; font-size: 14px;")
-                self.filter_parameters = fs.read_and_parse_file(file_path)
+                self.network_parameters = fs.read_and_parse_file(file_path)
 
                 # Crear la lista de BVDs a partir de los parámetros leídos
-                self.list_BVD = mat_bvd_com.create_list_BVD(self.filter_parameters)
+                self.list_BVD = mat_bvd_com.create_list_BVD(self.network_parameters)
                 
                 # Rellenar los campos de Matching Network y Lossy BVD con los parámetros leídos
                 self.combo_bvd.clear() # Borra el "Archivo no leído"
                 for bvd in self.list_BVD:
                     self.combo_bvd.addItem(bvd.name)
                 
-                self.input_rs.setText(str(self.filter_parameters["rs"]))
-                self.input_rp.setText(str(self.filter_parameters["rp"]))
-                self.input_ql.setText(str(self.filter_parameters["ql"]))
-                self.input_qc.setText(str(self.filter_parameters["qc"]))
-                self.input_qa.setText(str(self.filter_parameters["qa"]))
+                self.input_rs.setText(str(self.network_parameters["rs"]))
+                self.input_rp.setText(str(self.network_parameters["rp"]))
+                self.input_ql.setText(str(self.network_parameters["ql"]))
+                self.input_qc.setText(str(self.network_parameters["qc"]))
+                self.input_qa.setText(str(self.network_parameters["qa"]))
+
+                # Rellenar el combo del gráfico con los elementos disponibles
+                self.combo_elemento_graf.clear() # Borra el "Archivo no leído"
+                idx = 1
+                for bvd in self.list_BVD:
+                    self.combo_elemento_graf.addItem("Elemento " + str(idx))
+                    idx += 1
+
+                # Habilitamos el radio button de COM y ploteamos la primera curva por defecto
+                self.radio_bvd.setEnabled(True)
+                self.plot_admitancia()
 
         except Exception as e:
             error_detallado = traceback.format_exc()
@@ -484,7 +600,7 @@ class MainWindow(QMainWindow):
         # Crear los esquemáticos y los símbolos correspondientes
         try:
             ads.create_SchematicAndSymbol_lossyBVD(lib, library_name)
-            ads.create_Schematic_ladderFilter_BVDlossy(lib, library_name, self.filter_parameters)
+            ads.create_Schematic_ladderFilter_BVDlossy(lib, library_name, self.network_parameters)
             ads.create_SchematicAndSymbol_lossyCOM(lib, library_name)
         except Exception as e:
             error_detallado = traceback.format_exc()
@@ -507,12 +623,15 @@ class MainWindow(QMainWindow):
         else:
             try:
                 self.list_COM = mat_bvd_com.compute_list_COM(self.list_BVD)
-                self.list_COM = mat_bvd_com.compute_admitance_COM(self.list_COM, self.filter_parameters)
-                
+                self.list_COM = mat_bvd_com.compute_admitance_COM(self.list_COM, self.network_parameters)
+
                 # Rellenar los campos de Matching Network y Lossy BVD con los parámetros leídos
                 self.combo_com.clear() # Borra el "Archivo no leído"
                 for com in self.list_COM:
                     self.combo_com.addItem(com.name)
+                    
+                # Habilitamos el radio button de COM
+                self.radio_com.setEnabled(True)
 
             except Exception as e:
                 error_detallado = traceback.format_exc()

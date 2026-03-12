@@ -1,7 +1,8 @@
 import numpy as np
 
 class BVD():
-    def __init__(self, name, c0, cp, ca, la, fs, fp, cadd_shu, ladd_shu, cadd_ser, ladd_ser, ladd_ground, rs, rp, ql, qc, qa, Y=None):
+    def __init__(self, name, c0, cp, ca, la, fs, fp, cadd_shu, ladd_shu, cadd_ser, 
+                 ladd_ser, ladd_ground, rs, rp, ql, qc, qa, Y=None, f=None):
         self.name = name
         self.c0 = c0
         self.cp = cp
@@ -20,9 +21,10 @@ class BVD():
         self.qc = qc
         self.qa = qa
         self.Y = Y
+        self.f = f
 
 class COM():
-    def __init__(self, name, d, Ap, N, NR, alpha, alpha_n, Ct, Y=None):
+    def __init__(self, name, d, Ap, N, NR, alpha, alpha_n, Ct, Y=None, f=None):
         self.name = name
         self.d = d
         self.Ap = Ap
@@ -32,6 +34,7 @@ class COM():
         self.alpha_n = alpha_n
         self.Ct = Ct
         self.Y = Y
+        self.f = f
 
 K11_REAL = -82053.9
 K11 = -82053.9 - 1j*450
@@ -203,5 +206,6 @@ def compute_admitance_COM(list_COM: list[COM], parameters: dict) -> list[COM]:
         Y_com = 1 / Z_com
 
         com.Y = Y_com
+        com.f = f
 
     return list_COM
