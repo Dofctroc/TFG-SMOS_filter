@@ -1,7 +1,8 @@
 import numpy as np
 
 class BVD():
-    def __init__(self, c0, cp, ca, la, fs, fp, cadd_shu, ladd_shu, cadd_ser, ladd_ser, ladd_ground, rs, rp, ql, qc, qa):
+    def __init__(self, name, c0, cp, ca, la, fs, fp, cadd_shu, ladd_shu, cadd_ser, ladd_ser, ladd_ground, rs, rp, ql, qc, qa):
+        self.name = name
         self.c0 = c0
         self.cp = cp
         self.ca = ca
@@ -20,7 +21,8 @@ class BVD():
         self.qa = qa
 
 class COM():
-    def __init__(self, d, Ap, N, NR, alpha, alpha_n, Ct):
+    def __init__(self, name, d, Ap, N, NR, alpha, alpha_n, Ct):
+        self.name = name
         self.d = d
         self.Ap = Ap
         self.N = N
@@ -28,7 +30,6 @@ class COM():
         self.alpha = alpha
         self.alpha_n = alpha_n
         self.Ct = Ct
-
 
 K11_REAL = -82053.9
 K11 = -82053.9 - 1j*450
@@ -49,6 +50,8 @@ def create_list_BVD(parametersBVD: dict) -> list[BVD]:
     """Crea la lista de valores para el bloque BVD a partir de los parámetros leídos."""
     list_BVD: list[BVD] = []
 
+    startBVD_type = parametersBVD["typeseriesshunt_ini"]
+
     c0 = parametersBVD["c0_vals"]       #float[]
     cp = parametersBVD["cp_vals"]       #float[]
     ca = parametersBVD["ca_vals"]       #float[]
@@ -68,13 +71,18 @@ def create_list_BVD(parametersBVD: dict) -> list[BVD]:
     ql = parametersBVD["ql"]
     qc = parametersBVD["qc"]
     qa = parametersBVD["qa"]
+
+    currentType = startBVD_type
     
     for i in range(len(c0)):
-        bvd = BVD(c0=c0[i], cp=cp[i], ca=ca[i], la=la[i], fs=fs[i], fp=fp[i], 
+        name = f"BVD_{currentType}_{i+1}"
+
+        bvd = BVD(name=name, c0=c0[i], cp=cp[i], ca=ca[i], la=la[i], fs=fs[i], fp=fp[i], 
                   ladd_ser=ladd_ser[i], ladd_shu=ladd_shu[i], cadd_ser=cadd_ser[i], 
                   cadd_shu=cadd_shu[i], ladd_ground=ladd_ground[i], 
                   rs=rs, rp=rp, ql=ql, qc=qc, qa=qa)
         
+        currentType = "shunt" if currentType == "series" else "series"
         list_BVD.append(bvd)
 
     return list_BVD
@@ -151,7 +159,8 @@ def compute_list_COM(list_BVD: list[BVD]) -> list[COM]:
         alpha_n = alpha / np.sqrt(Ap)
 
         # Assign all values to the COM block
-        com = COM(d=p, Ap=Ap, N=Nidt, NR=NR, alpha=alpha, alpha_n=alpha_n, Ct=Ct)
+        name = bvd.name.replace("BVD", "COM")
+        com = COM(name=name, d=p, Ap=Ap, N=Nidt, NR=NR, alpha=alpha, alpha_n=alpha_n, Ct=Ct)
         list_COM.append(com)
 
     return list_COM

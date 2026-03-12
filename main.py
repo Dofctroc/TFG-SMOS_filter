@@ -17,7 +17,9 @@ import fs_utils as fs
 import bvd_com_computations as mat_bvd_com
 
 from PySide6.QtWidgets import (QApplication, QMainWindow, QPushButton, QWidget, QVBoxLayout, QHBoxLayout, 
-                               QLabel, QLineEdit, QMessageBox, QGroupBox, QGridLayout, QScrollArea)
+                               QLabel, QLineEdit, QMessageBox, QGroupBox, QGridLayout, QScrollArea, QFrame,
+                               QComboBox, QFormLayout)
+from PySide6.QtCore import Qt
 
 importlib.reload(ads)
 importlib.reload(fs)
@@ -32,199 +34,285 @@ class MainWindow(QMainWindow):
         super().__init__()
 
         self.setWindowTitle("TFG-SMOSfilter")
-        self.setGeometry(100, 100, 900, 700)
+        self.setGeometry(100, 100, 1000, 700)
 
-        # Variables de clase (accesibles entre métodos)
-        self.workspace_path = None
-        self.network_file_path = None
-        self.filter_parameters = None
-
-        self.list_BVD = []
-        self.list_COM = []
-
-        # Crear scroll area para contenido
-        scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(True)
+        # 1. CREAR EL WIDGET CENTRAL (El "lienzo" donde va todo)
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
         
-        main_widget = QWidget()
-        main_layout = QVBoxLayout()
+        # Layout principal de la ventana (Vertical: Barra superior + Cuerpo)
+        layout_principal = QVBoxLayout(central_widget)
 
-        # ============== SECCIÓN 1: LECTURA DE ARCHIVO ==============
-        btn_layout = QHBoxLayout()
+        # --- SECCIÓN: BARRA SUPERIOR (Botones de archivos) ---
+        self.barra_superior = QHBoxLayout()
+        self.btn_archivo = QPushButton("Seleccionar Archivo")
+        self.btn_archivo.clicked.connect(self.btn_readNetworkFile_clicked)
+
+        self.btn_directorio = QPushButton("Seleccionar Directorio")
+        self.btn_directorio.clicked.connect(self.btn_readDirectoy_clicked)
+
+        self.btn_convertir = QPushButton("CONVERTIR")
+        self.btn_convertir.clicked.connect(self.btn_convertBVD2COM_clicked)
+        self.btn_convertir.setStyleSheet("cursor: pointer; background-color: #2c3e50; color: white; font-weight: bold;")
         
-        self.btn_read_network = QPushButton("📁 Read Network File")
-        self.btn_read_network.setStyleSheet("""
-            QPushButton {
-                background-color: #4CAF50;
-                color: white;
-                font-weight: bold;
-                padding: 8px;
-                border-radius: 5px;
-                font-size: 12px;
-            }
-            QPushButton:hover {
-                background-color: #45a049;
-            }
-        """)
-        self.btn_read_network.clicked.connect(self.btn_readNetworkFile_clicked)
-        btn_layout.addWidget(self.btn_read_network)
+        self.barra_superior.addWidget(self.btn_archivo)
+        self.barra_superior.addWidget(self.btn_directorio)
+        self.barra_superior.addStretch() # Empuja el botón convertir a la derecha
+        self.barra_superior.addWidget(self.btn_convertir)
         
-        # Label para mostrar el archivo de network seleccionado
+        layout_principal.addLayout(self.barra_superior)
+
+        # --- SECCIÓN: SUB BARRA SUPERIOR (Botones de archivos) ---
+        self.sub_barra_superior = QVBoxLayout()
         self.label_network_file = QLabel("No file selected")
-        self.label_network_file.setStyleSheet("color: gray; font-size: 10px; margin-left: 10px;")
-        btn_layout.addWidget(self.label_network_file, 1)
-        
-        main_layout.addLayout(btn_layout)
-
-        # ============== SECCIÓN 2: MATCHING NETWORK ==============
-        matching_group = QGroupBox("Matching Network Parameters")
-        matching_group.setStyleSheet("""
-            QGroupBox {
-                border: 2px solid #2196F3;
-                border-radius: 5px;
-                margin-top: 10px;
-                padding-top: 10px;
-                font-weight: bold;
-                color: #2196F3;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 10px;
-                padding: 0 3px 0 3px;
-            }
-        """)
-        matching_layout = QGridLayout()
-        
-        self.matching_inputs = {}
-        matching_params = ["input_l", "lfini1", "lfini2", "cfini1", "cfini2"]
-        
-        for idx, param in enumerate(matching_params):
-            label = QLabel(f"{param}:")
-            label.setStyleSheet("font-weight: bold;")
-            input_field = QLineEdit()
-            input_field.setPlaceholderText(f"Enter {param} value")
-            row = idx // 2
-            col = (idx % 2) * 2
-            matching_layout.addWidget(label, row, col)
-            matching_layout.addWidget(input_field, row, col + 1)
-            self.matching_inputs[param] = input_field
-        
-        matching_group.setLayout(matching_layout)
-        main_layout.addWidget(matching_group)
-
-        # ============== SECCIÓN 3: LOSSY BVD ==============
-        lossy_group = QGroupBox("Lossy BVD Parameters")
-        lossy_group.setStyleSheet("""
-            QGroupBox {
-                border: 2px solid #FF9800;
-                border-radius: 5px;
-                margin-top: 10px;
-                padding-top: 10px;
-                font-weight: bold;
-                color: #FF9800;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 10px;
-                padding: 0 3px 0 3px;
-            }
-        """)
-        lossy_layout = QGridLayout()
-        
-        self.lossy_inputs = {}
-        lossy_params = ["c0", "la", "ca", "rs", "rp", "qa", "ql", "qc",
-                       "cadd_shu", "ladd_shu", "cadd_ser", "ladd_ser", "ladd_ground"]
-        
-        for idx, param in enumerate(lossy_params):
-            label = QLabel(f"{param}:")
-            label.setStyleSheet("font-weight: bold;")
-            input_field = QLineEdit()
-            input_field.setPlaceholderText(f"Enter {param} value")
-            row = idx // 2
-            col = (idx % 2) * 2
-            lossy_layout.addWidget(label, row, col)
-            lossy_layout.addWidget(input_field, row, col + 1)
-            self.lossy_inputs[param] = input_field
-        
-        lossy_group.setLayout(lossy_layout)
-        main_layout.addWidget(lossy_group)
-
-        # ============== SECCIÓN 4: CONTROLES DE WORKSPACE ==============
-        workspace_group = QGroupBox("Workspace Configuration")
-        workspace_group.setStyleSheet("""
-            QGroupBox {
-                border: 2px solid #9C27B0;
-                border-radius: 5px;
-                margin-top: 10px;
-                padding-top: 10px;
-                font-weight: bold;
-                color: #9C27B0;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 10px;
-                padding: 0 3px 0 3px;
-            }
-        """)
-        workspace_layout = QVBoxLayout()
-        
-        # Botón 2: Leer directorio
-        self.btn_read_dir = QPushButton("📂 Read Directory")
-        self.btn_read_dir.setStyleSheet("""
-            QPushButton {
-                background-color: #2196F3;
-                color: white;
-                font-weight: bold;
-                padding: 8px;
-                border-radius: 5px;
-                font-size: 11px;
-            }
-            QPushButton:hover {
-                background-color: #0b7dda;
-            }
-        """)
-        self.btn_read_dir.clicked.connect(self.btn_readDirectoy_clicked)
-        workspace_layout.addWidget(self.btn_read_dir)
-        
-        # Label para mostrar el directorio seleccionado
+        self.label_network_file.setStyleSheet("color: red; font-size: 14px;")
         self.label_workspace_path = QLabel("No directory selected")
-        self.label_workspace_path.setStyleSheet("color: gray; font-size: 10px; margin-left: 10px;")
-        workspace_layout.addWidget(self.label_workspace_path)
+        self.label_workspace_path.setStyleSheet("color: red; font-size: 14px;")
 
-        # Input para el nombre del workspace
-        workspace_name_label = QLabel("Workspace Name:")
-        workspace_name_label.setStyleSheet("font-weight: bold; margin-top: 10px;")
-        workspace_layout.addWidget(workspace_name_label)
-        self.input_workspace_name = QLineEdit()
-        self.input_workspace_name.setPlaceholderText("Enter workspace name")
-        workspace_layout.addWidget(self.input_workspace_name)
+        self.sub_barra_superior.addWidget(self.label_network_file)
+        self.sub_barra_superior.addWidget(self.label_workspace_path)
 
-        # Botón 3: Crear workspace
-        self.btn_create_workspace = QPushButton("🚀 Create Full Workspace")
-        self.btn_create_workspace.setStyleSheet("""
-            QPushButton {
-                background-color: #FF9800;
-                color: white;
-                font-weight: bold;
-                padding: 10px;
+        layout_principal.addLayout(self.sub_barra_superior)
+
+        # --- SECCIÓN: CUERPO (Layout Horizontal 50/50) ---
+        self.layout_cuerpo = QHBoxLayout()
+
+        # --- 2. PANEL IZQUIERDO (BVD) ---
+        self.panel_izquierdo = QGroupBox("BVD Parameters")
+        self.panel_izquierdo.setStyleSheet("""
+            QGroupBox {
+                border: 1px solid black;
                 border-radius: 5px;
-                font-size: 12px;
+                margin-top: 10px;
+                padding-top: 10px;
+                color: black;
             }
-            QPushButton:hover {
-                background-color: #e68900;
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 3px 0 3px;
             }
         """)
-        self.btn_create_workspace.clicked.connect(self.btn_createFullWorkspace_clicked)
-        workspace_layout.addWidget(self.btn_create_workspace)
         
-        workspace_group.setLayout(workspace_layout)
-        main_layout.addWidget(workspace_group)
+        self.layout_bvd = QVBoxLayout(self.panel_izquierdo)
+        self.setup_bvd_panel()
+
+        # --- 3. PANEL DERECHO (COM + GRÁFICO) ---
+        self.panel_derecho_contenedor = QWidget()
+        self.layout_derecha_total = QVBoxLayout(self.panel_derecho_contenedor)
+        self.layout_derecha_total.setContentsMargins(0, 0, 0, 0) # Quitar márgenes internos
+
+        # Sub-bloque COM (Superior)
+        self.bloque_com = QGroupBox("COM Parameters")
+        self.bloque_com.setStyleSheet("""
+            QGroupBox {
+                border: 1px solid black;
+                border-radius: 5px;
+                margin-top: 10px;
+                padding-top: 10px;
+                color: black;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 3px 0 3px;
+            }
+        """)
         
-        main_layout.addStretch()
+        self.layout_com = QVBoxLayout(self.bloque_com)
+        self.setup_com_panel()
+
+        # Sub-bloque Gráfico (Inferior)
+        self.bloque_grafico = QGroupBox("Admitance Visualization")
+        self.bloque_grafico.setStyleSheet("""
+            QGroupBox {
+                border: 1px solid black;
+                border-radius: 5px;
+                margin-top: 10px;
+                padding-top: 10px;
+                color: black;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 3px 0 3px;
+            }
+        """)
+
+        self.layout_grafico = QVBoxLayout(self.bloque_grafico)
+        self.label_graf = QLabel("VISUALIZACIÓN IMPEDANCIA")
+        self.label_graf.setStyleSheet("color: #0f0;") # Verde tipo osciloscopio
+        self.layout_grafico.addWidget(self.label_graf, alignment=Qt.AlignCenter)
+        self.layout_grafico.addStretch()
+
+        # Añadimos los sub-bloques al panel derecho
+        self.layout_derecha_total.addWidget(self.bloque_com, stretch=1)
+        self.layout_derecha_total.addWidget(self.bloque_grafico, stretch=1)
+
+        # --- 4. ENSAMBLAJE FINAL ---
+        self.layout_cuerpo.addWidget(self.panel_izquierdo, stretch=1)
+        self.layout_cuerpo.addWidget(self.panel_derecho_contenedor, stretch=1)
         
-        main_widget.setLayout(main_layout)
-        scroll_area.setWidget(main_widget)
-        self.setCentralWidget(scroll_area)
+        layout_principal.addLayout(self.layout_cuerpo)
+
+    def setup_bvd_panel(self):
+        # 1. El Desplegable (Selector)
+        self.combo_bvd = QComboBox()
+        self.combo_bvd.addItem("Archivo .ntw no leído")
+        
+        # Conectamos el cambio de selección a una función
+        self.combo_bvd.currentIndexChanged.connect(self.actualizar_formulario_bvd)
+
+        # 2. El Formulario de parámetros
+        self.form_layout_BVD = QFormLayout()
+        
+        # Creamos los campos (QLineEdit)
+        self.input_c0 = QLineEdit()
+        self.input_ca = QLineEdit()
+        self.input_la = QLineEdit()
+        self.input_fs = QLineEdit()
+        self.input_fp = QLineEdit()
+        self.input_ladd_ser = QLineEdit()
+        self.input_ladd_shu = QLineEdit()
+        self.input_cadd_ser = QLineEdit()
+        self.input_cadd_shu = QLineEdit()
+        self.input_ladd_ground = QLineEdit()
+        
+        # Configuramos como "Solo lectura" y ponemos placeholders
+        for inp in [self.input_c0, self.input_ca, self.input_la, self.input_fs, self.input_fp, self.input_ladd_ser,
+                    self.input_ladd_shu, self.input_cadd_ser, self.input_cadd_shu, self.input_ladd_ground]:
+            inp.setReadOnly(True)
+            inp.setPlaceholderText("---")
+            inp.setStyleSheet("background-color: #f0f0f0; color: #555;")
+
+        # Añadimos al layout del formulario
+        self.form_layout_BVD.addRow("C0 (pF):", self.input_c0)
+        self.form_layout_BVD.addRow("Ca (pF):", self.input_ca)
+        self.form_layout_BVD.addRow("La (nH):", self.input_la)
+        self.form_layout_BVD.addRow("fs (GHz):", self.input_fs)
+        self.form_layout_BVD.addRow("fp (GHz):", self.input_fp)
+        self.form_layout_BVD.addRow("Ladd_ser (nH):", self.input_ladd_ser)
+        self.form_layout_BVD.addRow("Ladd_shu (nH):", self.input_ladd_shu)
+        self.form_layout_BVD.addRow("Cadd_ser (pF):", self.input_cadd_ser)
+        self.form_layout_BVD.addRow("Cadd_shu (pF):", self.input_cadd_shu)
+        self.form_layout_BVD.addRow("Ladd_gnd (nH):", self.input_ladd_ground)
+
+        # Añadir parámetros generales (rs, rp, ql, qc, qa) al formulario de BVD
+        self.form_layout_BVD_general = QFormLayout()
+
+        self.input_rs = QLineEdit()
+        self.input_rp = QLineEdit()
+        self.input_ql = QLineEdit()
+        self.input_qc = QLineEdit()
+        self.input_qa = QLineEdit()
+
+        # Configuramos como "Solo lectura" y ponemos placeholders
+        for inp in [self.input_rs, self.input_rp, self.input_ql, self.input_qc, self.input_qa]:
+            inp.setReadOnly(True)
+            inp.setPlaceholderText("---")
+            inp.setStyleSheet("background-color: #f0f0f0; color: #555;")
+
+        self.form_layout_BVD_general.addRow("Rs (Ohms):", self.input_rs)
+        self.form_layout_BVD_general.addRow("Rp (Ohms):", self.input_rp)
+        self.form_layout_BVD_general.addRow("Ql (-):", self.input_ql)
+        self.form_layout_BVD_general.addRow("Qc (-):", self.input_qc)
+        self.form_layout_BVD_general.addRow("Qa (-):", self.input_qa)
+
+        # 3. Montaje en el panel izquierdo (el que ya tenías)
+        # Limpiamos el layout_bvd por si acaso y añadimos
+        bvd_label=QLabel("Parámetros Resonador:")
+        bvd_label.setStyleSheet("font-weight: bold; color: darkgray;")
+        self.layout_bvd.addWidget(bvd_label)
+        self.layout_bvd.addWidget(self.combo_bvd)
+        self.layout_bvd.addSpacing(10) # Espacio visual
+        self.layout_bvd.addLayout(self.form_layout_BVD)
+
+        self.layout_bvd.addSpacing(20) # Espacio visual
+        self.layout_bvd.addStretch()
+        bvd_general_label=QLabel("Parámetros Resonador:")
+        bvd_general_label.setStyleSheet("font-weight: bold; color: darkgray;")
+        self.layout_bvd.addWidget(bvd_general_label)
+        self.layout_bvd.addLayout(self.form_layout_BVD_general)
+        self.layout_bvd.addStretch()
+
+    def actualizar_formulario_bvd(self, index):
+        """Esta función se llama cada vez que eliges un BVD en el combo"""
+        # Si no hay datos (solo el mensaje por defecto) o la lista está vacía
+        if not self.list_BVD or self.combo_bvd.currentText() == "Archivo .ntw no leído":
+            return
+
+        # Obtenemos el objeto BVD seleccionado
+        bvd_seleccionado = self.list_BVD[index]
+        
+        # Rellenamos los campos
+        self.input_c0.setText(str(bvd_seleccionado.c0))
+        self.input_ca.setText(str(bvd_seleccionado.ca))
+        self.input_la.setText(str(bvd_seleccionado.la))
+        self.input_fs.setText(str(bvd_seleccionado.fs))
+        self.input_fp.setText(str(bvd_seleccionado.fp))
+        self.input_ladd_ser.setText(str(bvd_seleccionado.ladd_ser))
+        self.input_ladd_shu.setText(str(bvd_seleccionado.ladd_shu))
+        self.input_cadd_ser.setText(str(bvd_seleccionado.cadd_ser))
+        self.input_cadd_shu.setText(str(bvd_seleccionado.cadd_shu))
+        self.input_ladd_ground.setText(str(bvd_seleccionado.ladd_ground))
+
+    def setup_com_panel(self):
+        # 1. El Desplegable (Selector)
+        self.combo_com = QComboBox()
+        self.combo_com.addItem("Conversión no realizada")
+        
+        # Conectamos el cambio de selección a una función
+        self.combo_com.currentIndexChanged.connect(self.actualizar_formulario_com)
+
+        # 2. El Formulario de parámetros
+        self.form_layout_COM = QFormLayout()
+        
+        # Creamos los campos (QLineEdit)
+        self.input_pitch = QLineEdit()
+        self.input_aperture = QLineEdit()
+        self.input_digitsIDT = QLineEdit()
+        self.input_digitsREFL = QLineEdit()
+        self.input_alpha = QLineEdit()
+        
+        # Configuramos como "Solo lectura" y ponemos placeholders
+        for inp in [self.input_pitch, self.input_aperture, self.input_digitsIDT, 
+                    self.input_digitsREFL, self.input_alpha]:
+            inp.setReadOnly(True)
+            inp.setPlaceholderText("---")
+            inp.setStyleSheet("background-color: #f0f0f0; color: #555;")
+
+        # Añadimos al layout del formulario
+        self.form_layout_COM.addRow("p (m):", self.input_pitch)
+        self.form_layout_COM.addRow("Ap (λ0):", self.input_aperture)
+        self.form_layout_COM.addRow("digitsIDT (-):", self.input_digitsIDT)
+        self.form_layout_COM.addRow("digitsREFL (-):", self.input_digitsREFL)
+        self.form_layout_COM.addRow("α (-):", self.input_alpha)
+
+        # 3. Montaje en el panel derecho
+        # Limpiamos el layout_com por si acaso y añadimos
+        com_label=QLabel("Parámetros modelo COM:")
+        com_label.setStyleSheet("font-weight: bold; color: darkgray;")
+        self.layout_com.addWidget(com_label)
+        self.layout_com.addWidget(self.combo_com)
+        self.layout_com.addSpacing(10) # Espacio visual
+        self.layout_com.addLayout(self.form_layout_COM)
+        self.layout_com.addStretch()
+
+    def actualizar_formulario_com(self, index):
+        """Esta función se llama cada vez que eliges un BVD en el combo"""
+        # Si no hay datos (solo el mensaje por defecto) o la lista está vacía
+        if not self.list_COM or self.combo_com.currentText() == "Conversión no realizada":
+            return
+
+        # Obtenemos el objeto BVD seleccionado
+        com_seleccionado = self.list_COM[index]
+        
+        # Rellenamos los campos
+        self.input_pitch.setText(str(com_seleccionado.d))
+        self.input_aperture.setText(str(com_seleccionado.Ap))
+        self.input_digitsIDT.setText(str(com_seleccionado.N))
+        self.input_digitsREFL.setText(str(com_seleccionado.NR))
+        self.input_alpha.setText(str(com_seleccionado.alpha))
 
     def btn_readNetworkFile_clicked(self):
         try:
@@ -232,11 +320,23 @@ class MainWindow(QMainWindow):
             if file_path:
                 self.network_file_path = file_path
                 self.label_network_file.setText(f"Selected: {file_path}")
-                self.label_network_file.setStyleSheet("color: green; font-size: 10px; margin-left: 10px; margin-bottom: 10px;")
+                self.label_network_file.setStyleSheet("color: green; font-size: 14px;")
                 self.filter_parameters = fs.read_and_parse_file(file_path)
+
+                # Crear la lista de BVDs a partir de los parámetros leídos
+                self.list_BVD = mat_bvd_com.create_list_BVD(self.filter_parameters)
                 
                 # Rellenar los campos de Matching Network y Lossy BVD con los parámetros leídos
-                self.populate_parameters_from_file()
+                self.combo_bvd.clear() # Borra el "Archivo no leído"
+                for bvd in self.list_BVD:
+                    self.combo_bvd.addItem(bvd.name)
+                
+                self.input_rs.setText(str(self.filter_parameters["rs"]))
+                self.input_rp.setText(str(self.filter_parameters["rp"]))
+                self.input_ql.setText(str(self.filter_parameters["ql"]))
+                self.input_qc.setText(str(self.filter_parameters["qc"]))
+                self.input_qa.setText(str(self.filter_parameters["qa"]))
+
         except Exception as e:
             error_detallado = traceback.format_exc()
             QMessageBox.critical(self, "Error", 
@@ -246,28 +346,13 @@ class MainWindow(QMainWindow):
                 error_detallado)
             return
 
-    def populate_parameters_from_file(self):
-        """Rellena los campos de entrada con los parámetros del archivo leído."""
-        if not self.filter_parameters:
-            return
-        
-        # Mapear parámetros leídos a los campos de Matching Network
-        for param_name, input_field in self.matching_inputs.items():
-            if param_name in self.filter_parameters:
-                input_field.setText(str(self.filter_parameters[param_name]))
-        
-        # Mapear parámetros leídos a los campos de Lossy BVD
-        for param_name, input_field in self.lossy_inputs.items():
-            if param_name in self.filter_parameters:
-                input_field.setText(str(self.filter_parameters[param_name]))
-
     def btn_readDirectoy_clicked(self):
         try:
             selected_path = fs.select_workspace_path()
             if selected_path:
                 self.workspace_path = selected_path
                 self.label_workspace_path.setText(f"Selected: {self.workspace_path}")
-                self.label_workspace_path.setStyleSheet("color: green; font-size: 10px; margin-left: 10px; margin-bottom: 10px;")
+                self.label_workspace_path.setStyleSheet("color: green; font-size: 14px;")
         except Exception as e:
             error_detallado = traceback.format_exc()
             QMessageBox.critical(self, "Error", 
@@ -336,24 +421,33 @@ class MainWindow(QMainWindow):
                 error_detallado)
             return
         
-        # Crear lista de BVD y convertir a lista COM
-        try:
-            self.list_BVD = mat_bvd_com.create_list_BVD(self.filter_parameters)
-            self.list_COM = mat_bvd_com.compute_list_COM(self.list_BVD)
-            QMessageBox.information(self, "COM", 
-                "COM parameters computed:\n\n" +
-                "\n".join([f"COM {i+1}: d={com.d:.12e}, Ap={com.Ap:.12e}, N={com.N}, NR={com.NR}, alpha={com.alpha:.12e},"
-                           f"alpha_n={com.alpha_n:.12e}, Ct={com.Ct:.12e}" for i, com in enumerate(self.list_COM)]))
-        except Exception as e:
-            error_detallado = traceback.format_exc()
-            QMessageBox.critical(self, "Error", 
-                f"Error crear lista BVD o al calcular los parámetros COM.\n\n"
-                f"Tipo: {type(e).__name__}\n"
-                f"Mensaje: {str(e)}\n\n"+
-                error_detallado)
-            return
-        
         QMessageBox.information(self, "Éxito", f"Workspace '{workspace_name}' creado exitosamente en:\n{full_workspace_path}")
+
+    def btn_convertBVD2COM_clicked(self):
+        # Crear lista de BVD y convertir a lista COM
+        if self.list_BVD is None:
+            QMessageBox.critical(self, "Error", 
+                                 "Error: No hay datos de BVD para convertir. \n"
+                                 "Asegúrate de haber leído un archivo .ntw primero.")
+            return
+        else:
+            try:
+                self.list_COM = mat_bvd_com.compute_list_COM(self.list_BVD)
+                
+                # Rellenar los campos de Matching Network y Lossy BVD con los parámetros leídos
+                self.combo_com.clear() # Borra el "Archivo no leído"
+                for com in self.list_COM:
+                    self.combo_com.addItem(com.name)
+
+            except Exception as e:
+                error_detallado = traceback.format_exc()
+                QMessageBox.critical(self, "Error", 
+                    f"Error crear lista BVD o al calcular los parámetros COM.\n\n"
+                    f"Tipo: {type(e).__name__}\n"
+                    f"Mensaje: {str(e)}\n\n"+
+                    error_detallado)
+                return
+
 
 
 # Run the test if this file is executed directly
