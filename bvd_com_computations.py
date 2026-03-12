@@ -158,6 +158,8 @@ def compute_list_COM(list_BVD: list[BVD]) -> list[COM]:
         alpha = phi / (2*Nidt*lambda0*np.sqrt(Z0_PRIMA))
         alpha_n = alpha / np.sqrt(Ap)
 
+        # Cálculo de las admitancias de cada COM
+
         # Assign all values to the COM block
         name = bvd.name.replace("BVD", "COM")
         com = COM(name=name, d=p, Ap=Ap, N=Nidt, NR=NR, alpha=alpha, alpha_n=alpha_n, Ct=Ct)
