@@ -117,6 +117,9 @@ def compute_list_COM(list_BVD: list[BVD]) -> list[COM]:
             Nidt = round(Nidt)
             if Nidt > 500 or Nidt < 50:
                 print(f"Advertencia: N calculado es {Nidt}, lo cual está fuera del rango recomendado (50-500).")
+            else:
+                # Se recalcula Ap debido al redondeo de Nidt
+                Ap = Ct / (Nidt * EPS_R * EPS_0 *np.exp(0.71866*np.tan(DUTY-0.5))) / lambda0
 
         # 3) ============================= CÁLCULO DE ALPHA =============================
         # Cálculo constantes de entrada

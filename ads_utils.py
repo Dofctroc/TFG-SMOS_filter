@@ -388,8 +388,8 @@ def create_Schematic_ladderFilter_BVDlossy(library: de.Library, library_name: st
             exp10 = d.adjusted()   # exponente base 10
 
             if exp10 > -10:
-                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+xpos_firststep*3, y=ypos)])
-                xpos += xpos_firststep*3
+                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+xpos_firststep*2, y=ypos)])
+                xpos += xpos_firststep*2
 
                 inst = design.add_instance("ads_rflib:L", name="L_input", origin=(xpos, ypos), angle=-90.0)
                 inst.parameters["L"].value = "input_l H"
@@ -553,8 +553,8 @@ def create_Schematic_ladderFilter_BVDlossy(library: de.Library, library_name: st
 
                 inst = design.add_instance("ads_rflib:GROUND", name="G"+str(xstep), origin=(xpos, ypos), angle=-90.0, ads_annot=False)
                 ypos += 1.0
-                
-                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos + 1.0, y=ypos)])
+
+                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos + 2.0, y=ypos)])
 
             else:
                 #  Condensador Shunt (Cfini1) seguido de Bobina Serie (lfini2)
@@ -573,10 +573,10 @@ def create_Schematic_ladderFilter_BVDlossy(library: de.Library, library_name: st
                 inst.update_item_annotation()
                 xpos += 1.0
 
-                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos + 1.0, y=ypos)])
+                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos + 2.0, y=ypos)])
 
         xpos_max += max_size_output
-        xpos += 1.0
+        xpos += 2.0
         ypos = 0.0
 
 
