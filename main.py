@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QPushButton, QWidget, 
                                QLabel, QLineEdit, QMessageBox, QGroupBox, QGridLayout, QScrollArea, QFrame,
                                QComboBox, QFormLayout)
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QCursor
 
 importlib.reload(ads)
 importlib.reload(fs)
@@ -33,6 +34,11 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
 
+        self.list_BVD = None
+        self.list_COM = None
+        self.network_file_path = None
+        self.workspace_path = None
+
         self.setWindowTitle("TFG-SMOSfilter")
         self.setGeometry(100, 100, 1000, 700)
 
@@ -44,34 +50,11 @@ class MainWindow(QMainWindow):
         layout_principal = QVBoxLayout(central_widget)
 
         # --- SECCIÓN: BARRA SUPERIOR (Botones de archivos) ---
-        self.barra_superior = QHBoxLayout()
-        self.btn_archivo = QPushButton("Seleccionar Archivo")
-        self.btn_archivo.clicked.connect(self.btn_readNetworkFile_clicked)
-
-        self.btn_directorio = QPushButton("Seleccionar Directorio")
-        self.btn_directorio.clicked.connect(self.btn_readDirectoy_clicked)
-
-        self.btn_convertir = QPushButton("CONVERTIR")
-        self.btn_convertir.clicked.connect(self.btn_convertBVD2COM_clicked)
-        self.btn_convertir.setStyleSheet("cursor: pointer; background-color: #2c3e50; color: white; font-weight: bold;")
-        
-        self.barra_superior.addWidget(self.btn_archivo)
-        self.barra_superior.addWidget(self.btn_directorio)
-        self.barra_superior.addStretch() # Empuja el botón convertir a la derecha
-        self.barra_superior.addWidget(self.btn_convertir)
-        
+        self.setup_header()
         layout_principal.addLayout(self.barra_superior)
 
         # --- SECCIÓN: SUB BARRA SUPERIOR (Botones de archivos) ---
-        self.sub_barra_superior = QVBoxLayout()
-        self.label_network_file = QLabel("No file selected")
-        self.label_network_file.setStyleSheet("color: red; font-size: 14px;")
-        self.label_workspace_path = QLabel("No directory selected")
-        self.label_workspace_path.setStyleSheet("color: red; font-size: 14px;")
-
-        self.sub_barra_superior.addWidget(self.label_network_file)
-        self.sub_barra_superior.addWidget(self.label_workspace_path)
-
+        self.setup_sub_header()
         layout_principal.addLayout(self.sub_barra_superior)
 
         # --- SECCIÓN: CUERPO (Layout Horizontal 50/50) ---
@@ -149,12 +132,80 @@ class MainWindow(QMainWindow):
         self.layout_derecha_total.addWidget(self.bloque_com, stretch=1)
         self.layout_derecha_total.addWidget(self.bloque_grafico, stretch=1)
 
-        # --- 4. ENSAMBLAJE FINAL ---
+        # --- 4. ENSAMBLAJE CUERPO ---
         self.layout_cuerpo.addWidget(self.panel_izquierdo, stretch=1)
         self.layout_cuerpo.addWidget(self.panel_derecho_contenedor, stretch=1)
         
         layout_principal.addLayout(self.layout_cuerpo)
 
+        # --- 5. BOTÓN CREAR WORKSPACE ---
+        self.setup_footer()
+        layout_principal.addLayout(self.barra_inferior)
+
+        self.aplicar_cursor_interactivo()
+    
+
+    def aplicar_cursor_interactivo(self):
+        # 1. Buscamos todos los botones
+        botones = self.findChildren(QPushButton)
+        for boton in botones:
+            boton.setCursor(Qt.PointingHandCursor)
+        
+        # 2. Buscamos todos los combobox
+        combos = self.findChildren(QComboBox)
+        for combo in combos:
+            combo.setCursor(Qt.PointingHandCursor)
+            # Opcional: Esto asegura que la lista desplegable también tenga el cursor
+            combo.view().viewport().setCursor(Qt.PointingHandCursor)
+
+    def setup_header(self):
+        self.barra_superior = QHBoxLayout()
+
+        self.btn_archivo = QPushButton("Seleccionar Archivo")
+        self.btn_archivo.clicked.connect(self.btn_readNetworkFile_clicked)
+
+        self.btn_directorio = QPushButton("Seleccionar Directorio")
+        self.btn_directorio.clicked.connect(self.btn_readDirectoy_clicked)
+
+        self.btn_convertir = QPushButton("Convertir BVD -> COM")
+        self.btn_convertir.clicked.connect(self.btn_convertBVD2COM_clicked)
+        self.btn_convertir.setStyleSheet("background-color: #e0efff; color: black; font-weight: bold;")
+        
+        self.barra_superior.addWidget(self.btn_archivo)
+        self.barra_superior.addWidget(self.btn_directorio)
+        self.barra_superior.addStretch() # Empuja el botón convertir a la derecha
+        self.barra_superior.addWidget(self.btn_convertir)
+
+    def setup_sub_header(self):
+        self.sub_barra_superior = QVBoxLayout()
+
+        self.label_network_file = QLabel("No file selected")
+        self.label_network_file.setStyleSheet("color: red; font-size: 14px;")
+
+        self.label_workspace_path = QLabel("No directory selected")
+        self.label_workspace_path.setStyleSheet("color: red; font-size: 14px;")
+
+        self.sub_barra_superior.addWidget(self.label_network_file)
+        self.sub_barra_superior.addWidget(self.label_workspace_path)
+
+    def setup_footer(self):
+        self.barra_inferior = QHBoxLayout()
+
+        self.label_workspace_name = QLabel("Workspace Name:")
+        self.input_workspace_name = QLineEdit()
+        self.input_workspace_name.setPlaceholderText("---")
+        self.input_workspace_name.setFixedWidth(200)
+        self.input_workspace_name.setMaxLength(20)
+
+        self.btn_create_workspace = QPushButton("Create ADS Workspace")
+        self.btn_create_workspace.clicked.connect(self.btn_createFullWorkspace_clicked)
+        self.btn_create_workspace.setStyleSheet("background-color: #fffce6; color: black; font-weight: bold;")
+
+        self.barra_inferior.addWidget(self.label_workspace_name)
+        self.barra_inferior.addWidget(self.input_workspace_name)
+        self.barra_inferior.addStretch()
+        self.barra_inferior.addWidget(self.btn_create_workspace)
+        
     def setup_bvd_panel(self):
         # 1. El Desplegable (Selector)
         self.combo_bvd = QComboBox()
@@ -364,6 +415,18 @@ class MainWindow(QMainWindow):
 
     def btn_createFullWorkspace_clicked(self):
         # Verificar que se haya ejecutado btn_readDirectoy_clicked primero
+        if self.list_BVD is None:
+            QMessageBox.critical(self, "Error", 
+                                 "Error: No hay datos de BVD. \n"
+                                 "Asegúrate de haber leído un archivo .ntw primero.")
+            return
+        
+        if self.list_COM is None:
+            QMessageBox.critical(self, "Error", 
+                                 "Error: No hay datos de COM. \n"
+                                 "Asegúrate de haber convertido los datos BVD a COM primero.")
+            return
+        
         if self.workspace_path is None:
             QMessageBox.critical(self, "Error", "Error: Debes hacer clic en 'Read Directory' primero")
             return
