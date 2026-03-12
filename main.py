@@ -22,11 +22,22 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QPushButton, QWidget, 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QCursor
 
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.figure import Figure
+import numpy as np
+
 importlib.reload(ads)
 importlib.reload(fs)
 importlib.reload(mat_bvd_com)
 
 # ============= VARIABLES GLOBALES ==============
+class MplCanvas(FigureCanvas):
+    def __init__(self, parent=None, width=5, height=4, dpi=100):
+        # Creamos la figura de Matplotlib
+        self.fig = Figure(figsize=(width, height), dpi=dpi)
+        self.axes = self.fig.add_subplot(111) # Un solo eje
+        super().__init__(self.fig)
 
 # ============= CLASE PRINCIPAL DE LA APLICACIÓN ==============
 
@@ -496,6 +507,7 @@ class MainWindow(QMainWindow):
         else:
             try:
                 self.list_COM = mat_bvd_com.compute_list_COM(self.list_BVD)
+                self.list_COM = mat_bvd_com.compute_admitance_COM(self.list_COM, self.filter_parameters)
                 
                 # Rellenar los campos de Matching Network y Lossy BVD con los parámetros leídos
                 self.combo_com.clear() # Borra el "Archivo no leído"
@@ -510,7 +522,6 @@ class MainWindow(QMainWindow):
                     f"Mensaje: {str(e)}\n\n"+
                     error_detallado)
                 return
-
 
 
 # Run the test if this file is executed directly

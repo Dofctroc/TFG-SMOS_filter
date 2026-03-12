@@ -1,7 +1,7 @@
 import numpy as np
 
 class BVD():
-    def __init__(self, name, c0, cp, ca, la, fs, fp, cadd_shu, ladd_shu, cadd_ser, ladd_ser, ladd_ground, rs, rp, ql, qc, qa):
+    def __init__(self, name, c0, cp, ca, la, fs, fp, cadd_shu, ladd_shu, cadd_ser, ladd_ser, ladd_ground, rs, rp, ql, qc, qa, Y=None):
         self.name = name
         self.c0 = c0
         self.cp = cp
@@ -19,9 +19,10 @@ class BVD():
         self.ql = ql
         self.qc = qc
         self.qa = qa
+        self.Y = Y
 
 class COM():
-    def __init__(self, name, d, Ap, N, NR, alpha, alpha_n, Ct):
+    def __init__(self, name, d, Ap, N, NR, alpha, alpha_n, Ct, Y=None):
         self.name = name
         self.d = d
         self.Ap = Ap
@@ -30,6 +31,7 @@ class COM():
         self.alpha = alpha
         self.alpha_n = alpha_n
         self.Ct = Ct
+        self.Y = Y
 
 K11_REAL = -82053.9
 K11 = -82053.9 - 1j*450
@@ -158,11 +160,48 @@ def compute_list_COM(list_BVD: list[BVD]) -> list[COM]:
         alpha = phi / (2*Nidt*lambda0*np.sqrt(Z0_PRIMA))
         alpha_n = alpha / np.sqrt(Ap)
 
-        # Cálculo de las admitancias de cada COM
-
         # Assign all values to the COM block
         name = bvd.name.replace("BVD", "COM")
         com = COM(name=name, d=p, Ap=Ap, N=Nidt, NR=NR, alpha=alpha, alpha_n=alpha_n, Ct=Ct)
         list_COM.append(com)
+
+    return list_COM
+
+def compute_admitance_COM(list_COM: list[COM], parameters: dict) -> list[COM]:
+    # Sweep parameters
+    fstart = float(parameters["fstart1"])
+    fstop = float(parameters["fstop1"])
+    npoints = int(parameters["npoints1"])
+
+    f = np.linspace(fstart, fstop, npoints)
+
+    for com in list_COM:
+        # Calculamos la admitancia para cado bloque COM
+        k = (2*np.pi*f)/VP
+        lambda0 = 2*com.d
+        k0 = np.pi/com.d
+
+        delta = k - k0
+        beta = np.sqrt((delta+K11)**2 - K12**2)
+        pe = (beta-delta-K11)/K12
+
+        theta = beta*com.N*lambda0/2
+        theta_R = beta*NR*lambda0/2
+
+        z_0 = (1-pe)/(1+pe)*Z0_PRIMA
+        z_0R = (1+pe)/(1-pe)*Z0_PRIMA
+        z_inR = 1 / ( 1 / (1j*z_0R*np.tan(theta_R)+Z0_PRIMA) + 1j*np.sin(2*theta_R)/z_0R) + 1j*z_0R*np.tan(theta_R)
+
+        # Variables para la resolución de la ecuación cuadrática
+        A = 1j*2*np.pi*f*com.Ct
+        B = 1 / (1j*2*theta*z_0)
+        C = (1j*z_0R*np.tan(theta) + z_inR) / 2 + z_0R / (1j*np.sin(2*theta))
+        D = (Z0_PRIMA / (2*theta*z_0))**2
+        phi = 2*com.alpha*com.N*lambda0*np.sqrt(Z0_PRIMA)
+
+        Z_com = (R_SERIE + 1 / (1/R_SHUNT + A + B*phi**2 + D/C * phi**2))
+        Y_com = 1 / Z_com
+
+        com.Y = Y_com
 
     return list_COM
