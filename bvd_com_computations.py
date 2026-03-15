@@ -132,7 +132,7 @@ def Zc(f, C, Q=None):
     jw = 1j * 2 * np.pi * f
     if Q is None:
         return 1/(jw*C)
-    return 1 / (jw*C + 1/(2*np.pi*f*C/Q))
+    return 1 / (jw*C + 1/(Q/2*np.pi*f*C))
 
 def Zl(f, L, Q=None):
     if L == 0:
