@@ -1,8 +1,9 @@
 import numpy as np
 
 class BVD():
-    def __init__(self, name, c0, cp, ca, la, fs, fp, cadd_shu, ladd_shu, cadd_ser, 
-                 ladd_ser, ladd_ground, rs, rp, ql, qc, qa, Y=None, f=None):
+    def __init__(self, name: str, c0: float, cp: float, ca: float, la: float, fs: float, fp: float, 
+                 cadd_shu: float, ladd_shu: float, cadd_ser: float, ladd_ser: float, ladd_ground: float, 
+                 rs: float, rp: float, ql: float, qc: float, qa: float, Y=None, f=None):
         self.name = name
         self.c0 = c0
         self.cp = cp
@@ -24,7 +25,8 @@ class BVD():
         self.f = f
 
 class COM():
-    def __init__(self, name, d, Ap, N, NR, alpha, alpha_n, Ct, Y=None, f=None):
+    def __init__(self, name: str, d: float, Ap: float, N: int, NR: int, 
+                 alpha: float, alpha_n: float, Ct: float, Y=None, f=None):
         self.name = name
         self.d = d
         self.Ap = Ap

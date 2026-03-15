@@ -9,6 +9,8 @@ from keysight.ads.de.db import Transaction
 import pathlib
 import keysight.ads.dds as dds
 
+from bvd_com_computations import BVD
+
 from decimal import Decimal
 
 FORCE_RECREATE = True
@@ -133,25 +135,25 @@ def create_SchematicAndSymbol_lossyBVD(library: de.Library, library_name: str) -
 
         inst = design.add_instance("ads_rflib:L", name="Ladd_gnd", origin=(7.5, 0.0))
         inst.parameters["L"].value = "Ladd_ground H"
-        inst.parameters["R"].value = "2*pi*fs*Ladd_ground/Ql"
+        inst.parameters["R"].value = "2*pi*fs*Ladd_ground/Ql Ohm"
         inst.update_item_annotation()
 
         inst = design.add_instance("ads_rflib:L", name="Ladd_ser", origin=(4.0, 0.0))
         inst.parameters["L"].value = "Ladd_ser H"
-        inst.parameters["R"].value = "2*pi*fs*Ladd_ser/Ql"
+        inst.parameters["R"].value = "2*pi*fs*Ladd_ser/Ql Ohm"
         inst.update_item_annotation()
 
         inst = design.add_instance("ads_rflib:L", name="Ladd_shu", origin=(1.0, -1.5))
         inst.parameters["L"].value = "Ladd_shu H"
-        inst.parameters["R"].value = "2*pi*fs*Ladd_shu/Ql"
+        inst.parameters["R"].value = "2*pi*fs*Ladd_shu/Ql Ohm"
         inst.update_item_annotation()
 
         inst = design.add_instance("ads_rflib:R", name="R1", origin=(1.0, 2.5))
-        inst.parameters["R"].value = "2*pi*fs*Cadd_shu/qc Ohm"
+        inst.parameters["R"].value = "Qc/(2*pi*fs*Cadd_shu) Ohm"
         inst.update_item_annotation()
 
         inst = design.add_instance("ads_rflib:R", name="R2", origin=(6.0, 1.0))
-        inst.parameters["R"].value = "2*pi*fs*Cadd_ser/Qc Ohm"
+        inst.parameters["R"].value = "Qc/(2*pi*fs*Cadd_ser) Ohm"
         inst.update_item_annotation()
 
         inst = design.add_instance("ads_rflib:R", name="Ra", origin=(3.0, -0.5))
@@ -284,7 +286,7 @@ def create_SchematicAndSymbol_lossyBVD(library: de.Library, library_name: str) -
     design.save_design()
     design = None
 
-def create_Schematic_ladderFilter_BVDlossy(library: de.Library, library_name: str, parameters: dict) -> None:
+def create_Schematic_ladderFilter_BVDlossy(library: de.Library, library_name: str, parameters: dict, list_BVD: list[BVD]) -> None:
     assert de.version() >= 630
 
     design = db.create_schematic(f"{library_name}:{CELL_FILTER_BVD}:schematic")
@@ -317,40 +319,7 @@ def create_Schematic_ladderFilter_BVDlossy(library: de.Library, library_name: st
     lfini2 = parameters["lfini2"]
     cfini1 = parameters["cfini1"]
     cfini2 = parameters["cfini2"]
-
-    # READ BVD parameters
-    c0 = parameters["c0_vals"]       #float[]
-    ca = parameters["ca_vals"]       #float[]
-    la = parameters["la_vals"]       #float[]
-
-    c0_list = parameters["c0"]
-    ca_list = parameters["ca"]
-    la_list = parameters["la"]
-
-    fs_list = parameters["fs"]
-    ra_list = parameters["ra"]
-
-    # READ Additional BVD parameters
-    ladd_ser = parameters["ladd_ser_vals"]           #float[]
-    ladd_shu = parameters["ladd_shu_vals"]           #float[]
-    cadd_ser = parameters["cadd_ser_vals"]           #float[]
-    cadd_shu = parameters["cadd_shu_vals"]           #float[]
-    ladd_ground = parameters["ladd_ground_vals"]     #float[]
-
-    ladd_ser_list = parameters["ladd_ser"]
-    ladd_shu_list = parameters["ladd_shu"]
-    cadd_ser_list = parameters["cadd_ser"]
-    cadd_shu_list = parameters["cadd_shu"]
-    ladd_ground_list = parameters["ladd_ground"]
-
-    rs = parameters["rs"]
-    qlim = parameters["qlim"]
-    q50 = parameters["q50"]
-    ql = parameters["ql"]
-    qc = parameters["qc"]
-    qa = parameters["qa"]
-    rp = parameters["rp"]
-
+    
     # Sweep parameters
     fstart = parameters["fstart1"]
     fstop = parameters["fstop1"]
@@ -439,19 +408,19 @@ def create_Schematic_ladderFilter_BVDlossy(library: de.Library, library_name: st
             inst = design.add_instance("ads_rflib:GROUND", name="G"+str(xstep), origin=(xpos, ypos-1.0), angle=-90.0, ads_annot=False)
         
         inst = design.add_instance((library_name, CELL_BVD_LOSSY, "symbol"), origin=(xpos, ypos), name="lossyBVD_"+str(num_BVD), angle=angle_BVD)
-        inst.parameters["C0"].value = str(c0[num_BVD])
-        inst.parameters["Ca"].value = str(ca[num_BVD])
-        inst.parameters["La"].value = str(la[num_BVD])
-        inst.parameters["Ladd_ser"].value = str(ladd_ser[num_BVD])
-        inst.parameters["Ladd_shu"].value = str(ladd_shu[num_BVD])
-        inst.parameters["Cadd_ser"].value = str(cadd_ser[num_BVD])
-        inst.parameters["Cadd_shu"].value = str(cadd_shu[num_BVD])
-        inst.parameters["Ladd_ground"].value = str(ladd_ground[num_BVD])
-        inst.parameters["Rs"].value = rs
-        inst.parameters["Rp"].value = rp
-        inst.parameters["Ql"].value = ql
-        inst.parameters["Qc"].value = qc
-        inst.parameters["Qa"].value = qa
+        inst.parameters["C0"].value = str(list_BVD[num_BVD].c0)
+        inst.parameters["Ca"].value = str(list_BVD[num_BVD].ca)
+        inst.parameters["La"].value = str(list_BVD[num_BVD].la)
+        inst.parameters["Ladd_ser"].value = str(list_BVD[num_BVD].ladd_ser if list_BVD[num_BVD].ladd_ser != 0.0 else 1e-20)
+        inst.parameters["Ladd_shu"].value = str(list_BVD[num_BVD].ladd_shu if list_BVD[num_BVD].ladd_shu != 0.0 else 1e-20)
+        inst.parameters["Cadd_ser"].value = str(list_BVD[num_BVD].cadd_ser if list_BVD[num_BVD].cadd_ser != 0.0 else 1e-20)
+        inst.parameters["Cadd_shu"].value = str(list_BVD[num_BVD].cadd_shu if list_BVD[num_BVD].cadd_shu != 0.0 else 1e-20)
+        inst.parameters["Ladd_ground"].value = str(list_BVD[num_BVD].ladd_ground if list_BVD[num_BVD].ladd_ground != 0.0 else 1e-20)
+        inst.parameters["Rs"].value = str(list_BVD[num_BVD].rs)
+        inst.parameters["Rp"].value = str(list_BVD[num_BVD].rp)
+        inst.parameters["Ql"].value = str(list_BVD[num_BVD].ql)
+        inst.parameters["Qc"].value = str(list_BVD[num_BVD].qc)
+        inst.parameters["Qa"].value = str(list_BVD[num_BVD].qa)
 
         try:
             inst.update_item_annotation()
@@ -484,19 +453,19 @@ def create_Schematic_ladderFilter_BVDlossy(library: de.Library, library_name: st
                 inst = design.add_instance("ads_rflib:GROUND", name="G"+str(xstep), origin=(xpos, ypos-1.0), angle=-90.0, ads_annot=False)
 
             inst = design.add_instance((library_name, CELL_BVD_LOSSY, "symbol"), origin=(xpos, ypos), name="lossyBVD_"+str(num_BVD), angle=angle_BVD)
-            inst.parameters["C0"].value = str(c0[num_BVD])
-            inst.parameters["Ca"].value = str(ca[num_BVD])
-            inst.parameters["La"].value = str(la[num_BVD])
-            inst.parameters["Ladd_ser"].value = str(ladd_ser[num_BVD])
-            inst.parameters["Ladd_shu"].value = str(ladd_shu[num_BVD])
-            inst.parameters["Cadd_ser"].value = str(cadd_ser[num_BVD])
-            inst.parameters["Cadd_shu"].value = str(cadd_shu[num_BVD])
-            inst.parameters["Ladd_ground"].value = str(ladd_ground[num_BVD])
-            inst.parameters["Rs"].value = rs
-            inst.parameters["Rp"].value = rp
-            inst.parameters["Ql"].value = ql
-            inst.parameters["Qc"].value = qc
-            inst.parameters["Qa"].value = qa
+            inst.parameters["C0"].value = str(list_BVD[num_BVD].c0)
+            inst.parameters["Ca"].value = str(list_BVD[num_BVD].ca)
+            inst.parameters["La"].value = str(list_BVD[num_BVD].la)
+            inst.parameters["Ladd_ser"].value = str(list_BVD[num_BVD].ladd_ser if list_BVD[num_BVD].ladd_ser != 0.0 else 1e-20)
+            inst.parameters["Ladd_shu"].value = str(list_BVD[num_BVD].ladd_shu if list_BVD[num_BVD].ladd_shu != 0.0 else 1e-20)
+            inst.parameters["Cadd_ser"].value = str(list_BVD[num_BVD].cadd_ser if list_BVD[num_BVD].cadd_ser != 0.0 else 1e-20)
+            inst.parameters["Cadd_shu"].value = str(list_BVD[num_BVD].cadd_shu if list_BVD[num_BVD].cadd_shu != 0.0 else 1e-20)
+            inst.parameters["Ladd_ground"].value = str(list_BVD[num_BVD].ladd_ground if list_BVD[num_BVD].ladd_ground != 0.0 else 1e-20)
+            inst.parameters["Rs"].value = str(list_BVD[num_BVD].rs)
+            inst.parameters["Rp"].value = str(list_BVD[num_BVD].rp)
+            inst.parameters["Ql"].value = str(list_BVD[num_BVD].ql)
+            inst.parameters["Qc"].value = str(list_BVD[num_BVD].qc)
+            inst.parameters["Qa"].value = str(list_BVD[num_BVD].qa)
 
             try:
                 inst.update_item_annotation()
@@ -602,19 +571,7 @@ def create_Schematic_ladderFilter_BVDlossy(library: de.Library, library_name: st
         assert isinstance(inst.parameters[0], db.ParamRepeated)
         del(inst.parameters[0].repeats[0])
 
-        inst = design.add_var_instance(name="VAR_BVDs", origin=(6.0, 6.0))
-        inst.vars.update({"c_0": c0_list, "ca": ca_list, "la": la_list, "fs": fs_list, "ra": ra_list, "rs": rs, "rp": rp, "qa": qa, "ql": ql, "qc": qc})
-        # Since inst.vars does not contain 'X', we need to remove the first repeat.
-        assert isinstance(inst.parameters[0], db.ParamRepeated)
-        del(inst.parameters[0].repeats[0])
-
-        inst = design.add_var_instance(name="VAR_BVDs_extra", origin=(6.0, 3.5))
-        inst.vars.update({"ladd_ser": ladd_ser_list, "ladd_shu": ladd_shu_list, "cadd_ser": cadd_ser_list, "cadd_shu": cadd_shu_list, "ladd_ground": ladd_ground_list})
-        # Since inst.vars does not contain 'X', we need to remove the first repeat.
-        assert isinstance(inst.parameters[0], db.ParamRepeated)
-        del(inst.parameters[0].repeats[0])
-
-        inst = design.add_var_instance(name="VAR_MNs", origin=(24.0, 6.0))
+        inst = design.add_var_instance(name="VAR_MNs", origin=(8.0, 6.0))
         inst.vars.update({"input_l": input_l, "lfini1": lfini1, "lfini2": lfini2, "cfini1": cfini1, "cfini2": cfini2})
         # Since inst.vars does not contain 'X', we need to remove the first repeat.
         assert isinstance(inst.parameters[0], db.ParamRepeated)

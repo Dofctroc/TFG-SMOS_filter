@@ -493,9 +493,6 @@ class MainWindow(QMainWindow):
                 # Crear la lista de BVDs a partir de los parámetros leídos
                 self.list_BVD = mat_bvd_com.create_list_BVD(self.network_parameters)
                 self.list_BVD = mat_bvd_com.compute_admitance_BVD(self.list_BVD, self.network_parameters)
-
-                msg = "\n".join([f"{i}: {v:.4e}" for i, v in enumerate(self.list_BVD[0].Y[:20])])
-                QMessageBox.information(None, "f Values", msg)  
                 
                 # Rellenar los campos de Matching Network y Lossy BVD con los parámetros leídos
                 self.combo_bvd.clear() # Borra el "Archivo no leído"
@@ -604,7 +601,7 @@ class MainWindow(QMainWindow):
         # Crear los esquemáticos y los símbolos correspondientes
         try:
             ads.create_SchematicAndSymbol_lossyBVD(lib, library_name)
-            ads.create_Schematic_ladderFilter_BVDlossy(lib, library_name, self.network_parameters)
+            ads.create_Schematic_ladderFilter_BVDlossy(lib, library_name, self.network_parameters, self.list_BVD)
             ads.create_SchematicAndSymbol_lossyCOM(lib, library_name)
         except Exception as e:
             error_detallado = traceback.format_exc()
