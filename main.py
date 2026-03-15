@@ -540,6 +540,35 @@ class MainWindow(QMainWindow):
                 f"Mensaje: {str(e)}\n\n"+
                 error_detallado)
             return
+        
+    def btn_convertBVD2COM_clicked(self):
+        # Crear lista de BVD y convertir a lista COM
+        if self.list_BVD is None:
+            QMessageBox.critical(self, "Error", 
+                                 "Error: No hay datos de BVD para convertir. \n"
+                                 "Asegúrate de haber leído un archivo .ntw primero.")
+            return
+        else:
+            try:
+                self.list_COM = mat_bvd_com.compute_list_COM(self.list_BVD)
+                self.list_COM = mat_bvd_com.compute_admitance_COM(self.list_COM, self.network_parameters)
+
+                # Rellenar los campos de Matching Network y Lossy BVD con los parámetros leídos
+                self.combo_com.clear() # Borra el "Archivo no leído"
+                for com in self.list_COM:
+                    self.combo_com.addItem(com.name)
+                    
+                # Habilitamos el radio button de COM
+                self.radio_com.setEnabled(True)
+
+            except Exception as e:
+                error_detallado = traceback.format_exc()
+                QMessageBox.critical(self, "Error", 
+                    f"Error crear lista BVD o al calcular los parámetros COM.\n\n"
+                    f"Tipo: {type(e).__name__}\n"
+                    f"Mensaje: {str(e)}\n\n"+
+                    error_detallado)
+                return
 
     def btn_createFullWorkspace_clicked(self):
         # Verificar que se haya ejecutado btn_readDirectoy_clicked primero
@@ -603,6 +632,7 @@ class MainWindow(QMainWindow):
             ads.create_SchematicAndSymbol_lossyBVD(lib, library_name)
             ads.create_Schematic_ladderFilter_BVDlossy(lib, library_name, self.network_parameters, self.list_BVD)
             ads.create_SchematicAndSymbol_lossyCOM(lib, library_name)
+            ads.create_Schematic_ladderFilter_COM(lib, library_name, self.network_parameters, self.list_COM)
         except Exception as e:
             error_detallado = traceback.format_exc()
             QMessageBox.critical(self, "Error", 
@@ -613,35 +643,6 @@ class MainWindow(QMainWindow):
             return
         
         QMessageBox.information(self, "Éxito", f"Workspace '{workspace_name}' creado exitosamente en:\n{full_workspace_path}")
-
-    def btn_convertBVD2COM_clicked(self):
-        # Crear lista de BVD y convertir a lista COM
-        if self.list_BVD is None:
-            QMessageBox.critical(self, "Error", 
-                                 "Error: No hay datos de BVD para convertir. \n"
-                                 "Asegúrate de haber leído un archivo .ntw primero.")
-            return
-        else:
-            try:
-                self.list_COM = mat_bvd_com.compute_list_COM(self.list_BVD)
-                self.list_COM = mat_bvd_com.compute_admitance_COM(self.list_COM, self.network_parameters)
-
-                # Rellenar los campos de Matching Network y Lossy BVD con los parámetros leídos
-                self.combo_com.clear() # Borra el "Archivo no leído"
-                for com in self.list_COM:
-                    self.combo_com.addItem(com.name)
-                    
-                # Habilitamos el radio button de COM
-                self.radio_com.setEnabled(True)
-
-            except Exception as e:
-                error_detallado = traceback.format_exc()
-                QMessageBox.critical(self, "Error", 
-                    f"Error crear lista BVD o al calcular los parámetros COM.\n\n"
-                    f"Tipo: {type(e).__name__}\n"
-                    f"Mensaje: {str(e)}\n\n"+
-                    error_detallado)
-                return
 
 
 # Run the test if this file is executed directly

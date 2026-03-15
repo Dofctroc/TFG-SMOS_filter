@@ -10,6 +10,7 @@ import pathlib
 import keysight.ads.dds as dds
 
 from bvd_com_computations import BVD
+from bvd_com_computations import COM
 
 from decimal import Decimal
 
@@ -875,6 +876,290 @@ def create_SchematicAndSymbol_lossyCOM(library: de.Library, library_name: str) -
 
     design.save_design()
     design = None
+
+def create_Schematic_ladderFilter_COM(library: de.Library, library_name: str, parameters: dict, list_COM: list[COM]) -> None:
+    assert de.version() >= 630
+
+    design = db.create_schematic(f"{library_name}:{CELL_FILTER_COM}:schematic")
+    design = db.open_design(f"{library_name}:{CELL_FILTER_COM}:schematic")
+
+    # READ Basic Ladder parameters
+    order = int(parameters["norder_ini"])
+    startCOM_type = parameters["typeseriesshunt_ini"]
+    endCOM_type = ""
+    option = int(parameters["option"])
+
+    # Determine the type of the last COM based on the order and the type of the first COM
+    if order % 2 == 0:
+        if startCOM_type == "series":
+            endCOM_type = "shunt"
+        else:            
+            endCOM_type = "series"
+    else:
+        if startCOM_type == "series":
+            endCOM_type = "series"
+        else:            
+            endCOM_type = "shunt"
+
+    # READ Matching network parameters
+    matching_network = parameters["matching_network"]
+    mntype1 = parameters["mntype1"]
+    mntype2 = parameters["mntype2"]
+    input_l = parameters["input_l"]
+    lfini1 = parameters["lfini1"]
+    lfini2 = parameters["lfini2"]
+    cfini1 = parameters["cfini1"]
+    cfini2 = parameters["cfini2"]
+    
+    # Sweep parameters
+    fstart = parameters["fstart1"]
+    fstop = parameters["fstop1"]
+    npoints = parameters["npoints1"]
+    
+    # Grid positon parameters
+    xpos = 0.0
+    xpos_max = xpos
+    max_size_symb = 3.0
+    max_size_input = 3.0
+    max_size_output = 4.0
+    ypos = 0.0
+
+    xpos_firststep = 1.25
+    xstep = -1
+    num_COM = 0
+
+    space_parallel = 1.0
+
+    with Transaction(design) as transaction:
+        # TermG1
+        inst = design.add_instance("ads_simulation:TermG", name="TermG1", origin=(xpos, ypos), angle=-90.0)
+        inst.parameters["Num"].value = "1"
+        inst.update_item_annotation()
+
+        xpos = xpos_max
+        ypos = 0.0
+
+        # INPUT MATCHING NETWORK: (need to know if first COM is series or shunt)
+        xstep += 1
+
+        if startCOM_type == "series":
+            # Add shunt inductor at the input
+            d = Decimal(input_l)
+            exp10 = d.adjusted()   # exponente base 10
+
+            if exp10 > -10:
+                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+xpos_firststep*2, y=ypos)])
+                xpos += xpos_firststep*2
+
+                inst = design.add_instance("ads_rflib:L", name="L_input", origin=(xpos, ypos), angle=-90.0)
+                inst.parameters["L"].value = "input_l H"
+                inst.update_item_annotation()
+                ypos -= 1.0
+
+                inst = design.add_instance("ads_rflib:GROUND", name="G"+str(xstep), origin=(xpos, ypos), angle=-90.0, ads_annot=False)
+                ypos += 1.0
+
+            design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos_max + max_size_input, y=ypos)])
+
+        else:
+            # Add series inductor at the input
+            design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+xpos_firststep, y=ypos)])
+            xpos += xpos_firststep
+
+            inst = design.add_instance("ads_rflib:L", name="L_input", origin=(xpos, ypos))
+            inst.parameters["L"].value = "input_l H"
+            inst.update_item_annotation()
+            xpos += 1.0
+
+            design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos_max + max_size_input, y=ypos)])
+
+        xpos_max += max_size_input
+        xpos = xpos_max
+        ypos = 0.0
+
+        # FIRST COM: Start COM ladder depending on if it is series or shunt
+        # Remember to put a GROUND if COM is shunt
+        xstep += 1
+
+        if startCOM_type == "series":
+            # SERIES COM start
+            angle_COM = 0.0
+            design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+xpos_firststep, y=ypos)])
+            xpos += xpos_firststep
+
+            design.add_wire([PointF(x=xpos+1.0, y=ypos), PointF(x=xpos_max + max_size_symb, y=ypos)])
+        else:
+            # SHUNT COM start
+            angle_COM = -90.0
+            xpos += max_size_symb/2
+
+            points = [PointF(x=xpos-max_size_symb/2, y=ypos), PointF(x=xpos, y=ypos), PointF(x=xpos+max_size_symb/2, y=ypos)]
+            design.add_wire(points)
+
+            inst = design.add_instance("ads_rflib:GROUND", name="G"+str(xstep), origin=(xpos, ypos-1.0), angle=-90.0, ads_annot=False)
+        
+        inst = design.add_instance((library_name, CELL_COM_LOSSY, "symbol"), origin=(xpos, ypos), name="COM_"+str(num_COM), angle=angle_COM)
+        inst.parameters["d"].value = str(list_COM[num_COM].d)
+        inst.parameters["Ap"].value = str(list_COM[num_COM].Ap)
+        inst.parameters["DigitsActiveIDT"].value = str(list_COM[num_COM].N)
+        inst.parameters["DigitsReflector"].value = str(list_COM[num_COM].NR)
+        inst.parameters["alpha"].value = str(list_COM[num_COM].alpha)
+
+        try:
+            inst.update_item_annotation()
+        except Exception:
+            pass
+
+        xpos_max += max_size_symb
+        xpos = xpos_max
+        ypos = 0.0
+        num_COM += 1
+
+
+        # COM LADDER: Add the rest of the ladder depending on the number of COMs
+        for num_COM in range(1, order):
+            if (num_COM % 2 == 0 and startCOM_type == "series") or (num_COM % 2 != 0 and startCOM_type == "shunt"):
+                # SERIES COM
+                angle_COM = 0.0
+                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+xpos_firststep, y=ypos)])
+                xpos += xpos_firststep
+
+                design.add_wire([PointF(x=xpos+1.0, y=ypos), PointF(x=xpos_max + max_size_symb, y=ypos)])
+            else:
+                # SHUNT COM
+                angle_COM = -90.0
+                xpos += max_size_symb/2
+
+                points = [PointF(x=xpos-max_size_symb/2, y=ypos), PointF(x=xpos, y=ypos), PointF(x=xpos+max_size_symb/2, y=ypos)]
+                design.add_wire(points)
+
+                inst = design.add_instance("ads_rflib:GROUND", name="G"+str(xstep), origin=(xpos, ypos-1.0), angle=-90.0, ads_annot=False)
+
+            inst = design.add_instance((library_name, CELL_COM_LOSSY, "symbol"), origin=(xpos, ypos), name="COM_"+str(num_COM), angle=angle_COM)
+            inst.parameters["d"].value = str(list_COM[num_COM].d)
+            inst.parameters["Ap"].value = str(list_COM[num_COM].Ap)
+            inst.parameters["DigitsActiveIDT"].value = str(list_COM[num_COM].N)
+            inst.parameters["DigitsReflector"].value = str(list_COM[num_COM].NR)
+            inst.parameters["alpha"].value = str(list_COM[num_COM].alpha)
+
+            try:
+                inst.update_item_annotation()
+            except Exception:
+                pass
+                
+            xpos_max += max_size_symb
+            xpos = xpos_max
+            ypos = 0.0
+            xstep += 1
+
+
+        # OUTPUT MATCHING NETWORK: (need to know if last COM is series or shunt)
+        xstep += 1
+
+        design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+xpos_firststep*2, y=ypos)])
+        xpos += xpos_firststep*2
+
+        if matching_network == "0.0":
+            if endCOM_type == "series":
+                # Bobina en shunt (lfini2)
+                inst = design.add_instance("ads_rflib:L", name="L_output", origin=(xpos, ypos), angle=-90.0)
+                inst.parameters["L"].value = "lfini2 H"
+                inst.update_item_annotation()
+                ypos -= 1.0
+
+                inst = design.add_instance("ads_rflib:GROUND", name="G"+str(xstep), origin=(xpos, ypos), angle=-90.0, ads_annot=False)
+                ypos += 1.0
+                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=float(max_size_symb*xstep), y=ypos)])
+
+            else:
+                # Bobina en serie (lfini2)
+                inst = design.add_instance("ads_rflib:L", name="L_output", origin=(xpos, ypos))
+                inst.parameters["L"].value = "lfini2 H"
+                inst.update_item_annotation()
+                xpos += 1.0
+
+                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=float(max_size_symb*xstep), y=ypos)])
+        else:
+            # Add the matching network for the output
+            if mntype1 == "s":
+                # Bobina Serie (lfini1) seguida de Condensador Shunt (Cfini2)
+                inst = design.add_instance("ads_rflib:L", name="L_output", origin=(xpos, ypos))
+                inst.parameters["L"].value = "lfini1 H"
+                inst.update_item_annotation()
+                xpos += 1.0
+                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+space_parallel, y=ypos)])
+                xpos += space_parallel
+
+                inst = design.add_instance("ads_rflib:C", name="C_output", origin=(xpos, ypos), angle=-90.0)
+                inst.parameters["C"].value = "cfini2 F"
+                inst.update_item_annotation()
+                ypos -= 1.0
+
+                inst = design.add_instance("ads_rflib:GROUND", name="G"+str(xstep), origin=(xpos, ypos), angle=-90.0, ads_annot=False)
+                ypos += 1.0
+
+                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos + 2.0, y=ypos)])
+
+            else:
+                #  Condensador Shunt (Cfini1) seguido de Bobina Serie (lfini2)
+                inst = design.add_instance("ads_rflib:C", name="C_output", origin=(xpos, ypos), angle=-90.0)
+                inst.parameters["C"].value = "cfini1 F"
+                inst.update_item_annotation()
+                ypos -= 1.0
+
+                inst = design.add_instance("ads_rflib:GROUND", name="G"+str(xstep), origin=(xpos, ypos), angle=-90.0, ads_annot=False)
+                ypos += 1.0
+                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+space_parallel, y=ypos)])
+                xpos += space_parallel
+
+                inst = design.add_instance("ads_rflib:L", name="L_output", origin=(xpos, ypos))
+                inst.parameters["L"].value = "lfini2 H"
+                inst.update_item_annotation()
+                xpos += 1.0
+
+                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos + 2.0, y=ypos)])
+
+        xpos_max += max_size_output
+        xpos += 2.0
+        ypos = 0.0
+
+
+        # TermG2
+        inst = design.add_instance("ads_simulation:TermG", name="TermG2", origin=(xpos, ypos), angle=-90.0)
+        inst.parameters["Num"].value = "2"
+        inst.update_item_annotation()
+
+
+        # S parameters simulation
+        inst = design.add_instance("ads_simulation:S_Param", name="SP1", origin=(0.0, 6.0))
+        inst.parameters["Start"].value = "fstart Hz"
+        inst.parameters["Stop"].value = "fstop Hz"
+        # inst.parameters["Step"].value = "(fstop-fstart)/npoints Hz"
+        inst.parameters["Step"].value = "1e6 Hz"
+        inst.update_item_annotation()
+
+
+        # Variables 
+        inst = design.add_var_instance(name="VAR_Sweep", origin=(3.0, 6.0))
+        inst.vars.update({'fstart': fstart, 'fstop': fstop, 'npoints': npoints})
+        # Since inst.vars does not contain 'X', we need to remove the first repeat.
+        assert isinstance(inst.parameters[0], db.ParamRepeated)
+        del(inst.parameters[0].repeats[0])
+
+        inst = design.add_var_instance(name="VAR_MNs", origin=(8.0, 6.0))
+        inst.vars.update({"input_l": input_l, "lfini1": lfini1, "lfini2": lfini2, "cfini1": cfini1, "cfini2": cfini2})
+        # Since inst.vars does not contain 'X', we need to remove the first repeat.
+        assert isinstance(inst.parameters[0], db.ParamRepeated)
+        del(inst.parameters[0].repeats[0])
+
+
+        # FINISH
+        transaction.commit()
+
+    design.save_design()
+    design = None
+
+    return
 
 def createDataDisplay_basic_Sparameters():
     examples_path = pathlib.Path(__file__).parent.resolve()
