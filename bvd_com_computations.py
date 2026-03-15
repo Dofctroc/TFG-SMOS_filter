@@ -206,7 +206,7 @@ def compute_list_COM(list_BVD: list[BVD]) -> list[COM]:
 
         # Resolución de la ecuación cuadrática
         # Nos quedamos solo con la solución positiva
-        phi = abs(np.sqrt(-1/R_SHUNT -A / (B + D/C)))
+        phi = abs(np.sqrt(-1/R_SHUNT - A / (B + D/C)))
 
         # Cálculo final de alpha
         alpha = phi / (2*Nidt*lambda0*np.sqrt(Z0_PRIMA))

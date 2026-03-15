@@ -1001,8 +1001,8 @@ def create_Schematic_ladderFilter_COM(library: de.Library, library_name: str, pa
         inst = design.add_instance((library_name, CELL_COM_LOSSY, "symbol"), origin=(xpos, ypos), name="COM_"+str(num_COM), angle=angle_COM)
         inst.parameters["d"].value = str(list_COM[num_COM].d)
         inst.parameters["Ap"].value = str(list_COM[num_COM].Ap)
-        inst.parameters["DigitsActiveIDT"].value = str(list_COM[num_COM].N)
-        inst.parameters["DigitsReflector"].value = str(list_COM[num_COM].NR)
+        inst.parameters["DigitsActiveIDT"].value = str(list_COM[num_COM].N*2)
+        inst.parameters["DigitsReflector"].value = str(list_COM[num_COM].NR*2)
         inst.parameters["alpha"].value = str(list_COM[num_COM].alpha)
 
         try:
@@ -1038,8 +1038,8 @@ def create_Schematic_ladderFilter_COM(library: de.Library, library_name: str, pa
             inst = design.add_instance((library_name, CELL_COM_LOSSY, "symbol"), origin=(xpos, ypos), name="COM_"+str(num_COM), angle=angle_COM)
             inst.parameters["d"].value = str(list_COM[num_COM].d)
             inst.parameters["Ap"].value = str(list_COM[num_COM].Ap)
-            inst.parameters["DigitsActiveIDT"].value = str(list_COM[num_COM].N)
-            inst.parameters["DigitsReflector"].value = str(list_COM[num_COM].NR)
+            inst.parameters["DigitsActiveIDT"].value = str(list_COM[num_COM].N*2)
+            inst.parameters["DigitsReflector"].value = str(list_COM[num_COM].NR*2)
             inst.parameters["alpha"].value = str(list_COM[num_COM].alpha)
 
             try:

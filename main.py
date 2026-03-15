@@ -233,6 +233,7 @@ class MainWindow(QMainWindow):
         
         # Creamos los campos (QLineEdit)
         self.input_c0 = QLineEdit()
+        self.input_cp = QLineEdit()
         self.input_ca = QLineEdit()
         self.input_la = QLineEdit()
         self.input_fs = QLineEdit()
@@ -244,7 +245,7 @@ class MainWindow(QMainWindow):
         self.input_ladd_ground = QLineEdit()
         
         # Configuramos como "Solo lectura" y ponemos placeholders
-        for inp in [self.input_c0, self.input_ca, self.input_la, self.input_fs, self.input_fp, self.input_ladd_ser,
+        for inp in [self.input_c0, self.input_cp, self.input_ca, self.input_la, self.input_fs, self.input_fp, self.input_ladd_ser,
                     self.input_ladd_shu, self.input_cadd_ser, self.input_cadd_shu, self.input_ladd_ground]:
             inp.setReadOnly(True)
             inp.setPlaceholderText("---")
@@ -252,6 +253,7 @@ class MainWindow(QMainWindow):
 
         # Añadimos al layout del formulario
         self.form_layout_BVD.addRow("C0 (F):", self.input_c0)
+        self.form_layout_BVD.addRow("Cp (F):", self.input_cp)
         self.form_layout_BVD.addRow("Ca (F):", self.input_ca)
         self.form_layout_BVD.addRow("La (H):", self.input_la)
         self.form_layout_BVD.addRow("fs (Hz):", self.input_fs)
@@ -310,6 +312,7 @@ class MainWindow(QMainWindow):
         
         # Rellenamos los campos
         self.input_c0.setText(str(bvd_seleccionado.c0))
+        self.input_cp.setText(str(bvd_seleccionado.cp))
         self.input_ca.setText(str(bvd_seleccionado.ca))
         self.input_la.setText(str(bvd_seleccionado.la))
         self.input_fs.setText(str(bvd_seleccionado.fs))
