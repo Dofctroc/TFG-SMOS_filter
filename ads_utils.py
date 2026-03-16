@@ -301,15 +301,9 @@ def create_Schematic_ladderFilter_BVDlossy(library: de.Library, library_name: st
 
     # Determine the type of the last BVD based on the order and the type of the first BVD
     if order % 2 == 0:
-        if startBVD_type == "series":
-            endBVD_type = "shunt"
-        else:            
-            endBVD_type = "series"
+        endBVD_type = "shunt" if startBVD_type == "series" else "series"
     else:
-        if startBVD_type == "series":
-            endBVD_type = "series"
-        else:            
-            endBVD_type = "shunt"
+        endBVD_type = "series" if startBVD_type == "series" else "shunt"
 
     # READ Matching network parameters
     matching_network = parameters["matching_network"]

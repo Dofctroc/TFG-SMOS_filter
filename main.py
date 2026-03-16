@@ -20,7 +20,7 @@ import bvd_com_computations as mat_bvd_com
 from PySide6.QtWidgets import (QApplication, QMainWindow, QPushButton, QWidget, QVBoxLayout, QHBoxLayout, 
                                QLabel, QLineEdit, QMessageBox, QGroupBox, QSizePolicy, QRadioButton, QButtonGroup,
                                QComboBox, QFormLayout)
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QSize
 from PySide6.QtGui import QCursor
 
 import matplotlib.pyplot as plt
@@ -75,75 +75,28 @@ class MainWindow(QMainWindow):
 
         # --- 2. PANEL IZQUIERDO (BVD) ---
         self.panel_izquierdo = QGroupBox("BVD Parameters")
-        self.panel_izquierdo.setStyleSheet("""
-            QGroupBox {
-                border: 1px solid black;
-                border-radius: 5px;
-                margin-top: 10px;
-                padding-top: 10px;
-                color: black;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 10px;
-                padding: 0 3px 0 3px;
-            }
-        """)
         
         self.layout_bvd = QVBoxLayout(self.panel_izquierdo)
         self.setup_bvd_panel()
 
+        # --- 2.5. PANEL CENTRAL (MATCHING NETWORKS + COM CONSTANTS)
+        self.panel_central_contenedor = QWidget()
+        self.layout_central_total = QVBoxLayout(self.panel_central_contenedor)
+        self.setup_central_panel()
+
         # --- 3. PANEL DERECHO (COM + GRÁFICO) ---
         self.panel_derecho_contenedor = QWidget()
         self.layout_derecha_total = QVBoxLayout(self.panel_derecho_contenedor)
-        self.layout_derecha_total.setContentsMargins(0, 0, 0, 0) # Quitar márgenes internos
-
-        # Sub-bloque COM (Superior)
-        self.bloque_com = QGroupBox("COM Parameters")
-        self.bloque_com.setStyleSheet("""
-            QGroupBox {
-                border: 1px solid black;
-                border-radius: 5px;
-                margin-top: 10px;
-                padding-top: 10px;
-                color: black;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 10px;
-                padding: 0 3px 0 3px;
-            }
-        """)
-        
-        self.layout_com = QVBoxLayout(self.bloque_com)
-        self.setup_com_panel()
-
-        # Sub-bloque Gráfico (Inferior)
-        self.bloque_grafico = QGroupBox("Admitance Visualization")
-        self.bloque_grafico.setStyleSheet("""
-            QGroupBox {
-                border: 1px solid black;
-                border-radius: 5px;
-                margin-top: 10px;
-                padding-top: 10px;
-                color: black;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 10px;
-                padding: 0 3px 0 3px;
-            }
-        """)
-
-        self.layout_grafico = QVBoxLayout(self.bloque_grafico)
-        self.setup_graph_panel()
-
-        # Añadimos los sub-bloques al panel derecho
-        self.layout_derecha_total.addWidget(self.bloque_com, stretch=0)
-        self.layout_derecha_total.addWidget(self.bloque_grafico, stretch=1)
+        self.setup_right_panel()
 
         # --- 4. ENSAMBLAJE CUERPO ---
-        self.layout_cuerpo.addWidget(self.panel_izquierdo, stretch=1)
+        self.panel_izquierdo.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Preferred)
+        self.panel_central_contenedor.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Preferred)
+        self.panel_izquierdo.setMinimumWidth(300)
+        self.panel_central_contenedor.setMinimumWidth(300)
+        
+        self.layout_cuerpo.addWidget(self.panel_izquierdo, stretch=0)
+        self.layout_cuerpo.addWidget(self.panel_central_contenedor, stretch=0)
         self.layout_cuerpo.addWidget(self.panel_derecho_contenedor, stretch=1)
         
         layout_principal.addLayout(self.layout_cuerpo)
@@ -222,8 +175,23 @@ class MainWindow(QMainWindow):
         self.barra_inferior.addWidget(self.btn_create_workspace)
         
     def setup_bvd_panel(self):
+        self.panel_izquierdo.setStyleSheet("""
+            QGroupBox {
+                border: 1px solid black;
+                border-radius: 5px;
+                margin-top: 10px;
+                padding-top: 10px;
+                color: black;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 3px 0 3px;
+            }
+        """)
         # 1. El Desplegable (Selector)
         self.combo_bvd = QComboBox()
+        self.combo_bvd.setFixedWidth(200)
         self.combo_bvd.addItem("Archivo .ntw no leído")
         
         # Conectamos el cambio de selección a una función
@@ -280,8 +248,8 @@ class MainWindow(QMainWindow):
             inp.setPlaceholderText("---")
             inp.setStyleSheet("background-color: #f0f0f0; color: #555;")
 
-        self.form_layout_BVD_general.addRow("Rs (Ohms):", self.input_rs)
-        self.form_layout_BVD_general.addRow("Rp (Ohms):", self.input_rp)
+        self.form_layout_BVD_general.addRow("Rs (Ω):", self.input_rs)
+        self.form_layout_BVD_general.addRow("Rp (Ω):", self.input_rp)
         self.form_layout_BVD_general.addRow("Ql (-):", self.input_ql)
         self.form_layout_BVD_general.addRow("Qc (-):", self.input_qc)
         self.form_layout_BVD_general.addRow("Qa (-):", self.input_qa)
@@ -324,9 +292,206 @@ class MainWindow(QMainWindow):
         self.input_cadd_shu.setText(str(bvd_seleccionado.cadd_shu/1e-12) if bvd_seleccionado.cadd_shu < 10 else "inf")
         self.input_ladd_ground.setText(str(bvd_seleccionado.ladd_ground/1e-09))
 
+    def setup_central_panel(self):
+        self.layout_central_total.setContentsMargins(0, 0, 0, 0) # Quitar márgenes internos
+
+        # Sub-bloque MN (Superior)
+        self.bloque_matchnetw = QGroupBox("COM Parameters")
+        self.bloque_matchnetw.setStyleSheet("""
+            QGroupBox {
+                border: 1px solid black;
+                border-radius: 5px;
+                margin-top: 10px;
+                padding-top: 10px;
+                color: black;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 3px 0 3px;
+            }
+        """)
+        
+        self.layout_matchnetw = QVBoxLayout(self.bloque_matchnetw)
+        self.setup_matchnetw_panel()
+
+        # Sub-bloque COM_consts (Inferior)
+        self.bloque_constsCOM = QGroupBox("COM Parameters")
+        self.bloque_constsCOM.setStyleSheet("""
+            QGroupBox {
+                border: 1px solid black;
+                border-radius: 5px;
+                margin-top: 10px;
+                padding-top: 10px;
+                color: black;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 3px 0 3px;
+            }
+        """)
+        
+        self.layout_constsCOM = QVBoxLayout(self.bloque_constsCOM)
+        self.setup_constsCOM_panel()
+
+        # Añadimos los sub-bloques al panel central
+        self.layout_central_total.addWidget(self.bloque_matchnetw, stretch=0)
+        self.layout_central_total.addWidget(self.bloque_constsCOM, stretch=1)
+
+    def setup_matchnetw_panel(self):
+        # 2. El Formulario de parámetros
+        self.form_layout_MN = QFormLayout()
+        
+        # Creamos los campos (QLineEdit)
+        self.input_inputL = QLineEdit()
+        self.input_inputL_type = QLineEdit()
+        self.input_Lfini = QLineEdit()
+        self.input_matchnetw_type = QLineEdit()
+        self.input_Cfini = QLineEdit()
+        self.input_Cfini_type = QLineEdit()
+        
+        # Configuramos como "Solo lectura" y ponemos placeholders
+        for inp in [self.input_inputL, self.input_inputL_type, self.input_Lfini, self.input_matchnetw_type, 
+                    self.input_Cfini, self.input_Cfini_type]:
+            inp.setReadOnly(True)
+            inp.setPlaceholderText("---")
+            inp.setStyleSheet("background-color: #f0f0f0; color: #555;")
+
+        # Añadimos al layout del formulario
+        self.form_layout_MN.addRow("L_input (nH):", self.input_inputL)
+        self.form_layout_MN.addRow("L_input type:", self.input_inputL_type)
+        self.form_layout_MN.addRow("L_output (nH):", self.input_Lfini)
+        self.form_layout_MN.addRow("L_output_type:", self.input_matchnetw_type)
+        self.form_layout_MN.addRow("L_output (pF):", self.input_Cfini)
+        self.form_layout_MN.addRow("L_output_type:", self.input_Cfini_type)
+
+        # 3. Montaje en el panel derecho
+        # Limpiamos el layout_com por si acaso y añadimos
+        matchnetw_label=QLabel("Parámetros Matching Networks:")
+        matchnetw_label.setStyleSheet("font-weight: bold; color: darkgray;")
+        self.layout_matchnetw.addWidget(matchnetw_label)
+        self.layout_matchnetw.addSpacing(10) # Espacio visual
+        self.layout_matchnetw.addLayout(self.form_layout_MN)
+        self.layout_matchnetw.addStretch()
+
+    def setup_constsCOM_panel(self):
+        K11 = -82053.9 - 1j*450
+        K12 = 59340.0
+
+        VP = 3741.8
+        EPS_R = 39.56
+        EPS_0 = 8.854e-12
+        DUTY = 0.55
+
+        Z0_PRIMA = 1
+        R_SHUNT = 4e5
+        R_SERIE = 0.1
+
+        # 2. El Formulario de parámetros
+        self.form_layout_constCOM = QFormLayout()
+        
+        # Creamos los campos (QLineEdit)
+        self.input_K11 = QLineEdit()
+        self.input_K12 = QLineEdit()
+        self.input_VP = QLineEdit()
+        self.input_EPS_R = QLineEdit()
+        self.input_EPS_0 = QLineEdit()
+        self.input_DUTY = QLineEdit()
+        self.input_Z0_PRIMA = QLineEdit()
+        self.input_R_SHUNT = QLineEdit()
+        self.input_R_SERIE = QLineEdit()
+        
+        # Configuramos como "Solo lectura" y ponemos placeholders
+        for inp in [self.input_K11, self.input_K12, self.input_VP, self.input_EPS_R, self.input_EPS_0, 
+                    self.input_DUTY, self.input_Z0_PRIMA, self.input_R_SHUNT, self.input_R_SERIE]:
+            inp.setReadOnly(True)
+            inp.setPlaceholderText("---")
+            inp.setStyleSheet("background-color: #f0f0f0; color: #555;")
+
+        # Añadimos al layout del formulario
+        self.form_layout_constCOM.addRow("k11 (?):", self.input_K11)
+        self.form_layout_constCOM.addRow("k12 (?):", self.input_K12)
+        self.form_layout_constCOM.addRow("Vp (m/s):", self.input_VP)
+        self.form_layout_constCOM.addRow("ε_r (-):", self.input_EPS_R)
+        self.form_layout_constCOM.addRow("ε_0 (-):", self.input_EPS_0)
+        self.form_layout_constCOM.addRow("η (-):", self.input_DUTY)
+        self.form_layout_constCOM.addRow("Z0' (Ω):", self.input_Z0_PRIMA)
+        self.form_layout_constCOM.addRow("Rp (Ω):", self.input_R_SHUNT)
+        self.form_layout_constCOM.addRow("Rs (Ω):", self.input_R_SERIE)
+        
+        self.input_K11.setText(str(K11))
+        self.input_K12.setText(str(K12))
+        self.input_VP.setText(str(VP))
+        self.input_EPS_R.setText(str(EPS_R))
+        self.input_EPS_0.setText(str(EPS_0))
+        self.input_DUTY.setText(str(DUTY))
+        self.input_Z0_PRIMA.setText(str(Z0_PRIMA))
+        self.input_R_SHUNT.setText(str(R_SHUNT))
+        self.input_R_SERIE.setText(str(R_SERIE))
+
+        # 3. Montaje en el panel derecho
+        # Limpiamos el layout_com por si acaso y añadimos
+        matchnetw_label=QLabel("Constantes COM:")
+        matchnetw_label.setStyleSheet("font-weight: bold; color: darkgray;")
+        self.layout_constsCOM.addWidget(matchnetw_label)
+        self.layout_constsCOM.addSpacing(10) # Espacio visual
+        self.layout_constsCOM.addLayout(self.form_layout_constCOM)
+        self.layout_constsCOM.addStretch()
+        
+        self.panel_central_contenedor.updateGeometry()
+
+    def setup_right_panel(self):
+        self.layout_derecha_total.setContentsMargins(0, 0, 0, 0) # Quitar márgenes internos
+
+        # Sub-bloque COM (Superior)
+        self.bloque_com = QGroupBox("COM Parameters")
+        self.bloque_com.setStyleSheet("""
+            QGroupBox {
+                border: 1px solid black;
+                border-radius: 5px;
+                margin-top: 10px;
+                padding-top: 10px;
+                color: black;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 3px 0 3px;
+            }
+        """)
+        
+        self.layout_com = QVBoxLayout(self.bloque_com)
+        self.setup_com_panel()
+
+        # Sub-bloque Gráfico (Inferior)
+        self.bloque_grafico = QGroupBox("Admitance Visualization")
+        self.bloque_grafico.setStyleSheet("""
+            QGroupBox {
+                border: 1px solid black;
+                border-radius: 5px;
+                margin-top: 10px;
+                padding-top: 10px;
+                color: black;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 3px 0 3px;
+            }
+        """)
+
+        self.layout_grafico = QVBoxLayout(self.bloque_grafico)
+        self.setup_graph_panel()
+
+        # Añadimos los sub-bloques al panel derecho
+        self.layout_derecha_total.addWidget(self.bloque_com, stretch=0)
+        self.layout_derecha_total.addWidget(self.bloque_grafico, stretch=1)
+
     def setup_com_panel(self):
         # 1. El Desplegable (Selector)
         self.combo_com = QComboBox()
+        self.combo_com.setFixedWidth(200)
         self.combo_com.addItem("Conversión no realizada")
         
         # Conectamos el cambio de selección a una función
@@ -390,7 +555,7 @@ class MainWindow(QMainWindow):
         else:
             self.layout_grafico = self.bloque_grafico.layout()
             
-        self.layout_grafico.setContentsMargins(10, 20, 10, 10)
+        self.layout_grafico.setContentsMargins(10, 10, 10, 10)
         self.layout_grafico.setSpacing(5)
 
         # --- BARRA DE CONTROL DEL GRÁFICO (Horizontal) ---
@@ -432,6 +597,7 @@ class MainWindow(QMainWindow):
         self.toolbar = NavigationToolbar(self.canvas, self)
         # Hacer la toolbar más discreta
         self.toolbar.setStyleSheet("background-color: transparent; border: none;")
+        self.toolbar.setIconSize(QSize(24, 24))
 
         # --- AÑADIR TODO AL LAYOUT PRINCIPAL DEL BLOQUE ---
         self.layout_grafico.addLayout(barra_filtros)
@@ -538,7 +704,6 @@ class MainWindow(QMainWindow):
                             clip_on=True
                         )
 
-        self.canvas.axes.set_title("Respuesta en Frecuencia (Magnitud)")
         self.canvas.axes.set_xlabel("Frecuencia (Hz)")
         self.canvas.axes.set_ylabel("Admitancia (dB)")
         
@@ -568,11 +733,8 @@ class MainWindow(QMainWindow):
                 for bvd in self.list_BVD:
                     self.combo_bvd.addItem(bvd.name)
                 
-                self.input_rs.setText(str(self.network_parameters["rs"]))
-                self.input_rp.setText(str(self.network_parameters["rp"]))
-                self.input_ql.setText(str(self.network_parameters["ql"]))
-                self.input_qc.setText(str(self.network_parameters["qc"]))
-                self.input_qa.setText(str(self.network_parameters["qa"]))
+                self.assign_input_GeneralBVDParams()
+                self.assign_input_MatchingNetworkParams()
 
                 # Rellenar el combo del gráfico con los elementos disponibles
                 self.combo_elemento_graf.clear() # Borra el "Archivo no leído"
@@ -595,6 +757,44 @@ class MainWindow(QMainWindow):
                 f"Mensaje: {str(e)}\n\n"+
                 error_detallado)
             return
+        
+    def assign_input_GeneralBVDParams(self):
+        # Assign General BVD parameters
+        self.input_rs.setText(str(self.network_parameters["rs"]))
+        self.input_rp.setText(str(self.network_parameters["rp"]))
+        self.input_ql.setText(str(self.network_parameters["ql"]))
+        self.input_qc.setText(str(self.network_parameters["qc"]))
+        self.input_qa.setText(str(self.network_parameters["qa"]))
+
+    def assign_input_MatchingNetworkParams(self):
+        # Assign Matching Network parameters
+        mntype = self.network_parameters["mntype1"]
+        startBVD_type = self.network_parameters["typeseriesshunt_ini"]
+        if int(self.network_parameters["norder_ini"]) % 2 == 0:
+            endBVD_type = "shunt" if startBVD_type == "series" else "series"
+        else:
+            endBVD_type = "series" if startBVD_type == "series" else "shunt"
+
+        self.input_inputL.setText(str(self.network_parameters["input_l"]))
+        self.input_inputL_type.setText("series" if startBVD_type == "shunt" else "shunt")
+
+        if self.network_parameters["matching_network"] == "0.0":
+            # Output matching network is a single inductance
+            self.input_Lfini.setText(str(self.network_parameters["lfini2"]))
+            self.input_Cfini.setText("N/A")
+            self.input_matchnetw_type.setText("Single inductance in: " + "series" if endBVD_type == "shunt" else "shunt")
+        else:
+            # Output has a LC matching network
+            if mntype == "s":
+                self.input_Lfini.setText(str(self.network_parameters["lfini1"]))
+                self.input_Cfini.setText(str(self.network_parameters["cfini2"]))
+                self.input_matchnetw_type.setText("Lfini series + Cfini shunt")
+            else:
+                self.input_Lfini.setText(str(self.network_parameters["lfini2"]))
+                self.input_Cfini.setText(str(self.network_parameters["cfini1"]))
+                self.input_matchnetw_type.setText("Cfini shunt + Lfini series")
+                
+        self.panel_central_contenedor.updateGeometry()
 
     def btn_readDirectoy_clicked(self):
         try:
