@@ -1,7 +1,9 @@
 import numpy as np
 
 class BVD():
-    def __init__(self, name, c0, cp, ca, la, fs, fp, cadd_shu, ladd_shu, cadd_ser, ladd_ser, ladd_ground, rs, rp, ql, qc, qa):
+    def __init__(self, name: str, c0: float, cp: float, ca: float, la: float, fs: float, fp: float, 
+                 cadd_shu: float, ladd_shu: float, cadd_ser: float, ladd_ser: float, ladd_ground: float, 
+                 rs: float, rp: float, ql: float, qc: float, qa: float, Y=None, f=None):
         self.name = name
         self.c0 = c0
         self.cp = cp
@@ -19,9 +21,12 @@ class BVD():
         self.ql = ql
         self.qc = qc
         self.qa = qa
+        self.Y = Y
+        self.f = f
 
 class COM():
-    def __init__(self, name, d, Ap, N, NR, alpha, alpha_n, Ct):
+    def __init__(self, name: str, d: float, Ap: float, N: int, NR: int, 
+                 alpha: float, alpha_n: float, Ct: float, Y=None, f=None):
         self.name = name
         self.d = d
         self.Ap = Ap
@@ -30,6 +35,8 @@ class COM():
         self.alpha = alpha
         self.alpha_n = alpha_n
         self.Ct = Ct
+        self.Y = Y
+        self.f = f
 
 K11_REAL = -82053.9
 K11 = -82053.9 - 1j*450
@@ -47,7 +54,6 @@ R_SERIE = 0.1
 NR = 40
 
 def create_list_BVD(parametersBVD: dict) -> list[BVD]:
-    """Crea la lista de valores para el bloque BVD a partir de los parámetros leídos."""
     list_BVD: list[BVD] = []
 
     startBVD_type = parametersBVD["typeseriesshunt_ini"]
@@ -66,11 +72,11 @@ def create_list_BVD(parametersBVD: dict) -> list[BVD]:
     cadd_shu = parametersBVD["cadd_shu_vals"]           #float[]
     ladd_ground = parametersBVD["ladd_ground_vals"]     #float[]
 
-    rs = parametersBVD["rs"]
-    rp = parametersBVD["rp"]
-    ql = parametersBVD["ql"]
-    qc = parametersBVD["qc"]
-    qa = parametersBVD["qa"]
+    rs = float(parametersBVD["rs"])
+    rp = float(parametersBVD["rp"])
+    ql = float(parametersBVD["ql"])
+    qc = float(parametersBVD["qc"])
+    qa = float(parametersBVD["qa"])
 
     currentType = startBVD_type
     
@@ -87,8 +93,56 @@ def create_list_BVD(parametersBVD: dict) -> list[BVD]:
 
     return list_BVD
 
+def compute_admitance_BVD(list_BVD: list[BVD], parameters: dict) -> list[BVD]:
+
+    fstart = float(parameters["fstart1"])
+    fstop = float(parameters["fstop1"])
+    npoints = int(parameters["npoints1"])
+
+    f = np.linspace(fstart, fstop, npoints)
+
+    for bvd in list_BVD:
+        z_la = Zl(f, bvd.la)
+        z_cp = Zc(f, bvd.cp)
+        z_ca = Zc(f, bvd.ca)
+        z_ra = 2*np.pi*f*bvd.la/bvd.qa
+
+        z_cadd_shu = Zc(f, bvd.cadd_shu, bvd.qc)
+        z_ladd_shu = Zl(f, bvd.ladd_shu, bvd.ql)
+
+        z_cadd_ser = Zc(f, bvd.cadd_ser, bvd.qc)
+        z_ladd_ser = Zl(f, bvd.ladd_ser, bvd.ql)
+
+        z_ladd_gnd = Zl(f, bvd.ladd_ground, bvd.ql)
+
+        y_core = (1/z_cadd_shu + 1/(bvd.rp + z_cp) + 1/(z_la + z_ca + z_ra) + 1/z_ladd_shu )
+        z_core = 1/y_core
+
+        Z_bvd = bvd.rs + z_core + z_ladd_ser + z_cadd_ser + z_ladd_gnd
+        Y_bvd = np.nan_to_num(1/Z_bvd)
+
+        bvd.Y = Y_bvd
+        bvd.f = f
+
+    return list_BVD
+
+def Zc(f, C, Q=None):
+    if C == 0:
+        return np.full_like(f, np.inf, dtype=complex)
+    jw = 1j * 2 * np.pi * f
+    if Q is None:
+        return 1/(jw*C)
+    return 1 / (jw*C + 1/(Q/2*np.pi*f*C))
+
+def Zl(f, L, Q=None):
+    if L == 0:
+        return np.zeros_like(f, dtype=complex)
+    jw = 1j * 2 * np.pi * f
+    if Q is None:
+        return jw*L
+    return jw*L + 2*np.pi*f*L/Q
+
 def compute_list_COM(list_BVD: list[BVD]) -> list[COM]:
-    """Computa la lista de valores para el bloque COM a partir de los parámetros leídos."""
     list_COM: list[COM] = []
 
     # Aquí se pueden agregar cálculos adicionales para obtener los parámetros necesarios para el bloque COM
@@ -152,7 +206,7 @@ def compute_list_COM(list_BVD: list[BVD]) -> list[COM]:
 
         # Resolución de la ecuación cuadrática
         # Nos quedamos solo con la solución positiva
-        phi = abs(np.sqrt(-1/R_SHUNT -A / (B + D/C)))
+        phi = abs(np.sqrt(-1/R_SHUNT - A / (B + D/C)))
 
         # Cálculo final de alpha
         alpha = phi / (2*Nidt*lambda0*np.sqrt(Z0_PRIMA))
@@ -162,5 +216,45 @@ def compute_list_COM(list_BVD: list[BVD]) -> list[COM]:
         name = bvd.name.replace("BVD", "COM")
         com = COM(name=name, d=p, Ap=Ap, N=Nidt, NR=NR, alpha=alpha, alpha_n=alpha_n, Ct=Ct)
         list_COM.append(com)
+
+    return list_COM
+
+def compute_admitance_COM(list_COM: list[COM], parameters: dict) -> list[COM]:
+    # Sweep parameters
+    fstart = float(parameters["fstart1"])
+    fstop = float(parameters["fstop1"])
+    npoints = int(parameters["npoints1"])
+
+    f = np.linspace(fstart, fstop, npoints)
+
+    for com in list_COM:
+        # Calculamos la admitancia para cado bloque COM
+        k = (2*np.pi*f)/VP
+        lambda0 = 2*com.d
+        k0 = np.pi/com.d
+
+        delta = k - k0
+        beta = np.sqrt((delta+K11)**2 - K12**2)
+        pe = (beta-delta-K11)/K12
+
+        theta = beta*com.N*lambda0/2
+        theta_R = beta*NR*lambda0/2
+
+        z_0 = (1-pe)/(1+pe)*Z0_PRIMA
+        z_0R = (1+pe)/(1-pe)*Z0_PRIMA
+        z_inR = 1 / ( 1 / (1j*z_0R*np.tan(theta_R)+Z0_PRIMA) + 1j*np.sin(2*theta_R)/z_0R) + 1j*z_0R*np.tan(theta_R)
+
+        # Variables para la resolución de la ecuación cuadrática
+        A = 1j*2*np.pi*f*com.Ct
+        B = 1 / (1j*2*theta*z_0)
+        C = (1j*z_0R*np.tan(theta) + z_inR) / 2 + z_0R / (1j*np.sin(2*theta))
+        D = (Z0_PRIMA / (2*theta*z_0))**2
+        phi = 2*com.alpha*com.N*lambda0*np.sqrt(Z0_PRIMA)
+
+        Z_com = (R_SERIE + 1 / (1/R_SHUNT + A + B*phi**2 + D/C * phi**2))
+        Y_com = 1 / Z_com
+
+        com.Y = Y_com
+        com.f = f
 
     return list_COM

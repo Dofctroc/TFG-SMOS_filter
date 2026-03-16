@@ -1,0 +1,53 @@
+    
+order = int(parameters["norder_ini"])
+startBVD_type = parameters["typeseriesshunt_ini"]
+endBVD_type = ""
+option = int(parameters["option"])
+
+# READ Matching network parameters
+matching_network = parameters["matching_network"]
+mntype1 = parameters["mntype1"]
+mntype2 = parameters["mntype2"]
+input_l = parameters["input_l"]
+lfini1 = parameters["lfini1"]
+lfini2 = parameters["lfini2"]
+cfini1 = parameters["cfini1"]
+cfini2 = parameters["cfini2"]
+
+# READ BVD parameters
+c0 = parameters["c0_vals"]       #float[]
+ca = parameters["ca_vals"]       #float[]
+la = parameters["la_vals"]       #float[]
+
+c0_list = parameters["c0"]
+ca_list = parameters["ca"]
+la_list = parameters["la"]
+
+fs_list = parameters["fs"]
+ra_list = parameters["ra"]
+
+# READ Additional BVD parameters
+ladd_ser = parameters["ladd_ser_vals"]           #float[]
+ladd_shu = parameters["ladd_shu_vals"]           #float[]
+cadd_ser = parameters["cadd_ser_vals"]           #float[]
+cadd_shu = parameters["cadd_shu_vals"]           #float[]
+ladd_ground = parameters["ladd_ground_vals"]     #float[]
+
+ladd_ser_list = parameters["ladd_ser"]
+ladd_shu_list = parameters["ladd_shu"]
+cadd_ser_list = parameters["cadd_ser"]
+cadd_shu_list = parameters["cadd_shu"]
+ladd_ground_list = parameters["ladd_ground"]
+
+rs = parameters["rs"]
+qlim = parameters["qlim"]
+q50 = parameters["q50"]
+ql = parameters["ql"]
+qc = parameters["qc"]
+qa = parameters["qa"]
+rp = parameters["rp"]
+
+# Sweep parameters
+fstart = parameters["fstart1"]
+fstop = parameters["fstop1"]
+npoints = parameters["npoints1"]

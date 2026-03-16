@@ -165,7 +165,7 @@ def compute_extra_parameters_AND_convert_tofloat(parameters: dict) -> dict:
     parameters["cp_vals"] = cp_vals
 
     matriz_valores = zip(cp_vals, ca_vals, la_vals)
-    fp_vals = [(1/(2 * np.pi)*np.sqrt((cp+ca)/cp*ca*la)) for cp, ca, la in matriz_valores]
+    fp_vals = [(1/(2 * np.pi)*np.sqrt((cp+ca)/(cp*ca*la))) for cp, ca, la in matriz_valores]
     parameters["fp"] = f"list({', '.join(str(fp) for fp in fp_vals)})"
     parameters["fp_vals"] = fp_vals
 
