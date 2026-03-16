@@ -25,7 +25,7 @@ class BVD():
         self.f = f
 
 class COM():
-    def __init__(self, name: str, d: float, Ap: float, N: int, NR: int, 
+    def __init__(self, name: str, d: float, Ap: float, N: int, NR: int, fs: float, fp: float, 
                  alpha: float, alpha_n: float, Ct: float, Y=None, f=None):
         self.name = name
         self.d = d
@@ -35,6 +35,8 @@ class COM():
         self.alpha = alpha
         self.alpha_n = alpha_n
         self.Ct = Ct
+        self.fs = fs
+        self.fp = fp
         self.Y = Y
         self.f = f
 
@@ -214,7 +216,7 @@ def compute_list_COM(list_BVD: list[BVD]) -> list[COM]:
 
         # Assign all values to the COM block
         name = bvd.name.replace("BVD", "COM")
-        com = COM(name=name, d=p, Ap=Ap, N=Nidt, NR=NR, alpha=alpha, alpha_n=alpha_n, Ct=Ct)
+        com = COM(name=name, d=p, Ap=Ap, N=Nidt, NR=NR, alpha=alpha, alpha_n=alpha_n, Ct=Ct, fs=bvd.fs, fp=bvd.fp)
         list_COM.append(com)
 
     return list_COM
@@ -223,7 +225,7 @@ def compute_admitance_COM(list_COM: list[COM], parameters: dict) -> list[COM]:
     # Sweep parameters
     fstart = float(parameters["fstart1"])
     fstop = float(parameters["fstop1"])
-    npoints = int(parameters["npoints1"])
+    npoints = int(parameters["npoints1"]) if int(parameters["npoints1"]) > 1000 else 1000
 
     f = np.linspace(fstart, fstop, npoints)
 
@@ -256,5 +258,10 @@ def compute_admitance_COM(list_COM: list[COM], parameters: dict) -> list[COM]:
 
         com.Y = Y_com
         com.f = f
+
+        Y_com_dB = 20 * np.log10(np.abs(Y_com) + 1e-20)
+
+        com.fs = f[np.argmax(Y_com_dB)]
+        com.fp = f[np.argmin(Y_com_dB)]
 
     return list_COM

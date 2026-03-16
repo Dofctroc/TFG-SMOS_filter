@@ -2,6 +2,7 @@ import os
 import sys
 import importlib
 import traceback
+import math
 
 # Intentamos obtener la ruta del archivo, si falla (consola), usamos el directorio actual
 try:
@@ -252,17 +253,17 @@ class MainWindow(QMainWindow):
             inp.setStyleSheet("background-color: #f0f0f0; color: #555;")
 
         # Añadimos al layout del formulario
-        self.form_layout_BVD.addRow("C0 (F):", self.input_c0)
-        self.form_layout_BVD.addRow("Cp (F):", self.input_cp)
-        self.form_layout_BVD.addRow("Ca (F):", self.input_ca)
-        self.form_layout_BVD.addRow("La (H):", self.input_la)
+        self.form_layout_BVD.addRow("C0 (pF):", self.input_c0)
+        self.form_layout_BVD.addRow("Cp (pF):", self.input_cp)
+        self.form_layout_BVD.addRow("Ca (pF):", self.input_ca)
+        self.form_layout_BVD.addRow("La (nH):", self.input_la)
         self.form_layout_BVD.addRow("fs (Hz):", self.input_fs)
         self.form_layout_BVD.addRow("fp (Hz):", self.input_fp)
-        self.form_layout_BVD.addRow("Ladd_ser (H):", self.input_ladd_ser)
-        self.form_layout_BVD.addRow("Ladd_shu (H):", self.input_ladd_shu)
-        self.form_layout_BVD.addRow("Cadd_ser (F):", self.input_cadd_ser)
-        self.form_layout_BVD.addRow("Cadd_shu (F):", self.input_cadd_shu)
-        self.form_layout_BVD.addRow("Ladd_gnd (H):", self.input_ladd_ground)
+        self.form_layout_BVD.addRow("Ladd_ser (nH):", self.input_ladd_ser)
+        self.form_layout_BVD.addRow("Ladd_shu (nH):", self.input_ladd_shu)
+        self.form_layout_BVD.addRow("Cadd_ser (pF):", self.input_cadd_ser)
+        self.form_layout_BVD.addRow("Cadd_shu (pF):", self.input_cadd_shu)
+        self.form_layout_BVD.addRow("Ladd_gnd (nH):", self.input_ladd_ground)
 
         # Añadir parámetros generales (rs, rp, ql, qc, qa) al formulario de BVD
         self.form_layout_BVD_general = QFormLayout()
@@ -311,17 +312,17 @@ class MainWindow(QMainWindow):
         bvd_seleccionado = self.list_BVD[index]
         
         # Rellenamos los campos
-        self.input_c0.setText(str(bvd_seleccionado.c0))
-        self.input_cp.setText(str(bvd_seleccionado.cp))
-        self.input_ca.setText(str(bvd_seleccionado.ca))
-        self.input_la.setText(str(bvd_seleccionado.la))
-        self.input_fs.setText(str(bvd_seleccionado.fs))
-        self.input_fp.setText(str(bvd_seleccionado.fp))
-        self.input_ladd_ser.setText(str(bvd_seleccionado.ladd_ser))
-        self.input_ladd_shu.setText(str(bvd_seleccionado.ladd_shu))
-        self.input_cadd_ser.setText(str(bvd_seleccionado.cadd_ser))
-        self.input_cadd_shu.setText(str(bvd_seleccionado.cadd_shu))
-        self.input_ladd_ground.setText(str(bvd_seleccionado.ladd_ground))
+        self.input_c0.setText(str(bvd_seleccionado.c0/1e-12))
+        self.input_cp.setText(str(bvd_seleccionado.cp/1e-12))
+        self.input_ca.setText(str(bvd_seleccionado.ca/1e-12))
+        self.input_la.setText(str(bvd_seleccionado.la/1e-09))
+        self.input_fs.setText(formato_ingenieria(bvd_seleccionado.fs))
+        self.input_fp.setText(formato_ingenieria(bvd_seleccionado.fp))
+        self.input_ladd_ser.setText(str(bvd_seleccionado.ladd_ser/1e-09) if bvd_seleccionado.ladd_ser < 10 else "inf")
+        self.input_ladd_shu.setText(str(bvd_seleccionado.ladd_shu/1e-09) if bvd_seleccionado.ladd_shu < 10 else "inf")
+        self.input_cadd_ser.setText(str(bvd_seleccionado.cadd_ser/1e-12) if bvd_seleccionado.cadd_ser < 10 else "inf")
+        self.input_cadd_shu.setText(str(bvd_seleccionado.cadd_shu/1e-12) if bvd_seleccionado.cadd_shu < 10 else "inf")
+        self.input_ladd_ground.setText(str(bvd_seleccionado.ladd_ground/1e-09))
 
     def setup_com_panel(self):
         # 1. El Desplegable (Selector)
@@ -405,14 +406,17 @@ class MainWindow(QMainWindow):
         # 2. Botones de Radio (BVD vs COM)
         self.radio_bvd = QRadioButton("BVD")
         self.radio_com = QRadioButton("COM")
+        self.radio_both = QRadioButton("Both")
         self.radio_bvd.setChecked(True) # BVD por defecto
         
         # Agrupamos los radios para que sean mutuamente excluyentes
         self.grupo_tipo = QButtonGroup(self)
         self.grupo_tipo.addButton(self.radio_bvd)
         self.grupo_tipo.addButton(self.radio_com)
+        self.grupo_tipo.addButton(self.radio_both)
         self.radio_bvd.setEnabled(False)
         self.radio_com.setEnabled(False)
+        self.radio_both.setEnabled(False)
 
         # Montamos la barrita de control
         barra_filtros.addWidget(label_el)
@@ -420,6 +424,7 @@ class MainWindow(QMainWindow):
         barra_filtros.addSpacing(20)
         barra_filtros.addWidget(self.radio_bvd)
         barra_filtros.addWidget(self.radio_com)
+        barra_filtros.addWidget(self.radio_both)
         barra_filtros.addStretch() # Empuja todo a la izquierda
 
         # 3. Canvas y Toolbar
@@ -437,6 +442,7 @@ class MainWindow(QMainWindow):
         self.combo_elemento_graf.currentIndexChanged.connect(self.plot_admitancia)
         self.radio_bvd.toggled.connect(self.plot_admitancia)
         self.radio_com.toggled.connect(self.plot_admitancia)
+        self.radio_both.toggled.connect(self.plot_admitancia)
 
     def plot_admitancia(self):
         idx = self.combo_elemento_graf.currentIndex()
@@ -444,34 +450,94 @@ class MainWindow(QMainWindow):
         # Verificaciones de seguridad
         if idx < 0:
             return
+        
+        color_data1 = "red"
+        color_data2 = "blue"
+        label_data1 = f"BVD - Elemento {idx+1}"
+        label_data2 = f"COM - Elemento {idx+1}"
 
         # Decidir qué fuente usar
         if self.radio_bvd.isChecked():
             # Suponiendo que tu clase BVD tiene .Y y .f calculados
-            data = self.list_BVD[idx]
-            color_plot = 'red'
-            label_plot = f"BVD - Elemento {idx+1}"
+            data1 = self.list_BVD[idx]
+            data2 = None
+        elif self.radio_com.isChecked():
+            data1 = None
+            data2 = self.list_COM[idx]
         else:
-            data = self.list_COM[idx]
-            color_plot = 'blue'
-            label_plot = f"COM - Elemento {idx+1}"
+            data1 = self.list_BVD[idx]
+            data2 = self.list_COM[idx]
+            
+        self.canvas.axes.cla()
 
         # Verificamos que el objeto seleccionado tenga los datos
-        if not hasattr(data, 'Y') or data.Y is None:
-            return
-        if not hasattr(data, 'f') or data.f is None:
-            return
+        if data1 is not None and (hasattr(data1, 'Y') or data1.Y is not None):
+            # CONVERSIÓN A dB
+            magnitud_Y_dB = 20 * np.log10(np.abs(data1.Y) + 1e-20)
+            # Ploteamos f (log) vs Y (dB lineal)
+            self.canvas.axes.plot(data1.f, magnitud_Y_dB, label=label_data1, color=color_data1)
+            
+            frecuencias_interes = [data1.fs, data1.fp]
+            frecuencias_interes_names = ["fs_BVD", "fp_BVD"]
 
-        # CONVERSIÓN A dB
-        # Usamos 20*log10 porque la admitancia es una magnitud de "voltaje/corriente"
-        # Añadimos un pequeño valor (1e-20) para evitar log(0) si hubiera ceros
-        magnitud_Y_dB = 20 * np.log10(np.abs(data.Y) + 1e-20)
+            if data2 is None:
+                for f_marcar, f_marcar_name in zip(frecuencias_interes, frecuencias_interes_names):
 
-        self.canvas.axes.cla()
-        
-        # Ploteamos f (log) vs Y (dB lineal)
-        self.canvas.axes.plot(data.f, magnitud_Y_dB, label=label_plot, color=color_plot)
-        
+                    # Solo marcamos si está dentro del rango de los datos actuales
+                    if data1.f.min() <= f_marcar <= data1.f.max():
+                        idx = np.abs(data1.f - f_marcar).argmin()
+                        self.canvas.axes.plot(data1.f[idx], magnitud_Y_dB[idx], 'kx')
+
+                        ha_val = 'left'
+                        x_pos = data1.f[idx] + (data1.f.max() - data1.f.min()) * 0.03
+                        # Ajuste específico para "fp"
+                        if "fp" in f_marcar_name.lower():
+                            ha_val = 'right'
+                            x_pos = data1.f[idx] - (data1.f.max() - data1.f.min()) * 0.03
+
+                        self.canvas.axes.text(
+                            x_pos, 
+                            magnitud_Y_dB[idx],
+                            f"{f_marcar_name}: {f_marcar:.4e}",
+                            verticalalignment='center',
+                            horizontalalignment=ha_val,  # Dinámico: 'right' para fp, 'left' para los demás
+                            fontsize=9,
+                            clip_on=True
+                        )
+
+        if data2 is not None and (hasattr(data2, 'Y') or data2.Y is not None):
+            # CONVERSIÓN A dB
+            magnitud_Y_dB = 20 * np.log10(np.abs(data2.Y) + 1e-20)
+            # Ploteamos f (log) vs Y (dB lineal)
+            self.canvas.axes.plot(data2.f, magnitud_Y_dB, label=label_data2, color=color_data2)
+
+            frecuencias_interes = [data2.fs, data2.fp]
+            frecuencias_interes_names = ["fs_COM", "fp_COM"]
+
+            if data1 is None:
+                for f_marcar, f_marcar_name in zip(frecuencias_interes, frecuencias_interes_names):
+                    # Solo marcamos si está dentro del rango de los datos actuales
+                    if data2.f.min() <= f_marcar <= data2.f.max():
+                        idx = np.abs(data2.f - f_marcar).argmin()
+                        self.canvas.axes.plot(data2.f[idx], magnitud_Y_dB[idx], 'kx')
+                        
+                        ha_val = 'left'
+                        x_pos = data2.f[idx] + (data2.f.max() - data2.f.min()) * 0.03
+                        # Ajuste específico para "fp"
+                        if "fp" in f_marcar_name.lower():
+                            ha_val = 'right'
+                            x_pos = data2.f[idx] - (data2.f.max() - data2.f.min()) * 0.03
+
+                        self.canvas.axes.text(
+                            x_pos, 
+                            magnitud_Y_dB[idx],              # Coordenada Y
+                            f"{f_marcar_name}: {f_marcar:.4e}",
+                            verticalalignment='center',
+                            horizontalalignment=ha_val,      # Empieza a la derecha del punto
+                            fontsize=9,
+                            clip_on=True
+                        )
+
         self.canvas.axes.set_title("Respuesta en Frecuencia (Magnitud)")
         self.canvas.axes.set_xlabel("Frecuencia (Hz)")
         self.canvas.axes.set_ylabel("Admitancia (dB)")
@@ -510,9 +576,11 @@ class MainWindow(QMainWindow):
 
                 # Rellenar el combo del gráfico con los elementos disponibles
                 self.combo_elemento_graf.clear() # Borra el "Archivo no leído"
+                element_type = self.network_parameters["typeseriesshunt_ini"]
                 idx = 1
                 for bvd in self.list_BVD:
-                    self.combo_elemento_graf.addItem("Elemento " + str(idx))
+                    self.combo_elemento_graf.addItem(element_type + "-" + str(idx))
+                    element_type = "series" if element_type == "shunt" else "shunt"
                     idx += 1
 
                 # Habilitamos el radio button de COM y ploteamos la primera curva por defecto
@@ -563,6 +631,7 @@ class MainWindow(QMainWindow):
                     
                 # Habilitamos el radio button de COM
                 self.radio_com.setEnabled(True)
+                self.radio_both.setEnabled(True)
 
             except Exception as e:
                 error_detallado = traceback.format_exc()
@@ -647,6 +716,21 @@ class MainWindow(QMainWindow):
         
         QMessageBox.information(self, "Éxito", f"Workspace '{workspace_name}' creado exitosamente en:\n{full_workspace_path}")
 
+
+def formato_ingenieria(valor, precision=3):
+    if valor == 0:
+        return "0"
+    
+    # 1. Hallar el exponente (potencia de 10)
+    exp = int(math.floor(math.log10(abs(valor))))
+    
+    # 2. Ajustar al múltiplo de 3 inferior
+    eng_exp = (exp // 3) * 3
+    
+    # 3. Calcular el coeficiente
+    coef = valor / (10**eng_exp)
+    
+    return f"{coef:.{precision}f}e{eng_exp}"
 
 # Run the test if this file is executed directly
 if __name__ == "__main__":
