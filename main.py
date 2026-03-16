@@ -296,7 +296,7 @@ class MainWindow(QMainWindow):
         self.layout_bvd.addLayout(self.form_layout_BVD)
 
         self.layout_bvd.addSpacing(20) # Espacio visual
-        bvd_general_label=QLabel("Parámetros Resonador:")
+        bvd_general_label=QLabel("Parámetros Generales:")
         bvd_general_label.setStyleSheet("font-weight: bold; color: darkgray;")
         self.layout_bvd.addWidget(bvd_general_label)
         self.layout_bvd.addLayout(self.form_layout_BVD_general)
