@@ -308,7 +308,6 @@ def create_Schematic_ladderFilter_BVDlossy(library: de.Library, library_name: st
     # READ Matching network parameters
     matching_network = parameters["matching_network"]
     mntype1 = parameters["mntype1"]
-    mntype2 = parameters["mntype2"]
     input_l = parameters["input_l"]
     lfini1 = parameters["lfini1"]
     lfini2 = parameters["lfini2"]

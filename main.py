@@ -19,7 +19,7 @@ import bvd_com_computations as mat_bvd_com
 
 from PySide6.QtWidgets import (QApplication, QMainWindow, QPushButton, QWidget, QVBoxLayout, QHBoxLayout, 
                                QLabel, QLineEdit, QMessageBox, QGroupBox, QSizePolicy, QRadioButton, QButtonGroup,
-                               QComboBox, QFormLayout)
+                               QComboBox, QFormLayout, QGridLayout)
 from PySide6.QtCore import Qt, QSize
 from PySide6.QtGui import QCursor
 
@@ -94,6 +94,7 @@ class MainWindow(QMainWindow):
         self.panel_central_contenedor.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Preferred)
         self.panel_izquierdo.setMinimumWidth(300)
         self.panel_central_contenedor.setMinimumWidth(300)
+        self.panel_derecho_contenedor.setMinimumWidth(600)
         
         self.layout_cuerpo.addWidget(self.panel_izquierdo, stretch=0)
         self.layout_cuerpo.addWidget(self.panel_central_contenedor, stretch=0)
@@ -438,8 +439,6 @@ class MainWindow(QMainWindow):
         self.layout_constsCOM.addSpacing(10) # Espacio visual
         self.layout_constsCOM.addLayout(self.form_layout_constCOM)
         self.layout_constsCOM.addStretch()
-        
-        self.panel_central_contenedor.updateGeometry()
 
     def setup_right_panel(self):
         self.layout_derecha_total.setContentsMargins(0, 0, 0, 0) # Quitar márgenes internos
@@ -496,9 +495,6 @@ class MainWindow(QMainWindow):
         
         # Conectamos el cambio de selección a una función
         self.combo_com.currentIndexChanged.connect(self.actualizar_formulario_com)
-
-        # 2. El Formulario de parámetros
-        self.form_layout_COM = QFormLayout()
         
         # Creamos los campos (QLineEdit)
         self.input_pitch = QLineEdit()
@@ -507,19 +503,37 @@ class MainWindow(QMainWindow):
         self.input_digitsREFL = QLineEdit()
         self.input_alpha = QLineEdit()
         
+        # Nuevos campos para la segunda columna
+        self.input_fs_COM = QLineEdit()
+        self.input_fp_COM = QLineEdit()
+        
         # Configuramos como "Solo lectura" y ponemos placeholders
         for inp in [self.input_pitch, self.input_aperture, self.input_digitsIDT, 
-                    self.input_digitsREFL, self.input_alpha]:
+                    self.input_digitsREFL, self.input_alpha, self.input_fs_COM, self.input_fp_COM]:
             inp.setReadOnly(True)
             inp.setPlaceholderText("---")
             inp.setStyleSheet("background-color: #f0f0f0; color: #555;")
 
+        # 3. Organización en dos columnas (Layout Horizontal con dos FormLayouts)
+        self.layout_horizontal_formularios = QHBoxLayout()
+
         # Añadimos al layout del formulario
-        self.form_layout_COM.addRow("p (m):", self.input_pitch)
-        self.form_layout_COM.addRow("Ap (λ0):", self.input_aperture)
-        self.form_layout_COM.addRow("digitsIDT (-):", self.input_digitsIDT)
-        self.form_layout_COM.addRow("digitsREFL (-):", self.input_digitsREFL)
-        self.form_layout_COM.addRow("α (-):", self.input_alpha)
+        self.form_layout_COM_izq = QFormLayout()
+        self.form_layout_COM_izq.addRow("p (m):", self.input_pitch)
+        self.form_layout_COM_izq.addRow("Ap (λ0):", self.input_aperture)
+        self.form_layout_COM_izq.addRow("digitsIDT (-):", self.input_digitsIDT)
+        self.form_layout_COM_izq.addRow("digitsREFL (-):", self.input_digitsREFL)
+        self.form_layout_COM_izq.addRow("α (-):", self.input_alpha)
+
+        # Formulario Derecho: Resultados de Frecuencia
+        self.form_layout_COM_der = QFormLayout()
+        self.form_layout_COM_der.addRow("fs (Hz):", self.input_fs_COM)
+        self.form_layout_COM_der.addRow("fp (Hz):", self.input_fp_COM)
+
+        # Ensamblamos los dos formularios
+        self.layout_horizontal_formularios.addLayout(self.form_layout_COM_izq)
+        self.layout_horizontal_formularios.addSpacing(20) # Separación entre columnas
+        self.layout_horizontal_formularios.addLayout(self.form_layout_COM_der)
 
         # 3. Montaje en el panel derecho
         # Limpiamos el layout_com por si acaso y añadimos
@@ -528,7 +542,7 @@ class MainWindow(QMainWindow):
         self.layout_com.addWidget(com_label)
         self.layout_com.addWidget(self.combo_com)
         self.layout_com.addSpacing(10) # Espacio visual
-        self.layout_com.addLayout(self.form_layout_COM)
+        self.layout_com.addLayout(self.layout_horizontal_formularios)
         self.layout_com.addStretch()
 
     def actualizar_formulario_com(self, index):
@@ -546,6 +560,9 @@ class MainWindow(QMainWindow):
         self.input_digitsIDT.setText(str(com_seleccionado.N))
         self.input_digitsREFL.setText(str(com_seleccionado.NR))
         self.input_alpha.setText(str(com_seleccionado.alpha))
+
+        self.input_fs_COM.setText(formato_ingenieria(com_seleccionado.fs))
+        self.input_fp_COM.setText(formato_ingenieria(com_seleccionado.fp))
 
     def setup_graph_panel(self):
         # Usamos el layout que ya definiste en el __init__
@@ -614,25 +631,26 @@ class MainWindow(QMainWindow):
         idx = self.combo_elemento_graf.currentIndex()
     
         # Verificaciones de seguridad
+
         if idx < 0:
             return
         
         color_data1 = "red"
         color_data2 = "blue"
-        label_data1 = f"BVD - Elemento {idx+1}"
-        label_data2 = f"COM - Elemento {idx+1}"
+
+        order = int(self.network_parameters["norder_ini"])
 
         # Decidir qué fuente usar
-        if self.radio_bvd.isChecked():
-            # Suponiendo que tu clase BVD tiene .Y y .f calculados
-            data1 = self.list_BVD[idx]
-            data2 = None
-        elif self.radio_com.isChecked():
-            data1 = None
-            data2 = self.list_COM[idx]
+        if idx == order:
+            data1 = self.filter_BVD if (self.radio_bvd.isChecked() or self.radio_both.isChecked()) else None
+            data2 = self.filter_COM if (self.radio_com.isChecked() or self.radio_both.isChecked()) else None
+            label_data1 = "BVD Filter"
+            label_data2 = "COM Filter"
         else:
-            data1 = self.list_BVD[idx]
-            data2 = self.list_COM[idx]
+            data1 = self.list_BVD[idx] if (self.radio_bvd.isChecked() or self.radio_both.isChecked()) else None
+            data2 = self.list_COM[idx] if (self.radio_com.isChecked() or self.radio_both.isChecked()) else None
+            label_data1 = f"BVD - Elemento {idx+1}"
+            label_data2 = f"COM - Elemento {idx+1}"
             
         self.canvas.axes.cla()
 
@@ -642,13 +660,11 @@ class MainWindow(QMainWindow):
             magnitud_Y_dB = 20 * np.log10(np.abs(data1.Y) + 1e-20)
             # Ploteamos f (log) vs Y (dB lineal)
             self.canvas.axes.plot(data1.f, magnitud_Y_dB, label=label_data1, color=color_data1)
-            
-            frecuencias_interes = [data1.fs, data1.fp]
-            frecuencias_interes_names = ["fs_BVD", "fp_BVD"]
 
-            if data2 is None:
+            if data2 is None and hasattr(data1, "fs"):
+                frecuencias_interes = [data1.fs, data1.fp]
+                frecuencias_interes_names = ["fs_BVD", "fp_BVD"]
                 for f_marcar, f_marcar_name in zip(frecuencias_interes, frecuencias_interes_names):
-
                     # Solo marcamos si está dentro del rango de los datos actuales
                     if data1.f.min() <= f_marcar <= data1.f.max():
                         idx = np.abs(data1.f - f_marcar).argmin()
@@ -677,10 +693,9 @@ class MainWindow(QMainWindow):
             # Ploteamos f (log) vs Y (dB lineal)
             self.canvas.axes.plot(data2.f, magnitud_Y_dB, label=label_data2, color=color_data2)
 
-            frecuencias_interes = [data2.fs, data2.fp]
-            frecuencias_interes_names = ["fs_COM", "fp_COM"]
-
-            if data1 is None:
+            if data1 is None and hasattr(data2, "fs"):
+                frecuencias_interes = [data2.fs, data2.fp]
+                frecuencias_interes_names = ["fs_COM", "fp_COM"]
                 for f_marcar, f_marcar_name in zip(frecuencias_interes, frecuencias_interes_names):
                     # Solo marcamos si está dentro del rango de los datos actuales
                     if data2.f.min() <= f_marcar <= data2.f.max():
@@ -735,6 +750,7 @@ class MainWindow(QMainWindow):
                 
                 self.assign_input_GeneralBVDParams()
                 self.assign_input_MatchingNetworkParams()
+                self.filter_BVD = mat_bvd_com.compute_filter_admitance(self.list_BVD, self.network_parameters)
 
                 # Rellenar el combo del gráfico con los elementos disponibles
                 self.combo_elemento_graf.clear() # Borra el "Archivo no leído"
@@ -744,6 +760,7 @@ class MainWindow(QMainWindow):
                     self.combo_elemento_graf.addItem(element_type + "-" + str(idx))
                     element_type = "series" if element_type == "shunt" else "shunt"
                     idx += 1
+                self.combo_elemento_graf.addItem("Full filter")
 
                 # Habilitamos el radio button de COM y ploteamos la primera curva por defecto
                 self.radio_bvd.setEnabled(True)
@@ -768,9 +785,13 @@ class MainWindow(QMainWindow):
 
     def assign_input_MatchingNetworkParams(self):
         # Assign Matching Network parameters
-        mntype = self.network_parameters["mntype1"]
         startBVD_type = self.network_parameters["typeseriesshunt_ini"]
-        if int(self.network_parameters["norder_ini"]) % 2 == 0:
+        order = int(self.network_parameters["norder_ini"])
+        mntype1 = self.network_parameters["mntype1"]
+        matching_network_type = self.network_parameters["matching_network"]
+
+        # Calculamos si el último elemento es shunt o series
+        if order % 2 == 0:
             endBVD_type = "shunt" if startBVD_type == "series" else "series"
         else:
             endBVD_type = "series" if startBVD_type == "series" else "shunt"
@@ -778,14 +799,14 @@ class MainWindow(QMainWindow):
         self.input_inputL.setText(str(self.network_parameters["input_l"]))
         self.input_inputL_type.setText("series" if startBVD_type == "shunt" else "shunt")
 
-        if self.network_parameters["matching_network"] == "0.0":
+        if matching_network_type == "0.0":
             # Output matching network is a single inductance
             self.input_Lfini.setText(str(self.network_parameters["lfini2"]))
             self.input_Cfini.setText("N/A")
             self.input_matchnetw_type.setText("Single inductance in: " + "series" if endBVD_type == "shunt" else "shunt")
         else:
             # Output has a LC matching network
-            if mntype == "s":
+            if mntype1 == "s":
                 self.input_Lfini.setText(str(self.network_parameters["lfini1"]))
                 self.input_Cfini.setText(str(self.network_parameters["cfini2"]))
                 self.input_matchnetw_type.setText("Lfini series + Cfini shunt")
@@ -793,8 +814,6 @@ class MainWindow(QMainWindow):
                 self.input_Lfini.setText(str(self.network_parameters["lfini2"]))
                 self.input_Cfini.setText(str(self.network_parameters["cfini1"]))
                 self.input_matchnetw_type.setText("Cfini shunt + Lfini series")
-                
-        self.panel_central_contenedor.updateGeometry()
 
     def btn_readDirectoy_clicked(self):
         try:
@@ -823,6 +842,7 @@ class MainWindow(QMainWindow):
             try:
                 self.list_COM = mat_bvd_com.compute_list_COM(self.list_BVD)
                 self.list_COM = mat_bvd_com.compute_admitance_COM(self.list_COM, self.network_parameters)
+                self.filter_COM = mat_bvd_com.compute_filter_admitance(self.list_COM, self.network_parameters)
 
                 # Rellenar los campos de Matching Network y Lossy BVD con los parámetros leídos
                 self.combo_com.clear() # Borra el "Archivo no leído"
@@ -917,7 +937,7 @@ class MainWindow(QMainWindow):
         QMessageBox.information(self, "Éxito", f"Workspace '{workspace_name}' creado exitosamente en:\n{full_workspace_path}")
 
 
-def formato_ingenieria(valor, precision=3):
+def formato_ingenieria(valor, precision=8):
     if valor == 0:
         return "0"
     
