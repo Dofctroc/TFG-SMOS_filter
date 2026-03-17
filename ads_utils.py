@@ -559,13 +559,13 @@ def create_Schematic_ladderFilter_BVDlossy(library: de.Library, library_name: st
 
 
         # Variables 
-        inst = design.add_var_instance(name="VAR_Sweep", origin=(3.0, 6.0))
+        inst = design.add_var_instance(name="VAR_Sweep", origin=(3.0, 3.0))
         inst.vars.update({'fstart': fstart, 'fstop': fstop, 'npoints': npoints})
         # Since inst.vars does not contain 'X', we need to remove the first repeat.
         assert isinstance(inst.parameters[0], db.ParamRepeated)
         del(inst.parameters[0].repeats[0])
 
-        inst = design.add_var_instance(name="VAR_MNs", origin=(8.0, 6.0))
+        inst = design.add_var_instance(name="VAR_MNs", origin=(5.0, 3.0))
         inst.vars.update({"input_l": input_l, "lfini1": lfini1, "lfini2": lfini2, "cfini1": cfini1, "cfini2": cfini2})
         # Since inst.vars does not contain 'X', we need to remove the first repeat.
         assert isinstance(inst.parameters[0], db.ParamRepeated)
@@ -1133,13 +1133,13 @@ def create_Schematic_ladderFilter_COM(library: de.Library, library_name: str, pa
 
 
         # Variables 
-        inst = design.add_var_instance(name="VAR_Sweep", origin=(3.0, 6.0))
+        inst = design.add_var_instance(name="VAR_Sweep", origin=(3.0, 3.0))
         inst.vars.update({'fstart': fstart, 'fstop': fstop, 'npoints': npoints})
         # Since inst.vars does not contain 'X', we need to remove the first repeat.
         assert isinstance(inst.parameters[0], db.ParamRepeated)
         del(inst.parameters[0].repeats[0])
 
-        inst = design.add_var_instance(name="VAR_MNs", origin=(8.0, 6.0))
+        inst = design.add_var_instance(name="VAR_MNs", origin=(5.0, 3.0))
         inst.vars.update({"input_l": input_l, "lfini1": lfini1, "lfini2": lfini2, "cfini1": cfini1, "cfini2": cfini2})
         # Since inst.vars does not contain 'X', we need to remove the first repeat.
         assert isinstance(inst.parameters[0], db.ParamRepeated)

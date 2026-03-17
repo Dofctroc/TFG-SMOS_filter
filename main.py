@@ -364,8 +364,8 @@ class MainWindow(QMainWindow):
         self.form_layout_MN.addRow("L_input type:", self.input_inputL_type)
         self.form_layout_MN.addRow("L_output (nH):", self.input_Lfini)
         self.form_layout_MN.addRow("L_output_type:", self.input_matchnetw_type)
-        self.form_layout_MN.addRow("L_output (pF):", self.input_Cfini)
-        self.form_layout_MN.addRow("L_output_type:", self.input_Cfini_type)
+        self.form_layout_MN.addRow("C_output (pF):", self.input_Cfini)
+        self.form_layout_MN.addRow("C_output_type:", self.input_Cfini_type)
 
         # 3. Montaje en el panel derecho
         # Limpiamos el layout_com por si acaso y añadimos

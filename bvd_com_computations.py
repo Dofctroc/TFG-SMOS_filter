@@ -319,6 +319,7 @@ def compute_filter_admitance(list: list, parameters: dict) -> FilterResponse:
 
         element_type = "series" if element_type == "shunt" else "shunt"
 
+    # Finalmente añadimos la impedancia de la bobina en la entrada
     if input_l < 1e-12: 
         # Si es casi 0, ignoramos la bobina (asumimos que no hay matching shunt)
         Ztot = Zeq
