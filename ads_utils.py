@@ -889,7 +889,7 @@ def create_SchematicAndSymbol_lossyCOM(library: de.Library, library_name: str) -
     design.save_design()
     design = None
 
-def create_Schematic_ladderFilter_COM(library: de.Library, library_name: str, parameters: dict, list_COM: list[COM]) -> None:
+def create_Schematic_ladderFilter_COM(library: de.Library, library_name: str, dataset_s2p_path: str, parameters: dict, list_COM: list[COM]) -> None:
     assert de.version() >= 630
 
     design = db.create_schematic(f"{library_name}:{CELL_FILTER_COM}:schematic")
@@ -899,7 +899,6 @@ def create_Schematic_ladderFilter_COM(library: de.Library, library_name: str, pa
     order = int(parameters["norder_ini"])
     startCOM_type = parameters["typeseriesshunt_ini"]
     endCOM_type = ""
-    option = int(parameters["option"])
 
     # Determine the type of the last COM based on the order and the type of the first COM
     if order % 2 == 0:
@@ -916,7 +915,6 @@ def create_Schematic_ladderFilter_COM(library: de.Library, library_name: str, pa
     # READ Matching network parameters
     matching_network = parameters["matching_network"]
     mntype1 = parameters["mntype1"]
-    mntype2 = parameters["mntype2"]
     input_l = parameters["input_l"]
     lfini1 = parameters["lfini1"]
     lfini2 = parameters["lfini2"]
@@ -1065,7 +1063,7 @@ def create_Schematic_ladderFilter_COM(library: de.Library, library_name: str, pa
             xstep += 1
 
 
-        # OUTPUT MATCHING NETWORK: (need to know if last COM is series or shunt)
+        # OUTPUT MATCHING NETWORK: (need to know if last BVD is series or shunt)
         xstep += 1
 
         design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+xpos_firststep*2, y=ypos)])
@@ -1074,61 +1072,65 @@ def create_Schematic_ladderFilter_COM(library: de.Library, library_name: str, pa
         if matching_network == "0.0":
             if endCOM_type == "series":
                 # Bobina en shunt (lfini2)
-                inst = design.add_instance("ads_rflib:L", name="L_output", origin=(xpos, ypos), angle=-90.0)
-                inst.parameters["L"].value = "lfini2 H"
-                inst.update_item_annotation()
-                ypos -= 1.0
+                if float(lfini2) > 0.0:
+                    inst = design.add_instance("ads_rflib:L", name="L_output", origin=(xpos, ypos), angle=-90.0)
+                    inst.parameters["L"].value = lfini2 + "H"
+                    inst.update_item_annotation()
+                    ypos -= 1.0
 
-                inst = design.add_instance("ads_rflib:GROUND", name="G"+str(xstep), origin=(xpos, ypos), angle=-90.0, ads_annot=False)
-                ypos += 1.0
+                    inst = design.add_instance("ads_rflib:GROUND", name="G"+str(xstep), origin=(xpos, ypos), angle=-90.0, ads_annot=False)
+                    ypos += 1.0
                 design.add_wire([PointF(x=xpos, y=ypos), PointF(x=float(max_size_symb*xstep), y=ypos)])
 
             else:
-                # Bobina en serie (lfini2)
-                inst = design.add_instance("ads_rflib:L", name="L_output", origin=(xpos, ypos))
-                inst.parameters["L"].value = "lfini2 H"
-                inst.update_item_annotation()
-                xpos += 1.0
+                if float(lfini2) > 0.0:
+                    # Bobina en serie (lfini2)
+                    inst = design.add_instance("ads_rflib:L", name="L_output", origin=(xpos, ypos))
+                    inst.parameters["L"].value = lfini2 + "H"
+                    inst.update_item_annotation()
+                    xpos += 1.0
 
                 design.add_wire([PointF(x=xpos, y=ypos), PointF(x=float(max_size_symb*xstep), y=ypos)])
         else:
             # Add the matching network for the output
             if mntype1 == "s":
-                # Bobina Serie (lfini1) seguida de Condensador Shunt (Cfini2)
-                inst = design.add_instance("ads_rflib:L", name="L_output", origin=(xpos, ypos))
-                inst.parameters["L"].value = "lfini1 H"
-                inst.update_item_annotation()
-                xpos += 1.0
+                if float(lfini1) > 0.0:
+                    # Bobina Serie (lfini1) seguida de Condensador Shunt (Cfini2)
+                    inst = design.add_instance("ads_rflib:L", name="L_output", origin=(xpos, ypos))
+                    inst.parameters["L"].value = lfini1 + "H"
+                    inst.update_item_annotation()
+                    xpos += 1.0
                 design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+space_parallel, y=ypos)])
                 xpos += space_parallel
 
-                inst = design.add_instance("ads_rflib:C", name="C_output", origin=(xpos, ypos), angle=-90.0)
-                inst.parameters["C"].value = "cfini2 F"
-                inst.update_item_annotation()
-                ypos -= 1.0
+                if float(cfini2) > 0.0:
+                    inst = design.add_instance("ads_rflib:C", name="C_output", origin=(xpos, ypos), angle=-90.0)
+                    inst.parameters["C"].value = cfini2 + "F"
+                    inst.update_item_annotation()
+                    ypos -= 1.0
 
-                inst = design.add_instance("ads_rflib:GROUND", name="G"+str(xstep), origin=(xpos, ypos), angle=-90.0, ads_annot=False)
-                ypos += 1.0
-
+                    inst = design.add_instance("ads_rflib:GROUND", name="G"+str(xstep), origin=(xpos, ypos), angle=-90.0, ads_annot=False)
+                    ypos += 1.0
                 design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos + 2.0, y=ypos)])
 
             else:
-                #  Condensador Shunt (Cfini1) seguido de Bobina Serie (lfini2)
-                inst = design.add_instance("ads_rflib:C", name="C_output", origin=(xpos, ypos), angle=-90.0)
-                inst.parameters["C"].value = "cfini1 F"
-                inst.update_item_annotation()
-                ypos -= 1.0
+                if float(cfini1) > 0.0:
+                    #  Condensador Shunt (Cfini1) seguido de Bobina Serie (lfini2)
+                    inst = design.add_instance("ads_rflib:C", name="C_output", origin=(xpos, ypos), angle=-90.0)
+                    inst.parameters["C"].value = cfini1 + "F"
+                    inst.update_item_annotation()
+                    ypos -= 1.0
 
-                inst = design.add_instance("ads_rflib:GROUND", name="G"+str(xstep), origin=(xpos, ypos), angle=-90.0, ads_annot=False)
-                ypos += 1.0
+                    inst = design.add_instance("ads_rflib:GROUND", name="G"+str(xstep), origin=(xpos, ypos), angle=-90.0, ads_annot=False)
+                    ypos += 1.0
                 design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+space_parallel, y=ypos)])
                 xpos += space_parallel
 
-                inst = design.add_instance("ads_rflib:L", name="L_output", origin=(xpos, ypos))
-                inst.parameters["L"].value = "lfini2 H"
-                inst.update_item_annotation()
-                xpos += 1.0
-
+                if float(lfini2) > 0.0:
+                    inst = design.add_instance("ads_rflib:L", name="L_output", origin=(xpos, ypos))
+                    inst.parameters["L"].value = lfini2 + "H"
+                    inst.update_item_annotation()
+                    xpos += 1.0
                 design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos + 2.0, y=ypos)])
 
         xpos_max += max_size_output
@@ -1141,16 +1143,6 @@ def create_Schematic_ladderFilter_COM(library: de.Library, library_name: str, pa
         inst.parameters["Num"].value = "2"
         inst.update_item_annotation()
 
-
-        # S parameters simulation
-        inst = design.add_instance("ads_simulation:S_Param", name="SP1", origin=(0.0, 6.0))
-        inst.parameters["Start"].value = "fstart Hz"
-        inst.parameters["Stop"].value = "fstop Hz"
-        # inst.parameters["Step"].value = "(fstop-fstart)/npoints Hz"
-        inst.parameters["Step"].value = "1e6 Hz"
-        inst.update_item_annotation()
-
-
         # Variables 
         inst = design.add_var_instance(name="VAR_Sweep", origin=(3.0, 3.0))
         inst.vars.update({'fstart': fstart, 'fstop': fstop, 'npoints': npoints})
@@ -1158,11 +1150,37 @@ def create_Schematic_ladderFilter_COM(library: de.Library, library_name: str, pa
         assert isinstance(inst.parameters[0], db.ParamRepeated)
         del(inst.parameters[0].repeats[0])
 
-        inst = design.add_var_instance(name="VAR_MNs", origin=(5.0, 3.0))
-        inst.vars.update({"input_l": input_l, "lfini1": lfini1, "lfini2": lfini2, "cfini1": cfini1, "cfini2": cfini2})
-        # Since inst.vars does not contain 'X', we need to remove the first repeat.
-        assert isinstance(inst.parameters[0], db.ParamRepeated)
-        del(inst.parameters[0].repeats[0])
+
+        # =========================================== Sparameters Data Item for Comparison ===========================================
+        if dataset_s2p_path is not None:
+            inst = design.add_instance("ads_simulation:TermG", name="TermG3", origin=(6.0, 3.0), angle=-90.0)
+            inst.parameters["Num"].value = "3"
+            inst.update_item_annotation()
+            design.add_wire([PointF(6.0, 3.0), PointF(7.0, 3.0)])
+
+            inst = design.add_instance("ads_datacmps:SnP", name="SnP1", origin=(7.0, 3.0))
+            inst.parameters["NumPorts"].value = "2"
+            inst.parameters["File"].value = dataset_s2p_path
+            inst.parameters["Type"].value = '"touchstone"'
+            inst.parameters["port_name_list"].value = "0 "
+            with de.db.ExpressionContext(design) as expr_context, db.Transaction(design) as trans:
+                expr_context.update_pcell_params(inst)
+                trans.commit()
+            inst.update_item_annotation()
+
+            design.add_wire([PointF(7.75, 3.0), PointF(9.0, 3.0)])
+            inst = design.add_instance("ads_simulation:TermG", name="TermG4", origin=(9.0, 3.0), angle=-90.0)
+            inst.parameters["Num"].value = "4"
+            inst.update_item_annotation()
+
+
+        # =========================================== S parameters simulation ===========================================
+        inst = design.add_instance("ads_simulation:S_Param", name="SP1", origin=(0.0, 3.0))
+        inst.parameters["Start"].value = "fstart Hz"
+        inst.parameters["Stop"].value = "fstop Hz"
+        # inst.parameters["Step"].value = "(fstop-fstart)/npoints Hz"
+        inst.parameters["Step"].value = "1e6 Hz"
+        inst.update_item_annotation()
 
 
         # FINISH

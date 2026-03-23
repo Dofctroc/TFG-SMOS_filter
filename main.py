@@ -936,7 +936,7 @@ class MainWindow(QMainWindow):
             ads.create_SchematicAndSymbol_lossyBVD(lib, library_name)
             ads.create_Schematic_ladderFilter_BVDlossy(lib, library_name, self.dataset_s2p_file_path, self.network_parameters, self.list_BVD)
             ads.create_SchematicAndSymbol_lossyCOM(lib, library_name)
-            ads.create_Schematic_ladderFilter_COM(lib, library_name, self.network_parameters, self.list_COM)
+            ads.create_Schematic_ladderFilter_COM(lib, library_name, self.dataset_s2p_file_path, self.network_parameters, self.list_COM)
 
         except Exception as e:
             error_detallado = traceback.format_exc()
