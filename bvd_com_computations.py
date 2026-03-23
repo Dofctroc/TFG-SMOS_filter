@@ -165,14 +165,15 @@ def compute_list_COM(list_BVD: list[BVD]) -> list[COM]:
             Ap = 30
             Nidt = Ct / (Ap * EPS_R * EPS_0 *np.exp(0.71866*np.tan(DUTY-0.5))) / lambda0
             Nidt = round(Nidt)
-            if Nidt > 500 or Nidt < 50:
+            if Nidt > 400 or Nidt < 50:
+                # Doblem
                 print(f"Advertencia: N calculado es {Nidt}, lo cual está fuera del rango recomendado (50-500).")
 
         elif Ap < 10:
             Ap = 10
             Nidt = Ct / (Ap * EPS_R * EPS_0 *np.exp(0.71866*np.tan(DUTY-0.5))) / lambda0
             Nidt = round(Nidt)
-            if Nidt > 500 or Nidt < 50:
+            if Nidt > 400 or Nidt < 50:
                 print(f"Advertencia: N calculado es {Nidt}, lo cual está fuera del rango recomendado (50-500).")
             else:
                 # Se recalcula Ap debido al redondeo de Nidt
