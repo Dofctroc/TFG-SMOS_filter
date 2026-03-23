@@ -108,7 +108,7 @@ def create_SchematicAndSymbol_lossyBVD(library: de.Library, library_name: str) -
 
         # Instances
         inst = design.add_var_instance(name="VAR1", origin=(4.75, 3.0))
-        inst.vars.update({'fs': '1/(2*pi*sqrt(La*Ca))', 'Cp': 'C0-Ca', 'Ra': '2*pi*fs*La/Qa'})
+        inst.vars.update({'fs': '1/(2*pi*sqrt(La*Ca))', 'Ra': '2*pi*fs*La/Qa'})
         # Since inst.vars does not contain 'X', we need to remove the first repeat.
         param = inst.parameters[0]
         assert isinstance(param, db.ParamRepeated)
@@ -178,9 +178,9 @@ def create_SchematicAndSymbol_lossyBVD(library: de.Library, library_name: str) -
     formset = de.db_uu.model_lib.formsets["StdFormSet"]
 
     # MAIN BVD parameters
-    varC0 = de.db_uu.ModelParam("C0", "Capacitance", formset, de.db_uu.ModelUnitType.CAPACITANCE)
-    varC0.default_value = de.db_uu.ParamItemString("C0", "StdForm", str("1"))
-    varC0.is_displayed_by_default = True
+    varCp = de.db_uu.ModelParam("Cp", "Capacitance", formset, de.db_uu.ModelUnitType.CAPACITANCE)
+    varCp.default_value = de.db_uu.ParamItemString("Cp", "StdForm", str("1"))
+    varCp.is_displayed_by_default = True
 
     varCa = de.db_uu.ModelParam("Ca", "Capacitance", formset, de.db_uu.ModelUnitType.CAPACITANCE)
     varCa.default_value = de.db_uu.ParamItemString("Ca", "StdForm", str("1"))
@@ -235,7 +235,7 @@ def create_SchematicAndSymbol_lossyBVD(library: de.Library, library_name: str) -
     model_def = de.db_uu.ModelDef(CELL_BVD_LOSSY, CELL_BVD_LOSSY)
     model_def.inst_name_prefix = "lossyBVD"
     model_def.is_sub_design = True
-    model_def.parameters = [varC0, varCa, varLa, varLadd_ser, varLadd_shu, varCadd_ser, varCadd_shu, varLadd_ground, varRs, varRp, varQl, varQc, varQa]
+    model_def.parameters = [varCp, varCa, varLa, varLadd_ser, varLadd_shu, varCadd_ser, varCadd_shu, varLadd_ground, varRs, varRp, varQl, varQc, varQa]
 
     de.add_model_definition(library, model_def)
 
@@ -402,7 +402,7 @@ def create_Schematic_ladderFilter_BVDlossy(library: de.Library, library_name: st
             inst = design.add_instance("ads_rflib:GROUND", name="G"+str(xstep), origin=(xpos, ypos-1.0), angle=-90.0, ads_annot=False)
         
         inst = design.add_instance((library_name, CELL_BVD_LOSSY, "symbol"), origin=(xpos, ypos), name="lossyBVD_"+str(num_BVD), angle=angle_BVD)
-        inst.parameters["C0"].value = str(list_BVD[num_BVD].c0)
+        inst.parameters["Cp"].value = str(list_BVD[num_BVD].cp)
         inst.parameters["Ca"].value = str(list_BVD[num_BVD].ca)
         inst.parameters["La"].value = str(list_BVD[num_BVD].la)
         inst.parameters["Ladd_ser"].value = str(list_BVD[num_BVD].ladd_ser if list_BVD[num_BVD].ladd_ser != 0.0 else 1e-20)
@@ -447,7 +447,7 @@ def create_Schematic_ladderFilter_BVDlossy(library: de.Library, library_name: st
                 inst = design.add_instance("ads_rflib:GROUND", name="G"+str(xstep), origin=(xpos, ypos-1.0), angle=-90.0, ads_annot=False)
 
             inst = design.add_instance((library_name, CELL_BVD_LOSSY, "symbol"), origin=(xpos, ypos), name="lossyBVD_"+str(num_BVD), angle=angle_BVD)
-            inst.parameters["C0"].value = str(list_BVD[num_BVD].c0)
+            inst.parameters["Cp"].value = str(list_BVD[num_BVD].cp)
             inst.parameters["Ca"].value = str(list_BVD[num_BVD].ca)
             inst.parameters["La"].value = str(list_BVD[num_BVD].la)
             inst.parameters["Ladd_ser"].value = str(list_BVD[num_BVD].ladd_ser if list_BVD[num_BVD].ladd_ser != 0.0 else 1e-20)

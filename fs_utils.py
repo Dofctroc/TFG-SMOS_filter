@@ -122,13 +122,20 @@ def compute_extra_parameters_AND_convert_tofloat(parameters: dict) -> dict:
     qa = float(parameters["qa"])
 
     # Convertir las listas de strings a listas de números
-    contenido = parameters["c0"].replace("list(", "").replace(")", "")
-    c0_vals = [float(x.strip()) for x in contenido.split(",")]
-    parameters["c0_vals"] = c0_vals
+    parameters["cp"] = parameters["c0"]
+    contenido = parameters["cp"].replace("list(", "").replace(")", "")
+    cp_vals = [float(x.strip()) for x in contenido.split(",")]
+    parameters["cp_vals"] = cp_vals
 
     contenido = parameters["ca"].replace("list(", "").replace(")", "")
     ca_vals = [float(x.strip()) for x in contenido.split(",")]
     parameters["ca_vals"] = ca_vals
+
+    # Calcular CO (suma de Cp y Ca)
+    matriz_valores = zip(cp_vals, ca_vals)
+    c0_vals = [(cp + ca) for cp, ca in matriz_valores]
+    parameters["c0"] = f"list({', '.join(str(c0) for c0 in c0_vals)})"
+    parameters["c0_vals"] = c0_vals
 
     contenido = parameters["la"].replace("list(", "").replace(")", "")
     la_vals = [float(x.strip()) for x in contenido.split(",")]
@@ -159,10 +166,6 @@ def compute_extra_parameters_AND_convert_tofloat(parameters: dict) -> dict:
     fs_vals = [(1/(2 * np.pi * np.sqrt(la * ca))) for la, ca in matriz_valores]
     parameters["fs"] = f"list({', '.join(str(fs) for fs in fs_vals)})"
     parameters["fs_vals"] = fs_vals
-
-    matriz_valores = zip(c0_vals, ca_vals)
-    cp_vals = [c0-ca for c0, ca in matriz_valores]
-    parameters["cp_vals"] = cp_vals
 
     matriz_valores = zip(cp_vals, ca_vals, la_vals)
     fp_vals = [(1/(2 * np.pi)*np.sqrt((cp+ca)/(cp*ca*la))) for cp, ca, la in matriz_valores]
