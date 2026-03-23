@@ -930,12 +930,14 @@ class MainWindow(QMainWindow):
                     break # Detenemos la búsqueda al hallar el primero
 
             if not encontrado:
+                QMessageBox.information(self, "Info", f"No se ha encontrado el archivo .s2p correspondiente a la network:\n{self.network_file_path}")
                 self.dataset_s2p_file_path = None
 
             ads.create_SchematicAndSymbol_lossyBVD(lib, library_name)
             ads.create_Schematic_ladderFilter_BVDlossy(lib, library_name, self.dataset_s2p_file_path, self.network_parameters, self.list_BVD)
             ads.create_SchematicAndSymbol_lossyCOM(lib, library_name)
             ads.create_Schematic_ladderFilter_COM(lib, library_name, self.network_parameters, self.list_COM)
+
         except Exception as e:
             error_detallado = traceback.format_exc()
             QMessageBox.critical(self, "Error", 
@@ -945,7 +947,7 @@ class MainWindow(QMainWindow):
                 error_detallado)
             return
         
-        QMessageBox.information(self, "Éxito", f"Workspace '{workspace_name}' creado exitosamente en:\n{full_workspace_path}")
+        QMessageBox.information(self, "Éxito", f"Workspace '{workspace_name}' creado con éxito en:\n{full_workspace_path}")
 
 
 def formato_ingenieria(valor, precision=8):
