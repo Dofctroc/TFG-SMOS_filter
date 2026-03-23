@@ -637,20 +637,12 @@ class MainWindow(QMainWindow):
         
         color_data1 = "red"
         color_data2 = "blue"
-
-        order = int(self.network_parameters["norder_ini"])
+        label_data1 = f"BVD - Elemento {idx+1}"
+        label_data2 = f"COM - Elemento {idx+1}"
 
         # Decidir qué fuente usar
-        if idx == order:
-            data1 = self.filter_BVD if (self.radio_bvd.isChecked() or self.radio_both.isChecked()) else None
-            data2 = self.filter_COM if (self.radio_com.isChecked() or self.radio_both.isChecked()) else None
-            label_data1 = "BVD Filter"
-            label_data2 = "COM Filter"
-        else:
-            data1 = self.list_BVD[idx] if (self.radio_bvd.isChecked() or self.radio_both.isChecked()) else None
-            data2 = self.list_COM[idx] if (self.radio_com.isChecked() or self.radio_both.isChecked()) else None
-            label_data1 = f"BVD - Elemento {idx+1}"
-            label_data2 = f"COM - Elemento {idx+1}"
+        data1 = self.list_BVD[idx] if (self.radio_bvd.isChecked() or self.radio_both.isChecked()) else None
+        data2 = self.list_COM[idx] if (self.radio_com.isChecked() or self.radio_both.isChecked()) else None
             
         self.canvas.axes.cla()
 
@@ -750,7 +742,7 @@ class MainWindow(QMainWindow):
                 
                 self.assign_input_GeneralBVDParams()
                 self.assign_input_MatchingNetworkParams()
-                self.filter_BVD = mat_bvd_com.compute_filter_admitance(self.list_BVD, self.network_parameters)
+                # self.filter_BVD = mat_bvd_com.compute_filter_admitance(self.list_BVD, self.network_parameters)
 
                 # Rellenar el combo del gráfico con los elementos disponibles
                 self.combo_elemento_graf.clear() # Borra el "Archivo no leído"
@@ -760,7 +752,6 @@ class MainWindow(QMainWindow):
                     self.combo_elemento_graf.addItem(element_type + "-" + str(idx))
                     element_type = "series" if element_type == "shunt" else "shunt"
                     idx += 1
-                self.combo_elemento_graf.addItem("Full filter")
 
                 # Habilitamos el radio button de COM y ploteamos la primera curva por defecto
                 self.radio_bvd.setEnabled(True)
@@ -842,7 +833,7 @@ class MainWindow(QMainWindow):
             try:
                 self.list_COM = mat_bvd_com.compute_list_COM(self.list_BVD)
                 self.list_COM = mat_bvd_com.compute_admitance_COM(self.list_COM, self.network_parameters)
-                self.filter_COM = mat_bvd_com.compute_filter_admitance(self.list_COM, self.network_parameters)
+                # self.filter_COM = mat_bvd_com.compute_filter_admitance(self.list_COM, self.network_parameters)
 
                 # Rellenar los campos de Matching Network y Lossy BVD con los parámetros leídos
                 self.combo_com.clear() # Borra el "Archivo no leído"

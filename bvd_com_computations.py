@@ -260,6 +260,23 @@ def compute_admitance_COM(list_COM: list[COM], parameters: dict) -> list[COM]:
 
     return list_COM
 
+def Zc(f: list[complex], C: float, Q=None):
+    if C == 0:
+        return np.full_like(f, np.inf, dtype=complex)
+    jw = 1j * 2 * np.pi * f
+    if Q is None:
+        return 1/(jw*C)
+    return 1 / (jw*C + 1/(Q/2*np.pi*f*C))
+
+def Zl(f: list[complex], L: float, Q=None):
+    if L == 0:
+        return np.zeros_like(f, dtype=complex)
+    jw = 1j * 2 * np.pi * f
+    if Q is None:
+        return jw*L
+    return jw*L + 2*np.pi*f*L/Q
+
+# ======================================== DEPRECATED ========================================
 def compute_filter_admitance(list: list, parameters: dict) -> FilterResponse:
     # General Parameter
     start_type = parameters["typeseriesshunt_ini"]
@@ -335,22 +352,5 @@ def compute_filter_admitance(list: list, parameters: dict) -> FilterResponse:
     Ytot = 1/Ztot
 
     return FilterResponse(Ytot, f)
-
-
-def Zc(f: list[complex], C: float, Q=None):
-    if C == 0:
-        return np.full_like(f, np.inf, dtype=complex)
-    jw = 1j * 2 * np.pi * f
-    if Q is None:
-        return 1/(jw*C)
-    return 1 / (jw*C + 1/(Q/2*np.pi*f*C))
-
-def Zl(f: list[complex], L: float, Q=None):
-    if L == 0:
-        return np.zeros_like(f, dtype=complex)
-    jw = 1j * 2 * np.pi * f
-    if Q is None:
-        return jw*L
-    return jw*L + 2*np.pi*f*L/Q
     
 
