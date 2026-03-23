@@ -25,7 +25,7 @@ class BVD():
         self.f = f
 
 class COM():
-    def __init__(self, name: str, d: float, Ap: float, N: int, NR: int, 
+    def __init__(self, name: str, d: float, Ap: float, N: int, NR: int, fs: float, fp: float, 
                  alpha: float, alpha_n: float, Ct: float, Y=None, f=None):
         self.name = name
         self.d = d
@@ -35,6 +35,13 @@ class COM():
         self.alpha = alpha
         self.alpha_n = alpha_n
         self.Ct = Ct
+        self.fs = fs
+        self.fp = fp
+        self.Y = Y
+        self.f = f
+
+class FilterResponse():
+    def __init__(self, Y=None, f=None):
         self.Y = Y
         self.f = f
 
@@ -52,6 +59,10 @@ R_SHUNT = 4e5
 R_SERIE = 0.1
 
 NR = 40
+
+N_POINTS_GRAPH = int(1e4)
+
+R_TERMG = 50
 
 def create_list_BVD(parametersBVD: dict) -> list[BVD]:
     list_BVD: list[BVD] = []
@@ -97,7 +108,7 @@ def compute_admitance_BVD(list_BVD: list[BVD], parameters: dict) -> list[BVD]:
 
     fstart = float(parameters["fstart1"])
     fstop = float(parameters["fstop1"])
-    npoints = int(parameters["npoints1"])
+    npoints = max(int(parameters["npoints1"]), N_POINTS_GRAPH)
 
     f = np.linspace(fstart, fstop, npoints)
 
@@ -125,22 +136,6 @@ def compute_admitance_BVD(list_BVD: list[BVD], parameters: dict) -> list[BVD]:
         bvd.f = f
 
     return list_BVD
-
-def Zc(f, C, Q=None):
-    if C == 0:
-        return np.full_like(f, np.inf, dtype=complex)
-    jw = 1j * 2 * np.pi * f
-    if Q is None:
-        return 1/(jw*C)
-    return 1 / (jw*C + 1/(Q/2*np.pi*f*C))
-
-def Zl(f, L, Q=None):
-    if L == 0:
-        return np.zeros_like(f, dtype=complex)
-    jw = 1j * 2 * np.pi * f
-    if Q is None:
-        return jw*L
-    return jw*L + 2*np.pi*f*L/Q
 
 def compute_list_COM(list_BVD: list[BVD]) -> list[COM]:
     list_COM: list[COM] = []
@@ -170,14 +165,15 @@ def compute_list_COM(list_BVD: list[BVD]) -> list[COM]:
             Ap = 30
             Nidt = Ct / (Ap * EPS_R * EPS_0 *np.exp(0.71866*np.tan(DUTY-0.5))) / lambda0
             Nidt = round(Nidt)
-            if Nidt > 500 or Nidt < 50:
+            if Nidt > 400 or Nidt < 50:
+                # Doblem
                 print(f"Advertencia: N calculado es {Nidt}, lo cual está fuera del rango recomendado (50-500).")
 
         elif Ap < 10:
             Ap = 10
             Nidt = Ct / (Ap * EPS_R * EPS_0 *np.exp(0.71866*np.tan(DUTY-0.5))) / lambda0
             Nidt = round(Nidt)
-            if Nidt > 500 or Nidt < 50:
+            if Nidt > 400 or Nidt < 50:
                 print(f"Advertencia: N calculado es {Nidt}, lo cual está fuera del rango recomendado (50-500).")
             else:
                 # Se recalcula Ap debido al redondeo de Nidt
@@ -214,7 +210,7 @@ def compute_list_COM(list_BVD: list[BVD]) -> list[COM]:
 
         # Assign all values to the COM block
         name = bvd.name.replace("BVD", "COM")
-        com = COM(name=name, d=p, Ap=Ap, N=Nidt, NR=NR, alpha=alpha, alpha_n=alpha_n, Ct=Ct)
+        com = COM(name=name, d=p, Ap=Ap, N=Nidt, NR=NR, alpha=alpha, alpha_n=alpha_n, Ct=Ct, fs=bvd.fs, fp=bvd.fp)
         list_COM.append(com)
 
     return list_COM
@@ -223,7 +219,7 @@ def compute_admitance_COM(list_COM: list[COM], parameters: dict) -> list[COM]:
     # Sweep parameters
     fstart = float(parameters["fstart1"])
     fstop = float(parameters["fstop1"])
-    npoints = int(parameters["npoints1"])
+    npoints = max(int(parameters["npoints1"]), N_POINTS_GRAPH)
 
     f = np.linspace(fstart, fstop, npoints)
 
@@ -257,4 +253,104 @@ def compute_admitance_COM(list_COM: list[COM], parameters: dict) -> list[COM]:
         com.Y = Y_com
         com.f = f
 
+        Y_com_dB = 20 * np.log10(np.abs(Y_com) + 1e-20)
+
+        com.fs = f[np.argmax(Y_com_dB)]
+        com.fp = f[np.argmin(Y_com_dB)]
+
     return list_COM
+
+def Zc(f: list[complex], C: float, Q=None):
+    if C == 0:
+        return np.full_like(f, np.inf, dtype=complex)
+    jw = 1j * 2 * np.pi * f
+    if Q is None:
+        return 1/(jw*C)
+    return 1 / (jw*C + 1/(Q/2*np.pi*f*C))
+
+def Zl(f: list[complex], L: float, Q=None):
+    if L == 0:
+        return np.zeros_like(f, dtype=complex)
+    jw = 1j * 2 * np.pi * f
+    if Q is None:
+        return jw*L
+    return jw*L + 2*np.pi*f*L/Q
+
+# ======================================== DEPRECATED ========================================
+def compute_filter_admitance(list: list, parameters: dict) -> FilterResponse:
+    # General Parameter
+    start_type = parameters["typeseriesshunt_ini"]
+    order = int(parameters["norder_ini"])
+
+    # Matching Network parameters
+    matching_network_type = parameters["matching_network"]
+    mntype1 = parameters["mntype1"]
+    input_l = float(parameters["input_l"])
+    lfini1 = float(parameters["lfini1"])
+    lfini2 = float(parameters["lfini2"])
+    cfini1 = float(parameters["cfini1"])
+    cfini2 = float(parameters["cfini2"])
+
+    # End element type
+    if order % 2 == 0:
+        end_type = "shunt" if start_type == "series" else "series"
+    else:
+        end_type = "series" if start_type == "series" else "shunt"
+
+    # Sweep parameters
+    fstart = float(parameters["fstart1"])
+    fstop = float(parameters["fstop1"])
+    npoints = max(int(parameters["npoints1"]), N_POINTS_GRAPH)
+
+    f = np.linspace(fstart, fstop, npoints)
+    Ytot = np.zeros(len(f), dtype=complex)
+    Ztot = np.zeros(len(f), dtype=complex)
+    Zend = np.zeros(len(f), dtype=complex)
+
+    # Primero el final, depende de si es LC(s-p), CL(p-s) o L(s) o L(p)
+    if matching_network_type == "0.0":
+        # Output matching network is a single inductance
+        if end_type == "series":
+            Zend = 1 / (1/(Zl(f,lfini2)) + 1/(R_TERMG))
+        else:
+            Zend = Zl(f,lfini2) + R_TERMG
+    else:
+        # Output has a LC matching network
+        if mntype1 == "s":
+            # Matching Network LC(s-p)
+            Zend = Zl(f,lfini1) + 1 / (1/(Zc(f,cfini2)) + 1/(R_TERMG))
+        else:
+            # Matching Network CL(p-s)
+            Zend = 1 / (1/(Zc(f,cfini1)) + 1/(Zl(f,lfini2) + R_TERMG))
+
+    Zeq = Zend
+    
+    # A continuación, depende de si el último elemento es shunt o serie (si es serie se suma con Zend, si es shunt se suma en paralelo)
+    element_type = end_type
+    for element in reversed(list):
+        if element_type == "series":
+            # Sumamos en serie Zeq y Zelement
+            Zeq = Zeq + 1/element.Y
+        else:
+            # Sumamos en paralelo Zeq y Zelement
+            Zeq = 1 / (1/Zeq + element.Y)
+
+        element_type = "series" if element_type == "shunt" else "shunt"
+
+    # Finalmente añadimos la impedancia de la bobina en la entrada
+    if input_l < 1e-12: 
+        # Si es casi 0, ignoramos la bobina (asumimos que no hay matching shunt)
+        Ztot = Zeq
+    else:
+        if start_type == "series":
+            # Bobina shunt, sumamos en paralelo
+            Ztot = 1 / (1/Zeq + 1/Zl(f, input_l))
+        else:
+            # Bobina serie, sumamos en serie
+            Ztot = Zeq + Zl(f, input_l)
+
+    Ytot = 1/Ztot
+
+    return FilterResponse(Ytot, f)
+    
+
