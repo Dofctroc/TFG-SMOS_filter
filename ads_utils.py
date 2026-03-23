@@ -287,7 +287,7 @@ def create_SchematicAndSymbol_lossyBVD(library: de.Library, library_name: str) -
     design.save_design()
     design = None
 
-def create_Schematic_ladderFilter_BVDlossy(library: de.Library, library_name: str, parameters: dict, list_BVD: list[BVD]) -> None:
+def create_Schematic_ladderFilter_BVDlossy(library: de.Library, library_name: str, dataset_s2p_path: str, parameters: dict, list_BVD: list[BVD]) -> None:
     assert de.version() >= 630
 
     design = db.create_schematic(f"{library_name}:{CELL_FILTER_BVD}:schematic")
@@ -297,7 +297,6 @@ def create_Schematic_ladderFilter_BVDlossy(library: de.Library, library_name: st
     order = int(parameters["norder_ini"])
     startBVD_type = parameters["typeseriesshunt_ini"]
     endBVD_type = ""
-    option = int(parameters["option"])
 
     # Determine the type of the last BVD based on the order and the type of the first BVD
     if order % 2 == 0:
@@ -334,32 +333,10 @@ def create_Schematic_ladderFilter_BVDlossy(library: de.Library, library_name: st
     space_parallel = 1.0
 
     with Transaction(design) as transaction:
-        # =========================================== Sparameters Data Item for Comparison ===========================================
-        inst = design.add_instance("ads_simulation:TermG", name="TermG1", origin=(6.0, 3.0), angle=-90.0)
-        inst.parameters["Num"].value = "1"
-        inst.update_item_annotation()
-        design.add_wire([PointF(6.0, 3.0), PointF(7.0, 3.0)])
-
-        inst = design.add_instance("ads_datacmps:SnP", name="SnP1", origin=(7.0, 3.0))
-        inst.parameters["NumPorts"].value = "2"
-        inst.parameters["File"].value = '"C:\\Users\\G513\\AppData\\FiltrAW_PROJECTS\\TestProject_pro\\Datasets\\SMOSfilter_SynthResponse1_2.s2p"'
-        inst.parameters["Type"].value = '"touchstone"'
-        inst.parameters["port_name_list"].value = "0 "
-        with de.db.ExpressionContext(design) as expr_context, db.Transaction(design) as trans:
-            expr_context.update_pcell_params(inst)
-            trans.commit()
-        inst.update_item_annotation()
-
-        design.add_wire([PointF(7.75, 3.0), PointF(9.0, 3.0)])
-        inst = design.add_instance("ads_simulation:TermG", name="TermG2", origin=(9.0, 3.0), angle=-90.0)
-        inst.parameters["Num"].value = "2"
-        inst.update_item_annotation()
-
-
         # =========================================== Ladder Filter of Lossy BVDs ===========================================
         # TermG1
-        inst = design.add_instance("ads_simulation:TermG", name="TermG3", origin=(xpos, ypos), angle=-90.0)
-        inst.parameters["Num"].value = "3"
+        inst = design.add_instance("ads_simulation:TermG", name="TermG1", origin=(xpos, ypos), angle=-90.0)
+        inst.parameters["Num"].value = "1"
         inst.update_item_annotation()
 
         xpos = xpos_max
@@ -570,8 +547,8 @@ def create_Schematic_ladderFilter_BVDlossy(library: de.Library, library_name: st
         ypos = 0.0
 
         # TermG2
-        inst = design.add_instance("ads_simulation:TermG", name="TermG4", origin=(xpos, ypos), angle=-90.0)
-        inst.parameters["Num"].value = "4"
+        inst = design.add_instance("ads_simulation:TermG", name="TermG2", origin=(xpos, ypos), angle=-90.0)
+        inst.parameters["Num"].value = "2"
         inst.update_item_annotation()
 
         # Variables 
@@ -580,6 +557,29 @@ def create_Schematic_ladderFilter_BVDlossy(library: de.Library, library_name: st
         # Since inst.vars does not contain 'X', we need to remove the first repeat.
         assert isinstance(inst.parameters[0], db.ParamRepeated)
         del(inst.parameters[0].repeats[0])
+
+
+        # =========================================== Sparameters Data Item for Comparison ===========================================
+        if dataset_s2p_path is not None:
+            inst = design.add_instance("ads_simulation:TermG", name="TermG3", origin=(6.0, 3.0), angle=-90.0)
+            inst.parameters["Num"].value = "3"
+            inst.update_item_annotation()
+            design.add_wire([PointF(6.0, 3.0), PointF(7.0, 3.0)])
+
+            inst = design.add_instance("ads_datacmps:SnP", name="SnP1", origin=(7.0, 3.0))
+            inst.parameters["NumPorts"].value = "2"
+            inst.parameters["File"].value = dataset_s2p_path
+            inst.parameters["Type"].value = '"touchstone"'
+            inst.parameters["port_name_list"].value = "0 "
+            with de.db.ExpressionContext(design) as expr_context, db.Transaction(design) as trans:
+                expr_context.update_pcell_params(inst)
+                trans.commit()
+            inst.update_item_annotation()
+
+            design.add_wire([PointF(7.75, 3.0), PointF(9.0, 3.0)])
+            inst = design.add_instance("ads_simulation:TermG", name="TermG4", origin=(9.0, 3.0), angle=-90.0)
+            inst.parameters["Num"].value = "4"
+            inst.update_item_annotation()
 
 
         # =========================================== S parameters simulation ===========================================

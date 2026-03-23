@@ -1,6 +1,7 @@
 import os
 import sys
 import importlib
+import pathlib
 import traceback
 import math
 
@@ -912,8 +913,27 @@ class MainWindow(QMainWindow):
             
         # Crear los esquemáticos y los símbolos correspondientes
         try:
+            # Buscamos si existe archivo .s2p con mismo nombre que el archivo network
+            network_file_clean_path = pathlib.Path(self.network_file_path.strip('"'))
+            datasets_folder = network_file_clean_path.parent.parent / "Datasets"
+            sufijos = ["_2", "_1"]
+            encontrado = False
+
+            for sufijo in sufijos:
+                dataset_s2p_file = f"{network_file_clean_path.stem}{sufijo}.s2p"
+                path_obj = datasets_folder / dataset_s2p_file
+                
+                if path_obj.exists():
+                    # Convertimos a string y envolvemos en comillas dobles literales
+                    self.dataset_s2p_file_path = f'"{path_obj}"'
+                    encontrado = True
+                    break # Detenemos la búsqueda al hallar el primero
+
+            if not encontrado:
+                self.dataset_s2p_file_path = None
+
             ads.create_SchematicAndSymbol_lossyBVD(lib, library_name)
-            ads.create_Schematic_ladderFilter_BVDlossy(lib, library_name, self.network_parameters, self.list_BVD)
+            ads.create_Schematic_ladderFilter_BVDlossy(lib, library_name, self.dataset_s2p_file_path, self.network_parameters, self.list_BVD)
             ads.create_SchematicAndSymbol_lossyCOM(lib, library_name)
             ads.create_Schematic_ladderFilter_COM(lib, library_name, self.network_parameters, self.list_COM)
         except Exception as e:
