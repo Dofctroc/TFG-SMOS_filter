@@ -1,4 +1,5 @@
 import numpy as np
+import copy
 
 class BVD():
     def __init__(self, name: str, c0: float, cp: float, ca: float, la: float, fs: float, fp: float, 
@@ -25,13 +26,13 @@ class BVD():
         self.f = f
 
 class COM():
-    def __init__(self, name: str, d: float, Ap: float, N: int, NR: int, fs: float, fp: float, 
+    def __init__(self, name: str, d: float, Ap: float, digitsN: int, digitsNR: int, fs: float, fp: float, 
                  alpha: float, alpha_n: float, Ct: float, Y=None, f=None):
         self.name = name
         self.d = d
         self.Ap = Ap
-        self.N = N
-        self.NR = NR
+        self.digitsN = digitsN
+        self.digitsNR = digitsNR
         self.alpha = alpha
         self.alpha_n = alpha_n
         self.Ct = Ct
@@ -48,6 +49,12 @@ class FilterResponse():
 K11_REAL = -82053.9
 K11 = -82053.9 - 1j*450
 K12 = 59340.0
+NR = 40
+
+NIDT_MAX = 400
+NIDT_MIN = 50
+AP_MAX = 30
+AP_MIN = 10
 
 VP = 3741.8
 EPS_R = 39.56
@@ -58,10 +65,7 @@ Z0_PRIMA = 1
 R_SHUNT = 4e5
 R_SERIE = 0.1
 
-NR = 40
-
 N_POINTS_GRAPH = int(1e4)
-
 R_TERMG = 50
 
 def create_list_BVD(parametersBVD: dict) -> list[BVD]:
@@ -69,13 +73,9 @@ def create_list_BVD(parametersBVD: dict) -> list[BVD]:
 
     startBVD_type = parametersBVD["typeseriesshunt_ini"]
 
-    c0 = parametersBVD["c0_vals"]       #float[]
     cp = parametersBVD["cp_vals"]       #float[]
     ca = parametersBVD["ca_vals"]       #float[]
     la = parametersBVD["la_vals"]       #float[]
-
-    fs = parametersBVD["fs_vals"]       #float[]
-    fp = parametersBVD["fp_vals"]       #float[]
 
     ladd_ser = parametersBVD["ladd_ser_vals"]           #float[]
     ladd_shu = parametersBVD["ladd_shu_vals"]           #float[]
@@ -91,10 +91,14 @@ def create_list_BVD(parametersBVD: dict) -> list[BVD]:
 
     currentType = startBVD_type
     
-    for i in range(len(c0)):
+    for i in range(len(cp)):
         name = f"BVD_{currentType}_{i+1}"
 
-        bvd = BVD(name=name, c0=c0[i], cp=cp[i], ca=ca[i], la=la[i], fs=fs[i], fp=fp[i], 
+        c0 = cp[i] + ca[i]
+        fs = 1/(2 * np.pi * np.sqrt(la[i] * ca[i]))
+        fp = 1/(2 * np.pi)*np.sqrt((cp[i]+ca[i])/(cp[i]*ca[i]*la[i]))
+
+        bvd = BVD(name=name, c0=c0, cp=cp[i], ca=ca[i], la=la[i], fs=fs, fp=fp, 
                   ladd_ser=ladd_ser[i], ladd_shu=ladd_shu[i], cadd_ser=cadd_ser[i], 
                   cadd_shu=cadd_shu[i], ladd_ground=ladd_ground[i], 
                   rs=rs, rp=rp, ql=ql, qc=qc, qa=qa)
@@ -161,23 +165,21 @@ def compute_list_COM(list_BVD: list[BVD]) -> list[COM]:
         Ap = Ct / (Nidt * EPS_R * EPS_0 *np.exp(0.71866*np.tan(DUTY-0.5))) / lambda0
         
         # Comprobación de los límites para Ap y ajuste de Nidt
-        if Ap > 30:
-            Ap = 30
+        if Ap > AP_MAX:
+            Ap = AP_MAX
             Nidt = Ct / (Ap * EPS_R * EPS_0 *np.exp(0.71866*np.tan(DUTY-0.5))) / lambda0
             Nidt = round(Nidt)
-            if Nidt > 400 or Nidt < 50:
-                # Doblem
-                print(f"Advertencia: N calculado es {Nidt}, lo cual está fuera del rango recomendado (50-500).")
+            
+            # Recalculamos la Apertura debido al redondeo de Nidt
+            Ap = Ct / (Nidt * EPS_R * EPS_0 *np.exp(0.71866*np.tan(DUTY-0.5))) / lambda0
 
-        elif Ap < 10:
-            Ap = 10
+        elif Ap < AP_MIN:
+            Ap = AP_MIN
             Nidt = Ct / (Ap * EPS_R * EPS_0 *np.exp(0.71866*np.tan(DUTY-0.5))) / lambda0
             Nidt = round(Nidt)
-            if Nidt > 400 or Nidt < 50:
-                print(f"Advertencia: N calculado es {Nidt}, lo cual está fuera del rango recomendado (50-500).")
-            else:
-                # Se recalcula Ap debido al redondeo de Nidt
-                Ap = Ct / (Nidt * EPS_R * EPS_0 *np.exp(0.71866*np.tan(DUTY-0.5))) / lambda0
+            
+            # Recalculamos la Apertura debido al redondeo de Nidt
+            Ap = Ct / (Nidt * EPS_R * EPS_0 *np.exp(0.71866*np.tan(DUTY-0.5))) / lambda0
 
         # 3) ============================= CÁLCULO DE ALPHA =============================
         # Cálculo constantes de entrada
@@ -210,7 +212,7 @@ def compute_list_COM(list_BVD: list[BVD]) -> list[COM]:
 
         # Assign all values to the COM block
         name = bvd.name.replace("BVD", "COM")
-        com = COM(name=name, d=p, Ap=Ap, N=Nidt, NR=NR, alpha=alpha, alpha_n=alpha_n, Ct=Ct, fs=bvd.fs, fp=bvd.fp)
+        com = COM(name=name, d=p, Ap=Ap, digitsN=Nidt*2, digitsNR=NR, alpha=alpha, alpha_n=alpha_n, Ct=Ct, fs=bvd.fs, fp=bvd.fp)
         list_COM.append(com)
 
     return list_COM
@@ -228,12 +230,13 @@ def compute_admitance_COM(list_COM: list[COM], parameters: dict) -> list[COM]:
         k = (2*np.pi*f)/VP
         lambda0 = 2*com.d
         k0 = np.pi/com.d
+        Nidt = com.digitsN/2
 
         delta = k - k0
         beta = np.sqrt((delta+K11)**2 - K12**2)
         pe = (beta-delta-K11)/K12
 
-        theta = beta*com.N*lambda0/2
+        theta = beta*Nidt*lambda0/2
         theta_R = beta*NR*lambda0/2
 
         z_0 = (1-pe)/(1+pe)*Z0_PRIMA
@@ -245,7 +248,7 @@ def compute_admitance_COM(list_COM: list[COM], parameters: dict) -> list[COM]:
         B = 1 / (1j*2*theta*z_0)
         C = (1j*z_0R*np.tan(theta) + z_inR) / 2 + z_0R / (1j*np.sin(2*theta))
         D = (Z0_PRIMA / (2*theta*z_0))**2
-        phi = 2*com.alpha*com.N*lambda0*np.sqrt(Z0_PRIMA)
+        phi = 2*com.alpha*Nidt*lambda0*np.sqrt(Z0_PRIMA)
 
         Z_com = (R_SERIE + 1 / (1/R_SHUNT + A + B*phi**2 + D/C * phi**2))
         Y_com = 1 / Z_com
@@ -275,6 +278,65 @@ def Zl(f: list[complex], L: float, Q=None):
     if Q is None:
         return jw*L
     return jw*L + 2*np.pi*f*L/Q
+
+def duplicate_resonators(list_BVD: list[BVD], list_COM: list[COM]) -> list[BVD]:
+    # Dejaremos la apertura tal cual la teniamos
+    # Doblaremos en serie si    Nidt > max
+    # Doblaremos en paralelo si Nidt < min
+    list_BVD_duplicados: list[BVD] = []
+    list_COM_duplicados: list[COM] = []
+
+    idx = 0
+    for com in list_COM:
+        if com.digitsN > NIDT_MAX:
+            # Duplicamos en serie
+            bvd_base = list_BVD[idx]
+
+            bvd_1 = copy.copy(bvd_base)
+            bvd_1.cp = bvd_base.cp*2
+            bvd_1.ca = bvd_base.ca*2
+            bvd_1.la = bvd_base.la/2
+            bvd_1.la = bvd_base.rs/2
+            bvd_1.la = bvd_base.rp/2
+            bvd_2 = copy.copy(bvd_1)
+
+            bvd_1.name = bvd_base.name + "_1"
+            bvd_2.name = bvd_base.name + "_2"
+
+            list_BVD_duplicados.extend([bvd_1, bvd_2])
+
+        elif com.digitsN < NIDT_MIN:
+            # Duplicamos en paralelo
+            bvd_base = list_BVD[idx]
+
+            bvd_1 = copy.copy(list_BVD[idx])
+            bvd_1.cp = bvd_base.cp/2
+            bvd_1.ca = bvd_base.ca/2
+            bvd_1.la = bvd_base.la*2
+            bvd_1.la = bvd_base.rs*2
+            bvd_1.la = bvd_base.rp*2
+            bvd_2 = copy.copy(bvd_1)
+
+            bvd_1.name = bvd_base.name + "_1"
+            bvd_2.name = bvd_base.name + "_2"
+
+            list_BVD_duplicados.extend([bvd_1, bvd_2])
+
+        idx += 1
+        
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 # ======================================== DEPRECATED ========================================
 def compute_filter_admitance(list: list, parameters: dict) -> FilterResponse:

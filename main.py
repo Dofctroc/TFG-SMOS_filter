@@ -570,8 +570,8 @@ class MainWindow(QMainWindow):
         # Rellenamos los campos
         self.input_pitch.setText(str(com_seleccionado.d))
         self.input_aperture.setText(str(com_seleccionado.Ap))
-        self.input_digitsIDT.setText(str(com_seleccionado.N))
-        self.input_digitsREFL.setText(str(com_seleccionado.NR))
+        self.input_digitsIDT.setText(str(com_seleccionado.digitsN))
+        self.input_digitsREFL.setText(str(com_seleccionado.digitsNR))
         self.input_alpha.setText(str(com_seleccionado.alpha))
 
         self.input_fs_COM.setText(formato_ingenieria(com_seleccionado.fs))
