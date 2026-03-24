@@ -198,6 +198,7 @@ class MainWindow(QMainWindow):
         
         # Conectamos el cambio de selección a una función
         self.combo_bvd.currentIndexChanged.connect(self.actualizar_formulario_bvd)
+        self.combo_bvd.currentIndexChanged.connect(self.unificar_grafico_bvd)
 
         # 2. El Formulario de parámetros
         self.form_layout_BVD = QFormLayout()
@@ -271,6 +272,11 @@ class MainWindow(QMainWindow):
         self.layout_bvd.addWidget(bvd_general_label)
         self.layout_bvd.addLayout(self.form_layout_BVD_general)
         self.layout_bvd.addStretch()
+
+    def unificar_grafico_bvd(self, index):
+        # Actualizamos los formularios BVD y GRPHICS para que haya uniformidad en la GUI
+        self.combo_com.setCurrentIndex(index)
+        self.combo_elemento_graf.setCurrentIndex(index)
 
     def actualizar_formulario_bvd(self, index):
         """Esta función se llama cada vez que eliges un BVD en el combo"""
@@ -496,6 +502,7 @@ class MainWindow(QMainWindow):
         
         # Conectamos el cambio de selección a una función
         self.combo_com.currentIndexChanged.connect(self.actualizar_formulario_com)
+        self.combo_com.currentIndexChanged.connect(self.unificar_grafico_com)
         
         # Creamos los campos (QLineEdit)
         self.input_pitch = QLineEdit()
@@ -545,6 +552,11 @@ class MainWindow(QMainWindow):
         self.layout_com.addSpacing(10) # Espacio visual
         self.layout_com.addLayout(self.layout_horizontal_formularios)
         self.layout_com.addStretch()
+
+    def unificar_grafico_com(self, index):
+        # Actualizamos los formularios BVD y GRPHICS para que haya uniformidad en la GUI
+        self.combo_bvd.setCurrentIndex(index)
+        self.combo_elemento_graf.setCurrentIndex(index)
 
     def actualizar_formulario_com(self, index):
         """Esta función se llama cada vez que eliges un BVD en el combo"""
@@ -623,18 +635,19 @@ class MainWindow(QMainWindow):
         self.layout_grafico.addWidget(self.toolbar)
 
         # --- CONEXIONES ---
+        self.combo_elemento_graf.currentIndexChanged.connect(self.unificar_grafico_admitancia)
         self.combo_elemento_graf.currentIndexChanged.connect(self.plot_admitancia)
         self.radio_bvd.toggled.connect(self.plot_admitancia)
         self.radio_com.toggled.connect(self.plot_admitancia)
         self.radio_both.toggled.connect(self.plot_admitancia)
 
+    def unificar_grafico_admitancia(self, index):
+        # Actualizamos los formularios BVD y GRPHICS para que haya uniformidad en la GUI
+        self.combo_bvd.setCurrentIndex(index)
+        self.combo_com.setCurrentIndex(index)
+
     def plot_admitancia(self):
         idx = self.combo_elemento_graf.currentIndex()
-    
-        # Verificaciones de seguridad
-
-        if idx < 0:
-            return
         
         color_data1 = "red"
         color_data2 = "blue"
