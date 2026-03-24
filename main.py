@@ -138,13 +138,20 @@ class MainWindow(QMainWindow):
         self.btn_directorio.clicked.connect(self.btn_readDirectoy_clicked)
 
         self.btn_convertir = QPushButton("Convertir BVD -> COM")
+        self.btn_convertir.setEnabled(False)
         self.btn_convertir.clicked.connect(self.btn_convertBVD2COM_clicked)
         self.btn_convertir.setStyleSheet("background-color: #e0efff; color: black; font-weight: bold;")
+
+        self.btn_duplicar = QPushButton("Duplicar Resonadores")
+        self.btn_duplicar.setEnabled(False)
+        self.btn_duplicar.clicked.connect(self.btn_duplicar_resonadores_clicked)
+        self.btn_duplicar.setStyleSheet("background-color: #e0efff; color: black; font-weight: bold;")
         
         self.barra_superior.addWidget(self.btn_archivo)
         self.barra_superior.addWidget(self.btn_directorio)
         self.barra_superior.addStretch() # Empuja el botón convertir a la derecha
         self.barra_superior.addWidget(self.btn_convertir)
+        self.barra_superior.addWidget(self.btn_duplicar)
 
     def setup_sub_header(self):
         self.sub_barra_superior = QVBoxLayout()
@@ -217,8 +224,9 @@ class MainWindow(QMainWindow):
         self.input_ladd_ground = QLineEdit()
         
         # Configuramos como "Solo lectura" y ponemos placeholders
-        for inp in [self.input_c0, self.input_cp, self.input_ca, self.input_la, self.input_fs, self.input_fp, self.input_ladd_ser,
-                    self.input_ladd_shu, self.input_cadd_ser, self.input_cadd_shu, self.input_ladd_ground]:
+        self.campos_form_bvd = [self.input_c0, self.input_cp, self.input_ca, self.input_la, self.input_fs, self.input_fp, self.input_ladd_ser,
+                    self.input_ladd_shu, self.input_cadd_ser, self.input_cadd_shu, self.input_ladd_ground]
+        for inp in self.campos_form_bvd:
             inp.setReadOnly(True)
             inp.setPlaceholderText("---")
             inp.setStyleSheet("background-color: #f0f0f0; color: #555;")
@@ -246,7 +254,8 @@ class MainWindow(QMainWindow):
         self.input_qa = QLineEdit()
 
         # Configuramos como "Solo lectura" y ponemos placeholders
-        for inp in [self.input_rs, self.input_rp, self.input_ql, self.input_qc, self.input_qa]:
+        self.campos_form_bvdgeneral = [self.input_rs, self.input_rp, self.input_ql, self.input_qc, self.input_qa]
+        for inp in self.campos_form_bvdgeneral:
             inp.setReadOnly(True)
             inp.setPlaceholderText("---")
             inp.setStyleSheet("background-color: #f0f0f0; color: #555;")
@@ -304,7 +313,7 @@ class MainWindow(QMainWindow):
         self.layout_central_total.setContentsMargins(0, 0, 0, 0) # Quitar márgenes internos
 
         # Sub-bloque MN (Superior)
-        self.bloque_matchnetw = QGroupBox("COM Parameters")
+        self.bloque_matchnetw = QGroupBox("Matching Networks Parameters")
         self.bloque_matchnetw.setStyleSheet("""
             QGroupBox {
                 border: 1px solid black;
@@ -324,7 +333,7 @@ class MainWindow(QMainWindow):
         self.setup_matchnetw_panel()
 
         # Sub-bloque COM_consts (Inferior)
-        self.bloque_constsCOM = QGroupBox("COM Parameters")
+        self.bloque_constsCOM = QGroupBox("COM Constants")
         self.bloque_constsCOM.setStyleSheet("""
             QGroupBox {
                 border: 1px solid black;
@@ -360,8 +369,9 @@ class MainWindow(QMainWindow):
         self.input_Cfini_type = QLineEdit()
         
         # Configuramos como "Solo lectura" y ponemos placeholders
-        for inp in [self.input_inputL, self.input_inputL_type, self.input_Lfini, self.input_matchnetw_type, 
-                    self.input_Cfini, self.input_Cfini_type]:
+        self.campos_form_MN = [self.input_inputL, self.input_inputL_type, self.input_Lfini, self.input_matchnetw_type, 
+                    self.input_Cfini, self.input_Cfini_type]
+        for inp in self.campos_form_MN:
             inp.setReadOnly(True)
             inp.setPlaceholderText("---")
             inp.setStyleSheet("background-color: #f0f0f0; color: #555;")
@@ -411,8 +421,9 @@ class MainWindow(QMainWindow):
         self.input_R_SERIE = QLineEdit()
         
         # Configuramos como "Solo lectura" y ponemos placeholders
-        for inp in [self.input_K11, self.input_K12, self.input_VP, self.input_EPS_R, self.input_EPS_0, 
-                    self.input_DUTY, self.input_Z0_PRIMA, self.input_R_SHUNT, self.input_R_SERIE]:
+        self.campos_form_comparameters = [self.input_K11, self.input_K12, self.input_VP, self.input_EPS_R, self.input_EPS_0, 
+                    self.input_DUTY, self.input_Z0_PRIMA, self.input_R_SHUNT, self.input_R_SERIE]
+        for inp in self.campos_form_comparameters:
             inp.setReadOnly(True)
             inp.setPlaceholderText("---")
             inp.setStyleSheet("background-color: #f0f0f0; color: #555;")
@@ -516,8 +527,9 @@ class MainWindow(QMainWindow):
         self.input_fp_COM = QLineEdit()
         
         # Configuramos como "Solo lectura" y ponemos placeholders
-        for inp in [self.input_pitch, self.input_aperture, self.input_digitsIDT, 
-                    self.input_digitsREFL, self.input_alpha, self.input_fs_COM, self.input_fp_COM]:
+        self.campos_form_com = [self.input_pitch, self.input_aperture, self.input_digitsIDT, 
+                    self.input_digitsREFL, self.input_alpha, self.input_fs_COM, self.input_fp_COM]
+        for inp in self.campos_form_com:
             inp.setReadOnly(True)
             inp.setPlaceholderText("---")
             inp.setStyleSheet("background-color: #f0f0f0; color: #555;")
@@ -592,11 +604,9 @@ class MainWindow(QMainWindow):
         barra_filtros = QHBoxLayout()
         
         # 1. Selector de Elemento
-        label_el = QLabel("Elemento:")
-        label_el.setStyleSheet("font-weight: bold;")
         self.combo_elemento_graf = QComboBox()
         self.combo_elemento_graf.addItem("Sin datos")
-        self.combo_elemento_graf.setFixedWidth(120)
+        self.combo_elemento_graf.setFixedWidth(200)
         
         # 2. Botones de Radio (BVD vs COM)
         self.radio_bvd = QRadioButton("BVD")
@@ -614,7 +624,6 @@ class MainWindow(QMainWindow):
         self.radio_both.setEnabled(False)
 
         # Montamos la barrita de control
-        barra_filtros.addWidget(label_el)
         barra_filtros.addWidget(self.combo_elemento_graf)
         barra_filtros.addSpacing(20)
         barra_filtros.addWidget(self.radio_bvd)
@@ -756,19 +765,27 @@ class MainWindow(QMainWindow):
                 
                 self.assign_input_GeneralBVDParams()
                 self.assign_input_MatchingNetworkParams()
-                # self.filter_BVD = mat_bvd_com.compute_filter_admitance(self.list_BVD, self.network_parameters)
+
+                # Limpiamos el combo com por si ya había valores de antes
+                self.combo_com.clear()
+                self.combo_com.addItem("Conversión no realizada")
 
                 # Rellenar el combo del gráfico con los elementos disponibles
                 self.combo_elemento_graf.clear() # Borra el "Archivo no leído"
-                element_type = self.network_parameters["typeseriesshunt_ini"]
-                idx = 1
                 for bvd in self.list_BVD:
-                    self.combo_elemento_graf.addItem(element_type + "-" + str(idx))
-                    element_type = "series" if element_type == "shunt" else "shunt"
-                    idx += 1
+                    self.combo_elemento_graf.addItem(bvd.name.replace("BVD", "Elemento"))
 
-                # Habilitamos el radio button de COM y ploteamos la primera curva por defecto
+                # Borramos formulario com, Habilitamos el radio button de COM y ploteamos la primera curva por defecto
+                self.list_COM = None
+                for inp in self.campos_form_com:
+                    inp.clear()
+
                 self.radio_bvd.setEnabled(True)
+                self.radio_com.setEnabled(False)
+                self.radio_both.setEnabled(False)
+
+                self.btn_convertir.setEnabled(True)
+                self.btn_duplicar.setEnabled(False)
                 self.plot_admitancia()
 
         except Exception as e:
@@ -782,11 +799,11 @@ class MainWindow(QMainWindow):
         
     def assign_input_GeneralBVDParams(self):
         # Assign General BVD parameters
-        self.input_rs.setText(str(self.network_parameters["rs"]))
-        self.input_rp.setText(str(self.network_parameters["rp"]))
-        self.input_ql.setText(str(self.network_parameters["ql"]))
-        self.input_qc.setText(str(self.network_parameters["qc"]))
-        self.input_qa.setText(str(self.network_parameters["qa"]))
+        self.input_rs.setText(str(self.list_BVD[0].rs))
+        self.input_rp.setText(str(self.list_BVD[0].rp))
+        self.input_ql.setText(str(self.list_BVD[0].ql))
+        self.input_qc.setText(str(self.list_BVD[0].qc))
+        self.input_qa.setText(str(self.list_BVD[0].qa))
 
     def assign_input_MatchingNetworkParams(self):
         # Assign Matching Network parameters
@@ -857,6 +874,10 @@ class MainWindow(QMainWindow):
                 # Habilitamos el radio button de COM
                 self.radio_com.setEnabled(True)
                 self.radio_both.setEnabled(True)
+
+                # Habilitamos el botón de convertir
+                self.btn_convertir.setEnabled(False)
+                self.btn_duplicar.setEnabled(True)
 
             except Exception as e:
                 error_detallado = traceback.format_exc()
@@ -962,6 +983,55 @@ class MainWindow(QMainWindow):
         
         QMessageBox.information(self, "Éxito", f"Workspace '{workspace_name}' creado con éxito en:\n{full_workspace_path}")
 
+    def btn_duplicar_resonadores_clicked(self):
+        if self.list_BVD is None:
+            QMessageBox.critical(self, "Error", 
+                                 "Error: No hay datos de BVD. \n"
+                                 "Asegúrate de haber leído un archivo .ntw primero.")
+        
+        elif self.list_COM is None:
+            QMessageBox.critical(self, "Error", 
+                                 "Error: No hay datos de COM. \n"
+                                 "Asegúrate de haber convertido los datos BVD a COM primero.")
+
+        try:
+            # Duplicamos los BVDs de la lista que sean necesarios según digitsNidt del COM
+            self.list_BVD, self.list_COM = mat_bvd_com.duplicate_resonators(self.list_BVD, self.list_COM, self.network_parameters)
+            
+            # Rellenar los campos de Matching Network y Lossy BVD con los parámetros leídos
+            self.combo_bvd.clear()
+            for bvd in self.list_BVD:
+                self.combo_bvd.addItem(bvd.name)
+
+            self.combo_com.clear()
+            for com in self.list_COM:
+                self.combo_com.addItem(com.name)
+
+            self.combo_elemento_graf.clear()
+            for bvd in self.list_BVD:
+                self.combo_elemento_graf.addItem(bvd.name.replace("BVD", "Elemento"))
+
+            # Ponemos todos los combos en la primera posición
+            self.radio_bvd.setChecked(True)
+
+            self.combo_bvd.setCurrentIndex(0)
+            self.combo_com.setCurrentIndex(0)
+            self.combo_elemento_graf.setCurrentIndex(0)
+
+            self.assign_input_GeneralBVDParams()
+
+            # Desactivamos el botón de duplicar resonadores
+            self.btn_duplicar.setEnabled(False)
+
+        except Exception as e:
+            error_detallado = traceback.format_exc()
+            QMessageBox.critical(self, "Error", 
+                f"Error al leer el archivo Network.\n\n"
+                f"Tipo: {type(e).__name__}\n"
+                f"Mensaje: {str(e)}\n\n"+
+                error_detallado)
+            return
+        
 
 def formato_ingenieria(valor, precision=8):
     if valor == 0:
@@ -969,10 +1039,8 @@ def formato_ingenieria(valor, precision=8):
     
     # 1. Hallar el exponente (potencia de 10)
     exp = int(math.floor(math.log10(abs(valor))))
-    
     # 2. Ajustar al múltiplo de 3 inferior
     eng_exp = (exp // 3) * 3
-    
     # 3. Calcular el coeficiente
     coef = valor / (10**eng_exp)
     

@@ -279,7 +279,7 @@ def Zl(f: list[complex], L: float, Q=None):
         return jw*L
     return jw*L + 2*np.pi*f*L/Q
 
-def duplicate_resonators(list_BVD: list[BVD], list_COM: list[COM]) -> list[BVD]:
+def duplicate_resonators(list_BVD: list[BVD], list_COM: list[COM], parameters: dict) -> tuple[list[BVD], list[COM]]:
     # Dejaremos la apertura tal cual la teniamos
     # Doblaremos en serie si    Nidt > max
     # Doblaremos en paralelo si Nidt < min
@@ -288,41 +288,72 @@ def duplicate_resonators(list_BVD: list[BVD], list_COM: list[COM]) -> list[BVD]:
 
     idx = 0
     for com in list_COM:
-        if com.digitsN > NIDT_MAX:
+        bvd_base = list_BVD[idx]
+        if com.digitsN < NIDT_MIN:
             # Duplicamos en serie
-            bvd_base = list_BVD[idx]
-
+            # Duplicamos o dividimos los parametros del BVD
             bvd_1 = copy.copy(bvd_base)
             bvd_1.cp = bvd_base.cp*2
             bvd_1.ca = bvd_base.ca*2
             bvd_1.la = bvd_base.la/2
-            bvd_1.la = bvd_base.rs/2
-            bvd_1.la = bvd_base.rp/2
+            bvd_1.rs = bvd_base.rs/2
+            bvd_1.rp = bvd_base.rp/2
+            bvd_1.c0 = bvd_1.cp + bvd_1.ca
+            bvd_1.fs = 1/(2 * np.pi * np.sqrt(bvd_1.la * bvd_1.ca))
+            bvd_1.fp = 1/(2 * np.pi)*np.sqrt((bvd_1.cp+bvd_1.ca)/(bvd_1.cp*bvd_1.ca*bvd_1.la))
             bvd_2 = copy.copy(bvd_1)
 
-            bvd_1.name = bvd_base.name + "_1"
-            bvd_2.name = bvd_base.name + "_2"
-
+            bvd_1.name = bvd_base.name + "_1s"
+            bvd_2.name = bvd_base.name + "_2s"
             list_BVD_duplicados.extend([bvd_1, bvd_2])
 
-        elif com.digitsN < NIDT_MIN:
-            # Duplicamos en paralelo
-            bvd_base = list_BVD[idx]
+            # Duplicamos el valor de DigitsActiveIDT del COM
+            com_base = list_COM[idx]
+            com_1 = copy.copy(com_base)
+            com_1.digitsN = round(com_base.digitsN*2)
+            com_2 = copy.copy(com_1)
 
+            com_1.name = com_base.name + "_1s"
+            com_2.name = com_base.name + "_2s"
+            list_COM_duplicados.extend([com_1, com_2])
+
+        elif com.digitsN > NIDT_MAX:
+            # Duplicamos en paralelo
             bvd_1 = copy.copy(list_BVD[idx])
             bvd_1.cp = bvd_base.cp/2
             bvd_1.ca = bvd_base.ca/2
             bvd_1.la = bvd_base.la*2
-            bvd_1.la = bvd_base.rs*2
-            bvd_1.la = bvd_base.rp*2
+            bvd_1.rs = bvd_base.rs*2
+            bvd_1.rp = bvd_base.rp*2
+            bvd_1.c0 = bvd_1.cp + bvd_1.ca
+            bvd_1.fs = 1/(2 * np.pi * np.sqrt(bvd_1.la * bvd_1.ca))
+            bvd_1.fp = 1/(2 * np.pi)*np.sqrt((bvd_1.cp+bvd_1.ca)/(bvd_1.cp*bvd_1.ca*bvd_1.la))
             bvd_2 = copy.copy(bvd_1)
 
-            bvd_1.name = bvd_base.name + "_1"
-            bvd_2.name = bvd_base.name + "_2"
-
+            bvd_1.name = bvd_base.name + "_1p"
+            bvd_2.name = bvd_base.name + "_2p"
             list_BVD_duplicados.extend([bvd_1, bvd_2])
 
+            # Dividimos camos el valor de DigitsActiveIDT del COM
+            com_base = list_COM[idx]
+            com_1 = copy.copy(com_base)
+            com_1.digitsN = round(com_base.digitsN/2)
+            com_2 = copy.copy(com_1)
+
+            com_1.name = com_base.name + "_1p"
+            com_2.name = com_base.name + "_2p"
+            list_COM_duplicados.extend([com_1, com_2])
+        
+        else:
+            list_BVD_duplicados.append(bvd_base)
+            list_COM_duplicados.append(com)
+
         idx += 1
+
+    list_BVD_duplicados = compute_admitance_BVD(list_BVD_duplicados, parameters)
+    list_COM_duplicados = compute_admitance_COM(list_COM_duplicados, parameters)
+
+    return list_BVD_duplicados, list_COM_duplicados
         
 
 
