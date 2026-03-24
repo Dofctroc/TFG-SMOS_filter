@@ -983,15 +983,11 @@ def create_Schematic_ladderFilter_COM(library: de.Library, library_name: str, da
 
     # Determine the type of the last COM based on the order and the type of the first COM
     if order % 2 == 0:
-        if startCOM_type == "series":
-            endCOM_type = "shunt"
-        else:            
-            endCOM_type = "series"
+        endCOM_type = "shunt" if startCOM_type == "series" else "series"
     else:
-        if startCOM_type == "series":
-            endCOM_type = "series"
-        else:            
-            endCOM_type = "shunt"
+        endCOM_type = "series" if startCOM_type == "series" else "shunt"
+
+    current_COM_type = startCOM_type
 
     # READ Matching network parameters
     matching_network = parameters["matching_network"]
@@ -1009,85 +1005,69 @@ def create_Schematic_ladderFilter_COM(library: de.Library, library_name: str, da
     
     # Grid positon parameters
     xpos = 0.0
-    xpos_max = xpos
-    max_size_symb = 3.0
-    max_size_input = 3.0
-    max_size_output = 4.0
     ypos = 0.0
 
-    xpos_firststep = 1.25
-    xstep = -1
+    x_margin = 1.0
+    y_margin = 1.0
+
     num_COM = 0
 
-    space_parallel = 1.0
-
     with Transaction(design) as transaction:
+        # =========================================== Ladder Filter of Lossy COMs ===========================================
         # TermG1
         inst = design.add_instance("ads_simulation:TermG", name="TermG1", origin=(xpos, ypos), angle=-90.0)
         inst.parameters["Num"].value = "1"
         inst.update_item_annotation()
 
-        xpos = xpos_max
-        ypos = 0.0
-
         # INPUT MATCHING NETWORK: (need to know if first COM is series or shunt)
-        xstep += 1
-
         if startCOM_type == "series":
             # Add shunt inductor at the input
             d = Decimal(input_l)
             exp10 = d.adjusted()   # exponente base 10
 
             if exp10 > -10:
-                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+xpos_firststep*2, y=ypos)])
-                xpos += xpos_firststep*2
+                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+x_margin, y=ypos)])
+                xpos += x_margin
 
                 inst = design.add_instance("ads_rflib:L", name="L_input", origin=(xpos, ypos), angle=-90.0)
-                inst.parameters["L"].value = "input_l H"
+                inst.parameters["L"].value = input_l + "H"
                 inst.update_item_annotation()
                 ypos -= 1.0
 
-                inst = design.add_instance("ads_rflib:GROUND", name="G"+str(xstep), origin=(xpos, ypos), angle=-90.0, ads_annot=False)
+                inst = design.add_instance("ads_rflib:GROUND", name="G"+str(num_COM), origin=(xpos, ypos), angle=-90.0, ads_annot=False)
                 ypos += 1.0
 
-            design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos_max + max_size_input, y=ypos)])
+            design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos + x_margin, y=ypos)])
+            xpos += x_margin
 
         else:
             # Add series inductor at the input
-            design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+xpos_firststep, y=ypos)])
-            xpos += xpos_firststep
+            design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+x_margin, y=ypos)])
+            xpos += x_margin
 
             inst = design.add_instance("ads_rflib:L", name="L_input", origin=(xpos, ypos))
-            inst.parameters["L"].value = "input_l H"
+            inst.parameters["L"].value = input_l + "H"
             inst.update_item_annotation()
             xpos += 1.0
 
-            design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos_max + max_size_input, y=ypos)])
+            design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos + x_margin, y=ypos)])
+            xpos += x_margin
 
-        xpos_max += max_size_input
-        xpos = xpos_max
         ypos = 0.0
 
         # FIRST COM: Start COM ladder depending on if it is series or shunt
         # Remember to put a GROUND if COM is shunt
-        xstep += 1
+        design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+x_margin, y=ypos)])
+        xpos += x_margin
 
-        if startCOM_type == "series":
+        if current_COM_type == "series":
             # SERIES COM start
             angle_COM = 0.0
-            design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+xpos_firststep, y=ypos)])
-            xpos += xpos_firststep
-
-            design.add_wire([PointF(x=xpos+1.0, y=ypos), PointF(x=xpos_max + max_size_symb, y=ypos)])
         else:
             # SHUNT COM start
             angle_COM = -90.0
-            xpos += max_size_symb/2
-
-            points = [PointF(x=xpos-max_size_symb/2, y=ypos), PointF(x=xpos, y=ypos), PointF(x=xpos+max_size_symb/2, y=ypos)]
-            design.add_wire(points)
-
-            inst = design.add_instance("ads_rflib:GROUND", name="G"+str(xstep), origin=(xpos, ypos-1.0), angle=-90.0, ads_annot=False)
+            if not list_COM[num_COM].name.endswith("_1s"):
+                inst = design.add_instance("ads_rflib:GROUND", name="G"+str(num_COM+1), origin=(xpos, ypos-1.0), angle=-90.0, ads_annot=False)
         
         inst = design.add_instance((library_name, CELL_COM_LOSSY, "symbol"), origin=(xpos, ypos), name="COM_"+str(num_COM), angle=angle_COM)
         inst.parameters["d"].value = str(list_COM[num_COM].d)
@@ -1095,60 +1075,139 @@ def create_Schematic_ladderFilter_COM(library: de.Library, library_name: str, da
         inst.parameters["DigitsActiveIDT"].value = str(list_COM[num_COM].digitsN)
         inst.parameters["DigitsReflector"].value = str(list_COM[num_COM].digitsNR)
         inst.parameters["alpha"].value = str(list_COM[num_COM].alpha)
+        inst.update_item_annotation()
 
-        try:
-            inst.update_item_annotation()
-        except Exception:
-            pass
+        xpos += 1.0 if current_COM_type == "series" else 0.0
+        ypos -= 1.0 if current_COM_type == "shunt" else 0.0
 
-        xpos_max += max_size_symb
-        xpos = xpos_max
-        ypos = 0.0
-        num_COM += 1
+        duplicate = False
 
-
-        # COM LADDER: Add the rest of the ladder depending on the number of COMs
-        for num_COM in range(1, order):
-            if (num_COM % 2 == 0 and startCOM_type == "series") or (num_COM % 2 != 0 and startCOM_type == "shunt"):
-                # SERIES COM
+        if list_COM[num_COM].name.endswith("_1s"):
+            duplicate = True
+            if current_COM_type == "series":
+                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+x_margin, y=ypos)])
+                xpos += x_margin
                 angle_COM = 0.0
-                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+xpos_firststep, y=ypos)])
-                xpos += xpos_firststep
-
-                design.add_wire([PointF(x=xpos+1.0, y=ypos), PointF(x=xpos_max + max_size_symb, y=ypos)])
             else:
-                # SHUNT COM
+                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos, y=ypos-y_margin)])
+                ypos -= y_margin
+                inst = design.add_instance("ads_rflib:GROUND", name="G"+str(num_COM), origin=(xpos, ypos-1.0), angle=-90.0, ads_annot=False)
                 angle_COM = -90.0
-                xpos += max_size_symb/2
 
-                points = [PointF(x=xpos-max_size_symb/2, y=ypos), PointF(x=xpos, y=ypos), PointF(x=xpos+max_size_symb/2, y=ypos)]
-                design.add_wire(points)
+        elif list_COM[num_COM].name.endswith("_1p"):
+            duplicate = True
+            if current_COM_type == "series":
+                xpos -= 1.0
+                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos, y=ypos-y_margin)])
+                design.add_wire([PointF(x=xpos + 1.0, y=ypos), PointF(x=xpos + 1.0, y=ypos-y_margin)])
+                ypos -= y_margin
+                angle_COM = 0.0
+            else:
+                ypos += 1.0
+                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos + x_margin, y=ypos)])
+                design.add_wire([PointF(x=xpos, y=ypos-y_margin), PointF(x=xpos + x_margin, y=ypos-y_margin)])
+                xpos += x_margin
+                angle_COM = -90.0
 
-                inst = design.add_instance("ads_rflib:GROUND", name="G"+str(xstep), origin=(xpos, ypos-1.0), angle=-90.0, ads_annot=False)
-
+        if duplicate:
+            num_COM += 1
             inst = design.add_instance((library_name, CELL_COM_LOSSY, "symbol"), origin=(xpos, ypos), name="COM_"+str(num_COM), angle=angle_COM)
             inst.parameters["d"].value = str(list_COM[num_COM].d)
             inst.parameters["Ap"].value = str(list_COM[num_COM].Ap)
             inst.parameters["DigitsActiveIDT"].value = str(list_COM[num_COM].digitsN)
             inst.parameters["DigitsReflector"].value = str(list_COM[num_COM].digitsNR)
             inst.parameters["alpha"].value = str(list_COM[num_COM].alpha)
+            inst.update_item_annotation()
 
-            try:
+        xpos += 1.0 if current_COM_type == "series" and (list_COM[num_COM-1].name.endswith("_1p") or list_COM[num_COM-1].name.endswith("_1s")) else 0.0
+        ypos += 1.0 if (current_COM_type == "series" and list_COM[num_COM-1].name.endswith("_1p")) or (current_COM_type == "shunt" and list_COM[num_COM-1].name.endswith("_1s")) else 0.0
+
+        ypos = 0.0
+        design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+x_margin, y=ypos)])
+        xpos += x_margin
+        num_COM += 1
+
+        current_COM_type = "series" if current_COM_type == "shunt" else "shunt"
+
+
+        # COM LADDER: Add the rest of the ladder depending on the number of COMs
+        while num_COM < len(list_COM):
+            design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+x_margin, y=ypos)])
+            xpos += x_margin
+
+            if current_COM_type == "series":
+                # SERIES COM start
+                angle_COM = 0.0
+            else:
+                # SHUNT COM start
+                angle_COM = -90.0
+                if not list_COM[num_COM].name.endswith("_1s"):
+                    inst = design.add_instance("ads_rflib:GROUND", name="G"+str(num_COM+1), origin=(xpos, ypos-1.0), angle=-90.0, ads_annot=False)
+            
+            inst = design.add_instance((library_name, CELL_COM_LOSSY, "symbol"), origin=(xpos, ypos), name="COM_"+str(num_COM), angle=angle_COM)
+            inst.parameters["d"].value = str(list_COM[num_COM].d)
+            inst.parameters["Ap"].value = str(list_COM[num_COM].Ap)
+            inst.parameters["DigitsActiveIDT"].value = str(list_COM[num_COM].digitsN)
+            inst.parameters["DigitsReflector"].value = str(list_COM[num_COM].digitsNR)
+            inst.parameters["alpha"].value = str(list_COM[num_COM].alpha)
+            inst.update_item_annotation()
+
+            xpos += 1.0 if current_COM_type == "series" else 0.0
+            ypos -= 1.0 if current_COM_type == "shunt" else 0.0
+
+            duplicate = False
+
+            if list_COM[num_COM].name.endswith("_1s"):
+                duplicate = True
+                if current_COM_type == "series":
+                    design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+x_margin, y=ypos)])
+                    xpos += x_margin
+                    angle_COM = 0.0
+                else:
+                    design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos, y=ypos-y_margin)])
+                    ypos -= y_margin
+                    inst = design.add_instance("ads_rflib:GROUND", name="G"+str(num_COM), origin=(xpos, ypos-1.0), angle=-90.0, ads_annot=False)
+                    angle_COM = -90.0
+
+            elif list_COM[num_COM].name.endswith("_1p"):
+                duplicate = True
+                if current_COM_type == "series":
+                    xpos -= 1.0
+                    design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos, y=ypos-y_margin)])
+                    design.add_wire([PointF(x=xpos + 1.0, y=ypos), PointF(x=xpos + 1.0, y=ypos-y_margin)])
+                    ypos -= y_margin
+                    angle_COM = 0.0
+                else:
+                    ypos += 1.0
+                    design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos + x_margin, y=ypos)])
+                    design.add_wire([PointF(x=xpos, y=ypos-y_margin), PointF(x=xpos + x_margin, y=ypos-y_margin)])
+                    xpos += x_margin
+                    angle_COM = -90.0
+
+            if duplicate:
+                num_COM += 1
+                inst = design.add_instance((library_name, CELL_COM_LOSSY, "symbol"), origin=(xpos, ypos), name="COM_"+str(num_COM), angle=angle_COM)
+                inst.parameters["d"].value = str(list_COM[num_COM].d)
+                inst.parameters["Ap"].value = str(list_COM[num_COM].Ap)
+                inst.parameters["DigitsActiveIDT"].value = str(list_COM[num_COM].digitsN)
+                inst.parameters["DigitsReflector"].value = str(list_COM[num_COM].digitsNR)
+                inst.parameters["alpha"].value = str(list_COM[num_COM].alpha)
                 inst.update_item_annotation()
-            except Exception:
-                pass
-                
-            xpos_max += max_size_symb
-            xpos = xpos_max
+
+            xpos += 1.0 if current_COM_type == "series" and (list_COM[num_COM-1].name.endswith("_1p") or list_COM[num_COM-1].name.endswith("_1s")) else 0.0
+            ypos += 1.0 if (current_COM_type == "series" and list_COM[num_COM-1].name.endswith("_1p")) or (current_COM_type == "shunt" and list_COM[num_COM-1].name.endswith("_1s")) else 0.0
+
             ypos = 0.0
-            xstep += 1
+            design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+x_margin, y=ypos)])
+            xpos += x_margin
+            num_COM += 1
+
+            current_COM_type = "series" if current_COM_type == "shunt" else "shunt"
 
 
-        # OUTPUT MATCHING NETWORK: (need to know if last BVD is series or shunt)
-        xstep += 1
-
-        design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+xpos_firststep*2, y=ypos)])
-        xpos += xpos_firststep*2
+        # OUTPUT MATCHING NETWORK: (need to know if last COM is series or shunt)
+        design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+x_margin, y=ypos)])
+        xpos += x_margin
 
         if matching_network == "0.0":
             if endCOM_type == "series":
@@ -1159,9 +1218,10 @@ def create_Schematic_ladderFilter_COM(library: de.Library, library_name: str, da
                     inst.update_item_annotation()
                     ypos -= 1.0
 
-                    inst = design.add_instance("ads_rflib:GROUND", name="G"+str(xstep), origin=(xpos, ypos), angle=-90.0, ads_annot=False)
+                    inst = design.add_instance("ads_rflib:GROUND", name="G"+str(num_COM), origin=(xpos, ypos), angle=-90.0, ads_annot=False)
                     ypos += 1.0
-                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=float(max_size_symb*xstep), y=ypos)])
+                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+x_margin, y=ypos)])
+                xpos += x_margin
 
             else:
                 if float(lfini2) > 0.0:
@@ -1171,7 +1231,8 @@ def create_Schematic_ladderFilter_COM(library: de.Library, library_name: str, da
                     inst.update_item_annotation()
                     xpos += 1.0
 
-                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=float(max_size_symb*xstep), y=ypos)])
+                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+x_margin, y=ypos)])
+                xpos += x_margin
         else:
             # Add the matching network for the output
             if mntype1 == "s":
@@ -1181,8 +1242,8 @@ def create_Schematic_ladderFilter_COM(library: de.Library, library_name: str, da
                     inst.parameters["L"].value = lfini1 + "H"
                     inst.update_item_annotation()
                     xpos += 1.0
-                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+space_parallel, y=ypos)])
-                xpos += space_parallel
+                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+x_margin, y=ypos)])
+                xpos += x_margin
 
                 if float(cfini2) > 0.0:
                     inst = design.add_instance("ads_rflib:C", name="C_output", origin=(xpos, ypos), angle=-90.0)
@@ -1190,9 +1251,10 @@ def create_Schematic_ladderFilter_COM(library: de.Library, library_name: str, da
                     inst.update_item_annotation()
                     ypos -= 1.0
 
-                    inst = design.add_instance("ads_rflib:GROUND", name="G"+str(xstep), origin=(xpos, ypos), angle=-90.0, ads_annot=False)
+                    inst = design.add_instance("ads_rflib:GROUND", name="G"+str(num_COM), origin=(xpos, ypos), angle=-90.0, ads_annot=False)
                     ypos += 1.0
-                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos + 2.0, y=ypos)])
+                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos + x_margin, y=ypos)])
+                xpos += x_margin
 
             else:
                 if float(cfini1) > 0.0:
@@ -1202,21 +1264,18 @@ def create_Schematic_ladderFilter_COM(library: de.Library, library_name: str, da
                     inst.update_item_annotation()
                     ypos -= 1.0
 
-                    inst = design.add_instance("ads_rflib:GROUND", name="G"+str(xstep), origin=(xpos, ypos), angle=-90.0, ads_annot=False)
+                    inst = design.add_instance("ads_rflib:GROUND", name="G"+str(num_COM), origin=(xpos, ypos), angle=-90.0, ads_annot=False)
                     ypos += 1.0
-                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+space_parallel, y=ypos)])
-                xpos += space_parallel
+                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos + x_margin, y=ypos)])
+                xpos += x_margin
 
                 if float(lfini2) > 0.0:
                     inst = design.add_instance("ads_rflib:L", name="L_output", origin=(xpos, ypos))
                     inst.parameters["L"].value = lfini2 + "H"
                     inst.update_item_annotation()
                     xpos += 1.0
-                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos + 2.0, y=ypos)])
-
-        xpos_max += max_size_output
-        xpos += 2.0
-        ypos = 0.0
+                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos + x_margin, y=ypos)])
+                xpos += x_margin
 
 
         # TermG2
