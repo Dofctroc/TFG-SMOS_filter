@@ -304,6 +304,8 @@ def create_Schematic_ladderFilter_BVDlossy(library: de.Library, library_name: st
     else:
         endBVD_type = "series" if startBVD_type == "series" else "shunt"
 
+    current_BVD_type = startBVD_type
+
     # READ Matching network parameters
     matching_network = parameters["matching_network"]
     mntype1 = parameters["mntype1"]
@@ -320,17 +322,12 @@ def create_Schematic_ladderFilter_BVDlossy(library: de.Library, library_name: st
     
     # Grid positon parameters
     xpos = 0.0
-    xpos_max = xpos
-    max_size_symb = 3.0
-    max_size_input = 3.0
-    max_size_output = 4.0
     ypos = 0.0
 
-    xpos_firststep = 1.25
-    xstep = -1
-    num_BVD = 0
+    x_margin = 1.0
+    y_margin = 1.0
 
-    space_parallel = 1.0
+    num_BVD = 0
 
     with Transaction(design) as transaction:
         # =========================================== Ladder Filter of Lossy BVDs ===========================================
@@ -339,69 +336,57 @@ def create_Schematic_ladderFilter_BVDlossy(library: de.Library, library_name: st
         inst.parameters["Num"].value = "1"
         inst.update_item_annotation()
 
-        xpos = xpos_max
-        ypos = 0.0
-
         # INPUT MATCHING NETWORK: (need to know if first BVD is series or shunt)
-        xstep += 1
-
         if startBVD_type == "series":
             # Add shunt inductor at the input
             d = Decimal(input_l)
             exp10 = d.adjusted()   # exponente base 10
 
             if exp10 > -10:
-                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+xpos_firststep*2, y=ypos)])
-                xpos += xpos_firststep*2
+                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+x_margin, y=ypos)])
+                xpos += x_margin
 
                 inst = design.add_instance("ads_rflib:L", name="L_input", origin=(xpos, ypos), angle=-90.0)
                 inst.parameters["L"].value = input_l + "H"
                 inst.update_item_annotation()
                 ypos -= 1.0
 
-                inst = design.add_instance("ads_rflib:GROUND", name="G"+str(xstep), origin=(xpos, ypos), angle=-90.0, ads_annot=False)
+                inst = design.add_instance("ads_rflib:GROUND", name="G"+str(num_BVD), origin=(xpos, ypos), angle=-90.0, ads_annot=False)
                 ypos += 1.0
 
-            design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos_max + max_size_input, y=ypos)])
+            design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos + x_margin, y=ypos)])
+            xpos += x_margin
 
         else:
             # Add series inductor at the input
-            design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+xpos_firststep, y=ypos)])
-            xpos += xpos_firststep
+            design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+x_margin, y=ypos)])
+            xpos += x_margin
 
             inst = design.add_instance("ads_rflib:L", name="L_input", origin=(xpos, ypos))
             inst.parameters["L"].value = input_l + "H"
             inst.update_item_annotation()
             xpos += 1.0
 
-            design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos_max + max_size_input, y=ypos)])
+            design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos + x_margin, y=ypos)])
+            xpos += x_margin
 
-        xpos_max += max_size_input
-        xpos = xpos_max
         ypos = 0.0
 
         # FIRST BVD: Start BVD ladder depending on if it is series or shunt
         # Remember to put a GROUND if BVD is shunt
-        xstep += 1
+        design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+x_margin, y=ypos)])
+        xpos += x_margin
 
-        if startBVD_type == "series":
+        if current_BVD_type == "series":
             # SERIES BVD start
             angle_BVD = 0.0
-            design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+xpos_firststep, y=ypos)])
-            xpos += xpos_firststep
-
-            design.add_wire([PointF(x=xpos+1.0, y=ypos), PointF(x=xpos_max + max_size_symb, y=ypos)])
         else:
             # SHUNT BVD start
             angle_BVD = -90.0
-            xpos += max_size_symb/2
-
-            points = [PointF(x=xpos-max_size_symb/2, y=ypos), PointF(x=xpos, y=ypos), PointF(x=xpos+max_size_symb/2, y=ypos)]
-            design.add_wire(points)
-
-            inst = design.add_instance("ads_rflib:GROUND", name="G"+str(xstep), origin=(xpos, ypos-1.0), angle=-90.0, ads_annot=False)
+            if not list_BVD[num_BVD].name.endswith("_1s"):
+                inst = design.add_instance("ads_rflib:GROUND", name="G"+str(num_BVD+1), origin=(xpos, ypos-1.0), angle=-90.0, ads_annot=False)
         
-        inst = design.add_instance((library_name, CELL_BVD_LOSSY, "symbol"), origin=(xpos, ypos), name="lossyBVD_"+str(num_BVD), angle=angle_BVD)
+        inst = design.add_instance((library_name, CELL_BVD_LOSSY, "symbol"), origin=(xpos, ypos), name=list_BVD[num_BVD].name, angle=angle_BVD)
         inst.parameters["Cp"].value = str(list_BVD[num_BVD].cp)
         inst.parameters["Ca"].value = str(list_BVD[num_BVD].ca)
         inst.parameters["La"].value = str(list_BVD[num_BVD].la)
@@ -415,38 +400,43 @@ def create_Schematic_ladderFilter_BVDlossy(library: de.Library, library_name: st
         inst.parameters["Ql"].value = str(list_BVD[num_BVD].ql)
         inst.parameters["Qc"].value = str(list_BVD[num_BVD].qc)
         inst.parameters["Qa"].value = str(list_BVD[num_BVD].qa)
+        inst.update_item_annotation()
 
-        try:
-            inst.update_item_annotation()
-        except Exception:
-            pass
+        xpos += 1.0 if current_BVD_type == "series" else 0.0
+        ypos -= 1.0 if current_BVD_type == "shunt" else 0.0
 
-        xpos_max += max_size_symb
-        xpos = xpos_max
-        ypos = 0.0
-        num_BVD += 1
+        duplicate = False
 
-
-        # BVD LADDER: Add the rest of the ladder depending on the number of BVDs
-        for num_BVD in range(1, order):
-            if (num_BVD % 2 == 0 and startBVD_type == "series") or (num_BVD % 2 != 0 and startBVD_type == "shunt"):
-                # SERIES BVD
+        if list_BVD[num_BVD].name.endswith("_1s"):
+            duplicate = True
+            if current_BVD_type == "series":
+                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+x_margin, y=ypos)])
+                xpos += x_margin
                 angle_BVD = 0.0
-                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+xpos_firststep, y=ypos)])
-                xpos += xpos_firststep
-
-                design.add_wire([PointF(x=xpos+1.0, y=ypos), PointF(x=xpos_max + max_size_symb, y=ypos)])
             else:
-                # SHUNT BVD
+                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos, y=ypos-y_margin)])
+                ypos -= y_margin
+                inst = design.add_instance("ads_rflib:GROUND", name="G"+str(num_BVD), origin=(xpos, ypos-1.0), angle=-90.0, ads_annot=False)
                 angle_BVD = -90.0
-                xpos += max_size_symb/2
 
-                points = [PointF(x=xpos-max_size_symb/2, y=ypos), PointF(x=xpos, y=ypos), PointF(x=xpos+max_size_symb/2, y=ypos)]
-                design.add_wire(points)
+        elif list_BVD[num_BVD].name.endswith("_1p"):
+            duplicate = True
+            if current_BVD_type == "series":
+                xpos -= 1.0
+                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos, y=ypos-y_margin)])
+                design.add_wire([PointF(x=xpos + 1.0, y=ypos), PointF(x=xpos + 1.0, y=ypos-y_margin)])
+                ypos -= y_margin
+                angle_BVD = 0.0
+            else:
+                ypos += 1.0
+                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos + x_margin, y=ypos)])
+                design.add_wire([PointF(x=xpos, y=ypos-y_margin), PointF(x=xpos + x_margin, y=ypos-y_margin)])
+                xpos += x_margin
+                angle_BVD = -90.0
 
-                inst = design.add_instance("ads_rflib:GROUND", name="G"+str(xstep), origin=(xpos, ypos-1.0), angle=-90.0, ads_annot=False)
-
-            inst = design.add_instance((library_name, CELL_BVD_LOSSY, "symbol"), origin=(xpos, ypos), name="lossyBVD_"+str(num_BVD), angle=angle_BVD)
+        if duplicate:
+            num_BVD += 1
+            inst = design.add_instance((library_name, CELL_BVD_LOSSY, "symbol"), origin=(xpos, ypos), name=list_BVD[num_BVD].name, angle=angle_BVD)
             inst.parameters["Cp"].value = str(list_BVD[num_BVD].cp)
             inst.parameters["Ca"].value = str(list_BVD[num_BVD].ca)
             inst.parameters["La"].value = str(list_BVD[num_BVD].la)
@@ -460,23 +450,113 @@ def create_Schematic_ladderFilter_BVDlossy(library: de.Library, library_name: st
             inst.parameters["Ql"].value = str(list_BVD[num_BVD].ql)
             inst.parameters["Qc"].value = str(list_BVD[num_BVD].qc)
             inst.parameters["Qa"].value = str(list_BVD[num_BVD].qa)
+            inst.update_item_annotation()
 
-            try:
+        xpos += 1.0 if current_BVD_type == "series" and (list_BVD[num_BVD-1].name.endswith("_1p") or list_BVD[num_BVD-1].name.endswith("_1s")) else 0.0
+        ypos += 1.0 if (current_BVD_type == "series" and list_BVD[num_BVD-1].name.endswith("_1p")) or (current_BVD_type == "shunt" and list_BVD[num_BVD-1].name.endswith("_1s")) else 0.0
+
+        ypos = 0.0
+        design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+x_margin, y=ypos)])
+        xpos += x_margin
+        num_BVD += 1
+
+        current_BVD_type = "series" if current_BVD_type == "shunt" else "shunt"
+
+
+        # BVD LADDER: Add the rest of the ladder depending on the number of BVDs
+        while num_BVD < len(list_BVD):
+            design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+x_margin, y=ypos)])
+            xpos += x_margin
+
+            if current_BVD_type == "series":
+                # SERIES BVD start
+                angle_BVD = 0.0
+            else:
+                # SHUNT BVD start
+                angle_BVD = -90.0
+                if not list_BVD[num_BVD].name.endswith("_1s"):
+                    inst = design.add_instance("ads_rflib:GROUND", name="G"+str(num_BVD+1), origin=(xpos, ypos-1.0), angle=-90.0, ads_annot=False)
+            
+            inst = design.add_instance((library_name, CELL_BVD_LOSSY, "symbol"), origin=(xpos, ypos), name=list_BVD[num_BVD].name, angle=angle_BVD)
+            inst.parameters["Cp"].value = str(list_BVD[num_BVD].cp)
+            inst.parameters["Ca"].value = str(list_BVD[num_BVD].ca)
+            inst.parameters["La"].value = str(list_BVD[num_BVD].la)
+            inst.parameters["Ladd_ser"].value = str(list_BVD[num_BVD].ladd_ser if list_BVD[num_BVD].ladd_ser != 0.0 else 1e-20)
+            inst.parameters["Ladd_shu"].value = str(list_BVD[num_BVD].ladd_shu if list_BVD[num_BVD].ladd_shu != 0.0 else 1e-20)
+            inst.parameters["Cadd_ser"].value = str(list_BVD[num_BVD].cadd_ser if list_BVD[num_BVD].cadd_ser != 0.0 else 1e-20)
+            inst.parameters["Cadd_shu"].value = str(list_BVD[num_BVD].cadd_shu if list_BVD[num_BVD].cadd_shu != 0.0 else 1e-20)
+            inst.parameters["Ladd_ground"].value = str(list_BVD[num_BVD].ladd_ground if list_BVD[num_BVD].ladd_ground != 0.0 else 1e-20)
+            inst.parameters["Rs"].value = str(list_BVD[num_BVD].rs)
+            inst.parameters["Rp"].value = str(list_BVD[num_BVD].rp)
+            inst.parameters["Ql"].value = str(list_BVD[num_BVD].ql)
+            inst.parameters["Qc"].value = str(list_BVD[num_BVD].qc)
+            inst.parameters["Qa"].value = str(list_BVD[num_BVD].qa)
+            inst.update_item_annotation()
+
+            xpos += 1.0 if current_BVD_type == "series" else 0.0
+            ypos -= 1.0 if current_BVD_type == "shunt" else 0.0
+
+            duplicate = False
+
+            if list_BVD[num_BVD].name.endswith("_1s"):
+                duplicate = True
+                if current_BVD_type == "series":
+                    design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+x_margin, y=ypos)])
+                    xpos += x_margin
+                    angle_BVD = 0.0
+                else:
+                    design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos, y=ypos-y_margin)])
+                    ypos -= y_margin
+                    inst = design.add_instance("ads_rflib:GROUND", name="G"+str(num_BVD), origin=(xpos, ypos-1.0), angle=-90.0, ads_annot=False)
+                    angle_BVD = -90.0
+
+            elif list_BVD[num_BVD].name.endswith("_1p"):
+                duplicate = True
+                if current_BVD_type == "series":
+                    xpos -= 1.0
+                    design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos, y=ypos-y_margin)])
+                    design.add_wire([PointF(x=xpos + 1.0, y=ypos), PointF(x=xpos + 1.0, y=ypos-y_margin)])
+                    ypos -= y_margin
+                    angle_BVD = 0.0
+                else:
+                    ypos += 1.0
+                    design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos + x_margin, y=ypos)])
+                    design.add_wire([PointF(x=xpos, y=ypos-y_margin), PointF(x=xpos + x_margin, y=ypos-y_margin)])
+                    xpos += x_margin
+                    angle_BVD = -90.0
+
+            if duplicate:
+                num_BVD += 1
+                inst = design.add_instance((library_name, CELL_BVD_LOSSY, "symbol"), origin=(xpos, ypos), name=list_BVD[num_BVD].name, angle=angle_BVD)
+                inst.parameters["Cp"].value = str(list_BVD[num_BVD].cp)
+                inst.parameters["Ca"].value = str(list_BVD[num_BVD].ca)
+                inst.parameters["La"].value = str(list_BVD[num_BVD].la)
+                inst.parameters["Ladd_ser"].value = str(list_BVD[num_BVD].ladd_ser if list_BVD[num_BVD].ladd_ser != 0.0 else 1e-20)
+                inst.parameters["Ladd_shu"].value = str(list_BVD[num_BVD].ladd_shu if list_BVD[num_BVD].ladd_shu != 0.0 else 1e-20)
+                inst.parameters["Cadd_ser"].value = str(list_BVD[num_BVD].cadd_ser if list_BVD[num_BVD].cadd_ser != 0.0 else 1e-20)
+                inst.parameters["Cadd_shu"].value = str(list_BVD[num_BVD].cadd_shu if list_BVD[num_BVD].cadd_shu != 0.0 else 1e-20)
+                inst.parameters["Ladd_ground"].value = str(list_BVD[num_BVD].ladd_ground if list_BVD[num_BVD].ladd_ground != 0.0 else 1e-20)
+                inst.parameters["Rs"].value = str(list_BVD[num_BVD].rs)
+                inst.parameters["Rp"].value = str(list_BVD[num_BVD].rp)
+                inst.parameters["Ql"].value = str(list_BVD[num_BVD].ql)
+                inst.parameters["Qc"].value = str(list_BVD[num_BVD].qc)
+                inst.parameters["Qa"].value = str(list_BVD[num_BVD].qa)
                 inst.update_item_annotation()
-            except Exception:
-                pass
-                
-            xpos_max += max_size_symb
-            xpos = xpos_max
+
+            xpos += 1.0 if current_BVD_type == "series" and (list_BVD[num_BVD-1].name.endswith("_1p") or list_BVD[num_BVD-1].name.endswith("_1s")) else 0.0
+            ypos += 1.0 if (current_BVD_type == "series" and list_BVD[num_BVD-1].name.endswith("_1p")) or (current_BVD_type == "shunt" and list_BVD[num_BVD-1].name.endswith("_1s")) else 0.0
+
             ypos = 0.0
-            xstep += 1
+            design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+x_margin, y=ypos)])
+            xpos += x_margin
+            num_BVD += 1
+
+            current_BVD_type = "series" if current_BVD_type == "shunt" else "shunt"
 
 
         # OUTPUT MATCHING NETWORK: (need to know if last BVD is series or shunt)
-        xstep += 1
-
-        design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+xpos_firststep*2, y=ypos)])
-        xpos += xpos_firststep*2
+        design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+x_margin, y=ypos)])
+        xpos += x_margin
 
         if matching_network == "0.0":
             if endBVD_type == "series":
@@ -487,9 +567,10 @@ def create_Schematic_ladderFilter_BVDlossy(library: de.Library, library_name: st
                     inst.update_item_annotation()
                     ypos -= 1.0
 
-                    inst = design.add_instance("ads_rflib:GROUND", name="G"+str(xstep), origin=(xpos, ypos), angle=-90.0, ads_annot=False)
+                    inst = design.add_instance("ads_rflib:GROUND", name="G"+str(num_BVD), origin=(xpos, ypos), angle=-90.0, ads_annot=False)
                     ypos += 1.0
-                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=float(max_size_symb*xstep), y=ypos)])
+                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+x_margin, y=ypos)])
+                xpos += x_margin
 
             else:
                 if float(lfini2) > 0.0:
@@ -499,7 +580,8 @@ def create_Schematic_ladderFilter_BVDlossy(library: de.Library, library_name: st
                     inst.update_item_annotation()
                     xpos += 1.0
 
-                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=float(max_size_symb*xstep), y=ypos)])
+                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+x_margin, y=ypos)])
+                xpos += x_margin
         else:
             # Add the matching network for the output
             if mntype1 == "s":
@@ -509,8 +591,8 @@ def create_Schematic_ladderFilter_BVDlossy(library: de.Library, library_name: st
                     inst.parameters["L"].value = lfini1 + "H"
                     inst.update_item_annotation()
                     xpos += 1.0
-                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+space_parallel, y=ypos)])
-                xpos += space_parallel
+                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+x_margin, y=ypos)])
+                xpos += x_margin
 
                 if float(cfini2) > 0.0:
                     inst = design.add_instance("ads_rflib:C", name="C_output", origin=(xpos, ypos), angle=-90.0)
@@ -518,9 +600,10 @@ def create_Schematic_ladderFilter_BVDlossy(library: de.Library, library_name: st
                     inst.update_item_annotation()
                     ypos -= 1.0
 
-                    inst = design.add_instance("ads_rflib:GROUND", name="G"+str(xstep), origin=(xpos, ypos), angle=-90.0, ads_annot=False)
+                    inst = design.add_instance("ads_rflib:GROUND", name="G"+str(num_BVD), origin=(xpos, ypos), angle=-90.0, ads_annot=False)
                     ypos += 1.0
-                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos + 2.0, y=ypos)])
+                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos + x_margin, y=ypos)])
+                xpos += x_margin
 
             else:
                 if float(cfini1) > 0.0:
@@ -530,21 +613,19 @@ def create_Schematic_ladderFilter_BVDlossy(library: de.Library, library_name: st
                     inst.update_item_annotation()
                     ypos -= 1.0
 
-                    inst = design.add_instance("ads_rflib:GROUND", name="G"+str(xstep), origin=(xpos, ypos), angle=-90.0, ads_annot=False)
+                    inst = design.add_instance("ads_rflib:GROUND", name="G"+str(num_BVD), origin=(xpos, ypos), angle=-90.0, ads_annot=False)
                     ypos += 1.0
-                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+space_parallel, y=ypos)])
-                xpos += space_parallel
+                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos + x_margin, y=ypos)])
+                xpos += x_margin
 
                 if float(lfini2) > 0.0:
                     inst = design.add_instance("ads_rflib:L", name="L_output", origin=(xpos, ypos))
                     inst.parameters["L"].value = lfini2 + "H"
                     inst.update_item_annotation()
                     xpos += 1.0
-                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos + 2.0, y=ypos)])
+                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos + x_margin, y=ypos)])
+                xpos += x_margin
 
-        xpos_max += max_size_output
-        xpos += 2.0
-        ypos = 0.0
 
         # TermG2
         inst = design.add_instance("ads_simulation:TermG", name="TermG2", origin=(xpos, ypos), angle=-90.0)
