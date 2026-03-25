@@ -216,7 +216,7 @@ def compute_list_COM(list_BVD: list[BVD], parameters: dict) -> list[COM]:
         com = COM(name=name, d=p, Ap=Ap, digitsN=Nidt*2, digitsNR=NR, alpha=alpha, alpha_n=alpha_n, Ct=Ct, fs=bvd.fs, fp=bvd.fp)
         list_COM.append(com)
     
-    # list_COM = reajuste_pitch(list_BVD, list_COM, parameters)
+    list_COM = reajuste_pitch(list_BVD, list_COM, parameters)
 
     return list_COM
 
