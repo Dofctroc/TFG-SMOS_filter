@@ -756,7 +756,6 @@ class MainWindow(QMainWindow):
 
                 # Crear la lista de BVDs a partir de los parámetros leídos
                 self.list_BVD = mat_bvd_com.create_list_BVD(self.network_parameters)
-                self.list_BVD = mat_bvd_com.compute_admitance_BVD(self.list_BVD, self.network_parameters)
                 
                 # Rellenar los campos de Matching Network y Lossy BVD con los parámetros leídos
                 self.combo_bvd.clear() # Borra el "Archivo no leído"
@@ -863,8 +862,6 @@ class MainWindow(QMainWindow):
         else:
             try:
                 self.list_COM = mat_bvd_com.compute_list_COM(self.list_BVD, self.network_parameters)
-                self.list_COM = mat_bvd_com.compute_admitance_COM(self.list_COM, self.network_parameters)
-                # self.filter_COM = mat_bvd_com.compute_filter_admitance(self.list_COM, self.network_parameters)
 
                 # Rellenar los campos de Matching Network y Lossy BVD con los parámetros leídos
                 self.combo_com.clear() # Borra el "Archivo no leído"

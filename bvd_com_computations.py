@@ -1,4 +1,5 @@
 import numpy as np
+from scipy.optimize import least_squares
 import copy
 
 class BVD():
@@ -103,13 +104,14 @@ def create_list_BVD(parametersBVD: dict) -> list[BVD]:
                   ladd_ser=ladd_ser[i], ladd_shu=ladd_shu[i], cadd_ser=cadd_ser[i], 
                   cadd_shu=cadd_shu[i], ladd_ground=ladd_ground[i], 
                   rs=rs, rp=rp, ql=ql, qc=qc, qa=qa)
+        bvd = compute_admitance_BVD(bvd, parametersBVD)
         
         currentType = "shunt" if currentType == "series" else "series"
         list_BVD.append(bvd)
 
     return list_BVD
 
-def compute_admitance_BVD(list_BVD: list[BVD], parameters: dict) -> list[BVD]:
+def compute_admitance_BVD(bvd: BVD, parameters: dict) -> BVD:
 
     fstart = float(parameters["fstart1"])
     fstop = float(parameters["fstop1"])
@@ -117,30 +119,29 @@ def compute_admitance_BVD(list_BVD: list[BVD], parameters: dict) -> list[BVD]:
 
     f = np.linspace(fstart, fstop, npoints)
 
-    for bvd in list_BVD:
-        z_la = Zl(f, bvd.la)
-        z_cp = Zc(f, bvd.cp)
-        z_ca = Zc(f, bvd.ca)
-        z_ra = 2*np.pi*f*bvd.la/bvd.qa
+    z_la = Zl(f, bvd.la)
+    z_cp = Zc(f, bvd.cp)
+    z_ca = Zc(f, bvd.ca)
+    z_ra = 2*np.pi*f*bvd.la/bvd.qa
 
-        z_cadd_shu = Zc(f, bvd.cadd_shu, bvd.qc)
-        z_ladd_shu = Zl(f, bvd.ladd_shu, bvd.ql)
+    z_cadd_shu = Zc(f, bvd.cadd_shu, bvd.qc)
+    z_ladd_shu = Zl(f, bvd.ladd_shu, bvd.ql)
 
-        z_cadd_ser = Zc(f, bvd.cadd_ser, bvd.qc)
-        z_ladd_ser = Zl(f, bvd.ladd_ser, bvd.ql)
+    z_cadd_ser = Zc(f, bvd.cadd_ser, bvd.qc)
+    z_ladd_ser = Zl(f, bvd.ladd_ser, bvd.ql)
 
-        z_ladd_gnd = Zl(f, bvd.ladd_ground, bvd.ql)
+    z_ladd_gnd = Zl(f, bvd.ladd_ground, bvd.ql)
 
-        y_core = (1/z_cadd_shu + 1/(bvd.rp + z_cp) + 1/(z_la + z_ca + z_ra) + 1/z_ladd_shu )
-        z_core = 1/y_core
+    y_core = (1/z_cadd_shu + 1/(bvd.rp + z_cp) + 1/(z_la + z_ca + z_ra) + 1/z_ladd_shu )
+    z_core = 1/y_core
 
-        Z_bvd = bvd.rs + z_core + z_ladd_ser + z_cadd_ser + z_ladd_gnd
-        Y_bvd = np.nan_to_num(1/Z_bvd)
+    Z_bvd = bvd.rs + z_core + z_ladd_ser + z_cadd_ser + z_ladd_gnd
+    Y_bvd = np.nan_to_num(1/Z_bvd)
 
-        bvd.Y = Y_bvd
-        bvd.f = f
+    bvd.Y = Y_bvd
+    bvd.f = f
 
-    return list_BVD
+    return bvd
 
 def compute_list_COM(list_BVD: list[BVD], parameters: dict) -> list[COM]:
     list_COM: list[COM] = []
@@ -214,13 +215,15 @@ def compute_list_COM(list_BVD: list[BVD], parameters: dict) -> list[COM]:
         # Assign all values to the COM block
         name = bvd.name.replace("BVD", "COM")
         com = COM(name=name, d=p, Ap=Ap, digitsN=Nidt*2, digitsNR=NR, alpha=alpha, alpha_n=alpha_n, Ct=Ct, fs=bvd.fs, fp=bvd.fp)
+        com = compute_admitance_COM(com, parameters)
+        
         list_COM.append(com)
     
     list_COM = reajuste_pitch(list_BVD, list_COM, parameters)
 
     return list_COM
 
-def compute_admitance_COM(list_COM: list[COM], parameters: dict) -> list[COM]:
+def compute_admitance_COM(com, parameters: dict) -> COM:
     # Sweep parameters
     fstart = float(parameters["fstart1"])
     fstop = float(parameters["fstop1"])
@@ -228,50 +231,49 @@ def compute_admitance_COM(list_COM: list[COM], parameters: dict) -> list[COM]:
 
     f = np.linspace(fstart, fstop, npoints)
 
-    for com in list_COM:
-        # Calculamos la admitancia para cado bloque COM
-        k = (2*np.pi*f)/VP
-        lambda0 = 2*com.d
-        k0 = np.pi/com.d
-        Nidt = com.digitsN/2
+    # Calculamos la admitancia para cado bloque COM
+    k = (2*np.pi*f)/VP
+    lambda0 = 2*com.d
+    k0 = np.pi/com.d
+    Nidt = com.digitsN/2
 
-        delta = k - k0
-        beta = np.sqrt((delta+K11)**2 - K12**2)
-        pe = (beta-delta-K11)/K12
+    delta = k - k0
+    beta = np.sqrt((delta+K11)**2 - K12**2)
+    pe = (beta-delta-K11)/K12
 
-        theta = beta*Nidt*lambda0/2
-        theta_R = beta*NR*lambda0/2
+    theta = beta*Nidt*lambda0/2
+    theta_R = beta*NR*lambda0/2
 
-        z_0 = (1-pe)/(1+pe)*Z0_PRIMA
-        z_0R = (1+pe)/(1-pe)*Z0_PRIMA
-        z_inR = 1 / ( 1 / (1j*z_0R*np.tan(theta_R)+Z0_PRIMA) + 1j*np.sin(2*theta_R)/z_0R) + 1j*z_0R*np.tan(theta_R)
+    z_0 = (1-pe)/(1+pe)*Z0_PRIMA
+    z_0R = (1+pe)/(1-pe)*Z0_PRIMA
+    z_inR = 1 / ( 1 / (1j*z_0R*np.tan(theta_R)+Z0_PRIMA) + 1j*np.sin(2*theta_R)/z_0R) + 1j*z_0R*np.tan(theta_R)
 
-        # Variables para la resolución de la ecuación cuadrática
-        A = 1j*2*np.pi*f*com.Ct
-        B = 1 / (1j*2*theta*z_0)
-        C = (1j*z_0R*np.tan(theta) + z_inR) / 2 + z_0R / (1j*np.sin(2*theta))
-        D = (Z0_PRIMA / (2*theta*z_0))**2
-        phi = 2*com.alpha*Nidt*lambda0*np.sqrt(Z0_PRIMA)
+    # Variables para la resolución de la ecuación cuadrática
+    A = 1j*2*np.pi*f*com.Ct
+    B = 1 / (1j*2*theta*z_0)
+    C = (1j*z_0R*np.tan(theta) + z_inR) / 2 + z_0R / (1j*np.sin(2*theta))
+    D = (Z0_PRIMA / (2*theta*z_0))**2
+    phi = 2*com.alpha*Nidt*lambda0*np.sqrt(Z0_PRIMA)
 
-        Z_com = (R_SERIE + 1 / (1/R_SHUNT + A + B*phi**2 + D/C * phi**2))
-        Y_com = 1 / Z_com
+    Z_com = (R_SERIE + 1 / (1/R_SHUNT + A + B*phi**2 + D/C * phi**2))
+    Y_com = 1 / Z_com
 
-        com.Y = Y_com
-        com.f = f
+    com.Y = Y_com
+    com.f = f
 
-        Y_com_dB = 20 * np.log10(np.abs(Y_com) + 1e-20)
+    Y_com_dB = 20 * np.log10(np.abs(Y_com) + 1e-20)
 
-        com.fs = f[np.argmax(Y_com_dB)]
-        com.fp = f[np.argmin(Y_com_dB)]
+    com.fs = f[np.argmax(Y_com_dB)]
+    com.fp = f[np.argmin(Y_com_dB)]
 
-    return list_COM
+    return com
 
 def reajuste_pitch(list_BVD: list[BVD], list_COM: list[COM], parameters: dict) -> list[COM]:
     for bvd, com in zip(list_BVD, list_COM):
         f_correction = bvd.fs / com.fs 
         com.d = com.d * f_correction
 
-    list_COM = compute_admitance_COM(list_COM, parameters)
+        com = compute_admitance_COM(com, parameters)
 
     return list_COM
 
@@ -301,6 +303,9 @@ def duplicate_resonators(list_BVD: list[BVD], list_COM: list[COM], parameters: d
 
             bvd_1.name = bvd_base.name + "_1s"
             bvd_2.name = bvd_base.name + "_2s"
+
+            bvd_1 = compute_admitance_BVD(bvd_1, parameters)
+            bvd_2 = compute_admitance_BVD(bvd_2, parameters)
             list_BVD_duplicados.extend([bvd_1, bvd_2])
 
             # Duplicamos el valor de DigitsActiveIDT del COM
@@ -311,6 +316,9 @@ def duplicate_resonators(list_BVD: list[BVD], list_COM: list[COM], parameters: d
 
             com_1.name = com_base.name + "_1s"
             com_2.name = com_base.name + "_2s"
+
+            com_1 = compute_admitance_COM(com_1, parameters)
+            com_2 = compute_admitance_COM(com_2, parameters)
             list_COM_duplicados.extend([com_1, com_2])
 
         elif com.digitsN > DIGITS_NIDT_MAX:
@@ -328,6 +336,9 @@ def duplicate_resonators(list_BVD: list[BVD], list_COM: list[COM], parameters: d
 
             bvd_1.name = bvd_base.name + "_1p"
             bvd_2.name = bvd_base.name + "_2p"
+
+            bvd_1 = compute_admitance_BVD(bvd_1, parameters)
+            bvd_2 = compute_admitance_BVD(bvd_2, parameters)
             list_BVD_duplicados.extend([bvd_1, bvd_2])
 
             # Dividimos camos el valor de DigitsActiveIDT del COM
@@ -338,6 +349,9 @@ def duplicate_resonators(list_BVD: list[BVD], list_COM: list[COM], parameters: d
 
             com_1.name = com_base.name + "_1p"
             com_2.name = com_base.name + "_2p"
+
+            com_1 = compute_admitance_COM(com_1, parameters)
+            com_2 = compute_admitance_COM(com_2, parameters)
             list_COM_duplicados.extend([com_1, com_2])
         
         else:
@@ -345,9 +359,6 @@ def duplicate_resonators(list_BVD: list[BVD], list_COM: list[COM], parameters: d
             list_COM_duplicados.append(com)
 
         idx += 1
-
-    list_BVD_duplicados = compute_admitance_BVD(list_BVD_duplicados, parameters)
-    list_COM_duplicados = compute_admitance_COM(list_COM_duplicados, parameters)
 
     return list_BVD_duplicados, list_COM_duplicados
         
