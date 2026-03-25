@@ -49,12 +49,13 @@ class FilterResponse():
 K11_REAL = -82053.9
 K11 = -82053.9 - 1j*450
 K12 = 59340.0
-NR = 40
 
-NIDT_MAX = 400
-NIDT_MIN = 50
-AP_MAX = 30
+DIGITS_NR = 40
+NR = DIGITS_NR*2
+DIGITS_NIDT_MIN = 100
+DIGITS_NIDT_MAX = 400
 AP_MIN = 10
+AP_MAX = 30
 
 VP = 3741.8
 EPS_R = 39.56
@@ -141,7 +142,7 @@ def compute_admitance_BVD(list_BVD: list[BVD], parameters: dict) -> list[BVD]:
 
     return list_BVD
 
-def compute_list_COM(list_BVD: list[BVD]) -> list[COM]:
+def compute_list_COM(list_BVD: list[BVD], parameters: dict) -> list[COM]:
     list_COM: list[COM] = []
 
     # Aquí se pueden agregar cálculos adicionales para obtener los parámetros necesarios para el bloque COM
@@ -214,6 +215,8 @@ def compute_list_COM(list_BVD: list[BVD]) -> list[COM]:
         name = bvd.name.replace("BVD", "COM")
         com = COM(name=name, d=p, Ap=Ap, digitsN=Nidt*2, digitsNR=NR, alpha=alpha, alpha_n=alpha_n, Ct=Ct, fs=bvd.fs, fp=bvd.fp)
         list_COM.append(com)
+    
+    # list_COM = reajuste_pitch(list_BVD, list_COM, parameters)
 
     return list_COM
 
@@ -263,21 +266,14 @@ def compute_admitance_COM(list_COM: list[COM], parameters: dict) -> list[COM]:
 
     return list_COM
 
-def Zc(f: list[complex], C: float, Q=None):
-    if C == 0:
-        return np.full_like(f, np.inf, dtype=complex)
-    jw = 1j * 2 * np.pi * f
-    if Q is None:
-        return 1/(jw*C)
-    return 1 / (jw*C + 1/(Q/2*np.pi*f*C))
+def reajuste_pitch(list_BVD: list[BVD], list_COM: list[COM], parameters: dict) -> list[COM]:
+    for bvd, com in zip(list_BVD, list_COM):
+        f_correction = bvd.fs / com.fs 
+        com.d = com.d * f_correction
 
-def Zl(f: list[complex], L: float, Q=None):
-    if L == 0:
-        return np.zeros_like(f, dtype=complex)
-    jw = 1j * 2 * np.pi * f
-    if Q is None:
-        return jw*L
-    return jw*L + 2*np.pi*f*L/Q
+    list_COM = compute_admitance_COM(list_COM, parameters)
+
+    return list_COM
 
 def duplicate_resonators(list_BVD: list[BVD], list_COM: list[COM], parameters: dict) -> tuple[list[BVD], list[COM]]:
     # Dejaremos la apertura tal cual la teniamos
@@ -289,7 +285,7 @@ def duplicate_resonators(list_BVD: list[BVD], list_COM: list[COM], parameters: d
     idx = 0
     for com in list_COM:
         bvd_base = list_BVD[idx]
-        if com.digitsN < NIDT_MIN:
+        if com.digitsN < DIGITS_NIDT_MIN:
             # Duplicamos en serie
             # Duplicamos o dividimos los parametros del BVD
             bvd_1 = copy.copy(bvd_base)
@@ -317,7 +313,7 @@ def duplicate_resonators(list_BVD: list[BVD], list_COM: list[COM], parameters: d
             com_2.name = com_base.name + "_2s"
             list_COM_duplicados.extend([com_1, com_2])
 
-        elif com.digitsN > NIDT_MAX:
+        elif com.digitsN > DIGITS_NIDT_MAX:
             # Duplicamos en paralelo
             bvd_1 = copy.copy(list_BVD[idx])
             bvd_1.cp = bvd_base.cp/2
@@ -355,7 +351,21 @@ def duplicate_resonators(list_BVD: list[BVD], list_COM: list[COM], parameters: d
 
     return list_BVD_duplicados, list_COM_duplicados
         
+def Zc(f: list[complex], C: float, Q=None):
+    if C == 0:
+        return np.full_like(f, np.inf, dtype=complex)
+    jw = 1j * 2 * np.pi * f
+    if Q is None:
+        return 1/(jw*C)
+    return 1 / (jw*C + 1/(Q/2*np.pi*f*C))
 
+def Zl(f: list[complex], L: float, Q=None):
+    if L == 0:
+        return np.zeros_like(f, dtype=complex)
+    jw = 1j * 2 * np.pi * f
+    if Q is None:
+        return jw*L
+    return jw*L + 2*np.pi*f*L/Q
 
 
 

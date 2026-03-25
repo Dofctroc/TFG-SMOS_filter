@@ -131,18 +131,18 @@ class MainWindow(QMainWindow):
     def setup_header(self):
         self.barra_superior = QHBoxLayout()
 
-        self.btn_archivo = QPushButton("Seleccionar Archivo")
+        self.btn_archivo = QPushButton("Select Network File")
         self.btn_archivo.clicked.connect(self.btn_readNetworkFile_clicked)
 
-        self.btn_directorio = QPushButton("Seleccionar Directorio")
+        self.btn_directorio = QPushButton("Select Workspace Directory")
         self.btn_directorio.clicked.connect(self.btn_readDirectoy_clicked)
 
-        self.btn_convertir = QPushButton("Convertir BVD -> COM")
+        self.btn_convertir = QPushButton("Convert BVD -> COM")
         self.btn_convertir.setEnabled(False)
         self.btn_convertir.clicked.connect(self.btn_convertBVD2COM_clicked)
         self.btn_convertir.setStyleSheet("background-color: #e0efff; color: black; font-weight: bold;")
 
-        self.btn_duplicar = QPushButton("Duplicar Resonadores")
+        self.btn_duplicar = QPushButton("Duplicate Resonators")
         self.btn_duplicar.setEnabled(False)
         self.btn_duplicar.clicked.connect(self.btn_duplicar_resonadores_clicked)
         self.btn_duplicar.setStyleSheet("background-color: #e0efff; color: black; font-weight: bold;")
@@ -201,7 +201,7 @@ class MainWindow(QMainWindow):
         # 1. El Desplegable (Selector)
         self.combo_bvd = QComboBox()
         self.combo_bvd.setFixedWidth(200)
-        self.combo_bvd.addItem("Archivo .ntw no leído")
+        self.combo_bvd.addItem("File .ntw not selected")
         
         # Conectamos el cambio de selección a una función
         self.combo_bvd.currentIndexChanged.connect(self.actualizar_formulario_bvd)
@@ -268,7 +268,7 @@ class MainWindow(QMainWindow):
 
         # 3. Montaje en el panel izquierdo (el que ya tenías)
         # Limpiamos el layout_bvd por si acaso y añadimos
-        bvd_label=QLabel("Parámetros Resonador:")
+        bvd_label=QLabel("BVD parameters:")
         bvd_label.setStyleSheet("font-weight: bold; color: darkgray;")
         self.layout_bvd.addWidget(bvd_label)
         self.layout_bvd.addWidget(self.combo_bvd)
@@ -276,7 +276,7 @@ class MainWindow(QMainWindow):
         self.layout_bvd.addLayout(self.form_layout_BVD)
 
         self.layout_bvd.addSpacing(20) # Espacio visual
-        bvd_general_label=QLabel("Parámetros Generales:")
+        bvd_general_label=QLabel("General BVD parameters:")
         bvd_general_label.setStyleSheet("font-weight: bold; color: darkgray;")
         self.layout_bvd.addWidget(bvd_general_label)
         self.layout_bvd.addLayout(self.form_layout_BVD_general)
@@ -290,7 +290,7 @@ class MainWindow(QMainWindow):
     def actualizar_formulario_bvd(self, index):
         """Esta función se llama cada vez que eliges un BVD en el combo"""
         # Si no hay datos (solo el mensaje por defecto) o la lista está vacía
-        if not self.list_BVD or self.combo_bvd.currentText() == "Archivo .ntw no leído":
+        if not self.list_BVD or self.combo_bvd.currentText() == "File .ntw not selected":
             return
 
         # Obtenemos el objeto BVD seleccionado
@@ -333,7 +333,7 @@ class MainWindow(QMainWindow):
         self.setup_matchnetw_panel()
 
         # Sub-bloque COM_consts (Inferior)
-        self.bloque_constsCOM = QGroupBox("COM Constants")
+        self.bloque_constsCOM = QGroupBox("COM Design Constants")
         self.bloque_constsCOM.setStyleSheet("""
             QGroupBox {
                 border: 1px solid black;
@@ -380,13 +380,13 @@ class MainWindow(QMainWindow):
         self.form_layout_MN.addRow("L_input (nH):", self.input_inputL)
         self.form_layout_MN.addRow("L_input type:", self.input_inputL_type)
         self.form_layout_MN.addRow("L_output (nH):", self.input_Lfini)
-        self.form_layout_MN.addRow("L_output_type:", self.input_matchnetw_type)
+        self.form_layout_MN.addRow("L_output type:", self.input_matchnetw_type)
         self.form_layout_MN.addRow("C_output (pF):", self.input_Cfini)
-        self.form_layout_MN.addRow("C_output_type:", self.input_Cfini_type)
+        self.form_layout_MN.addRow("C_output type:", self.input_Cfini_type)
 
         # 3. Montaje en el panel derecho
         # Limpiamos el layout_com por si acaso y añadimos
-        matchnetw_label=QLabel("Parámetros Matching Networks:")
+        matchnetw_label=QLabel("Matching Network Parameters:")
         matchnetw_label.setStyleSheet("font-weight: bold; color: darkgray;")
         self.layout_matchnetw.addWidget(matchnetw_label)
         self.layout_matchnetw.addSpacing(10) # Espacio visual
@@ -451,7 +451,7 @@ class MainWindow(QMainWindow):
 
         # 3. Montaje en el panel derecho
         # Limpiamos el layout_com por si acaso y añadimos
-        matchnetw_label=QLabel("Constantes COM:")
+        matchnetw_label=QLabel("COM Design Constants:")
         matchnetw_label.setStyleSheet("font-weight: bold; color: darkgray;")
         self.layout_constsCOM.addWidget(matchnetw_label)
         self.layout_constsCOM.addSpacing(10) # Espacio visual
@@ -509,7 +509,7 @@ class MainWindow(QMainWindow):
         # 1. El Desplegable (Selector)
         self.combo_com = QComboBox()
         self.combo_com.setFixedWidth(200)
-        self.combo_com.addItem("Conversión no realizada")
+        self.combo_com.addItem("Pending Conversion")
         
         # Conectamos el cambio de selección a una función
         self.combo_com.currentIndexChanged.connect(self.actualizar_formulario_com)
@@ -541,8 +541,8 @@ class MainWindow(QMainWindow):
         self.form_layout_COM_izq = QFormLayout()
         self.form_layout_COM_izq.addRow("p (m):", self.input_pitch)
         self.form_layout_COM_izq.addRow("Ap (λ0):", self.input_aperture)
-        self.form_layout_COM_izq.addRow("digitsIDT (-):", self.input_digitsIDT)
-        self.form_layout_COM_izq.addRow("digitsREFL (-):", self.input_digitsREFL)
+        self.form_layout_COM_izq.addRow("Digits IDT (-):", self.input_digitsIDT)
+        self.form_layout_COM_izq.addRow("Digits REFL (-):", self.input_digitsREFL)
         self.form_layout_COM_izq.addRow("α (-):", self.input_alpha)
 
         # Formulario Derecho: Resultados de Frecuencia
@@ -557,7 +557,7 @@ class MainWindow(QMainWindow):
 
         # 3. Montaje en el panel derecho
         # Limpiamos el layout_com por si acaso y añadimos
-        com_label=QLabel("Parámetros modelo COM:")
+        com_label=QLabel("COM Parameters:")
         com_label.setStyleSheet("font-weight: bold; color: darkgray;")
         self.layout_com.addWidget(com_label)
         self.layout_com.addWidget(self.combo_com)
@@ -573,7 +573,7 @@ class MainWindow(QMainWindow):
     def actualizar_formulario_com(self, index):
         """Esta función se llama cada vez que eliges un BVD en el combo"""
         # Si no hay datos (solo el mensaje por defecto) o la lista está vacía
-        if not self.list_COM or self.combo_com.currentText() == "Conversión no realizada":
+        if not self.list_COM or self.combo_com.currentText() == "Pending Conversion":
             return
 
         # Obtenemos el objeto BVD seleccionado
@@ -605,7 +605,7 @@ class MainWindow(QMainWindow):
         
         # 1. Selector de Elemento
         self.combo_elemento_graf = QComboBox()
-        self.combo_elemento_graf.addItem("Sin datos")
+        self.combo_elemento_graf.addItem("No data")
         self.combo_elemento_graf.setFixedWidth(200)
         
         # 2. Botones de Radio (BVD vs COM)
@@ -734,8 +734,8 @@ class MainWindow(QMainWindow):
                             clip_on=True
                         )
 
-        self.canvas.axes.set_xlabel("Frecuencia (Hz)")
-        self.canvas.axes.set_ylabel("Admitancia (dB)")
+        self.canvas.axes.set_xlabel("Frequency (Hz)")
+        self.canvas.axes.set_ylabel("Admitance (dB)")
         
         # La escala Y ahora es lineal porque los datos YA están en dB
         self.canvas.axes.set_yscale('linear') 
@@ -768,12 +768,12 @@ class MainWindow(QMainWindow):
 
                 # Limpiamos el combo com por si ya había valores de antes
                 self.combo_com.clear()
-                self.combo_com.addItem("Conversión no realizada")
+                self.combo_com.addItem("Pending Conversion")
 
                 # Rellenar el combo del gráfico con los elementos disponibles
                 self.combo_elemento_graf.clear() # Borra el "Archivo no leído"
                 for bvd in self.list_BVD:
-                    self.combo_elemento_graf.addItem(bvd.name.replace("BVD", "Elemento"))
+                    self.combo_elemento_graf.addItem(bvd.name.replace("BVD", "Element"))
 
                 # Borramos formulario com, Habilitamos el radio button de COM y ploteamos la primera curva por defecto
                 self.list_COM = None
@@ -791,9 +791,9 @@ class MainWindow(QMainWindow):
         except Exception as e:
             error_detallado = traceback.format_exc()
             QMessageBox.critical(self, "Error", 
-                f"Error al leer el archivo Network.\n\n"
-                f"Tipo: {type(e).__name__}\n"
-                f"Mensaje: {str(e)}\n\n"+
+                f"Error reading network file.\n\n"
+                f"Type: {type(e).__name__}\n"
+                f"Message: {str(e)}\n\n"+
                 error_detallado)
             return
         
@@ -847,9 +847,9 @@ class MainWindow(QMainWindow):
         except Exception as e:
             error_detallado = traceback.format_exc()
             QMessageBox.critical(self, "Error", 
-                f"Error al importar Keysight ADS DE.\n\n"
-                f"Tipo: {type(e).__name__}\n"
-                f"Mensaje: {str(e)}\n\n"+
+                f"Error importing Keysight ADS DE.\n\n"
+                f"Type: {type(e).__name__}\n"
+                f"Message: {str(e)}\n\n"+
                 error_detallado)
             return
         
@@ -857,12 +857,12 @@ class MainWindow(QMainWindow):
         # Crear lista de BVD y convertir a lista COM
         if self.list_BVD is None:
             QMessageBox.critical(self, "Error", 
-                                 "Error: No hay datos de BVD para convertir. \n"
-                                 "Asegúrate de haber leído un archivo .ntw primero.")
+                                 "Error: No BVD data to convert. \n"
+                                 "Select a network file first")
             return
         else:
             try:
-                self.list_COM = mat_bvd_com.compute_list_COM(self.list_BVD)
+                self.list_COM = mat_bvd_com.compute_list_COM(self.list_BVD, self.network_parameters)
                 self.list_COM = mat_bvd_com.compute_admitance_COM(self.list_COM, self.network_parameters)
                 # self.filter_COM = mat_bvd_com.compute_filter_admitance(self.list_COM, self.network_parameters)
 
@@ -882,9 +882,9 @@ class MainWindow(QMainWindow):
             except Exception as e:
                 error_detallado = traceback.format_exc()
                 QMessageBox.critical(self, "Error", 
-                    f"Error crear lista BVD o al calcular los parámetros COM.\n\n"
-                    f"Tipo: {type(e).__name__}\n"
-                    f"Mensaje: {str(e)}\n\n"+
+                    f"Error creating BVD list or computing COM parameters.\n\n"
+                    f"Type: {type(e).__name__}\n"
+                    f"Message: {str(e)}\n\n"+
                     error_detallado)
                 return
 
@@ -892,24 +892,24 @@ class MainWindow(QMainWindow):
         # Verificar que se haya ejecutado btn_readDirectoy_clicked primero
         if self.list_BVD is None:
             QMessageBox.critical(self, "Error", 
-                                 "Error: No hay datos de BVD. \n"
-                                 "Asegúrate de haber leído un archivo .ntw primero.")
+                                 "Error: No BVD data. \n"
+                                 "Select a network file first")
             return
         
         if self.list_COM is None:
             QMessageBox.critical(self, "Error", 
-                                 "Error: No hay datos de COM. \n"
-                                 "Asegúrate de haber convertido los datos BVD a COM primero.")
+                                 "Error: No COM data. \n"
+                                 "Convert BVD -> COM parameters first")
             return
         
         if self.workspace_path is None:
-            QMessageBox.critical(self, "Error", "Error: Debes hacer clic en 'Read Directory' primero")
+            QMessageBox.critical(self, "Error", "Error: Select a workspace directory first")
             return
 
         # Obtener el nombre del workspace del input
         workspace_name = self.input_workspace_name.text().strip()
         if not workspace_name:
-            QMessageBox.critical(self, "Error", "Error: Debes ingresar un nombre para el workspace")
+            QMessageBox.critical(self, "Error", "Error: Input a workspace name first")
             return
 
         # Crear la ruta completa del workspace
@@ -922,9 +922,9 @@ class MainWindow(QMainWindow):
         except Exception as e:
             error_detallado = traceback.format_exc()
             QMessageBox.critical(self, "Error", 
-                f"Error al importar Keysight ADS DE.\n\n"
-                f"Tipo: {type(e).__name__}\n"
-                f"Mensaje: {str(e)}\n\n"+
+                f"Error importing Keysight ADS DE.\n\n"
+                f"Type: {type(e).__name__}\n"
+                f"Message: {str(e)}\n\n"+
                 error_detallado)
             return
 
@@ -932,16 +932,16 @@ class MainWindow(QMainWindow):
         try:
             workspace = ads.create_and_open_an_empty_workspace(full_workspace_path)
             if workspace is None: 
-                QMessageBox.critical(self, "Error", "Error: Ya existe un workspace con ese nombre")
+                QMessageBox.critical(self, "Error", "Error: A workspace with that name already exists")
                 return
 
             lib = ads.create_a_library_and_add_it_to_the_workspace(workspace, library_name)
         except Exception as e:
             error_detallado = traceback.format_exc()
             QMessageBox.critical(self, "Error", 
-                f"Error al crear el workspace o la librería.\n\n"
-                f"Tipo: {type(e).__name__}\n"
-                f"Mensaje: {str(e)}\n\n"+
+                f"Error creating the workspace or library.\n\n"
+                f"Type: {type(e).__name__}\n"
+                f"Message: {str(e)}\n\n"+
                 error_detallado)
             return
             
@@ -964,7 +964,7 @@ class MainWindow(QMainWindow):
                     break # Detenemos la búsqueda al hallar el primero
 
             if not encontrado:
-                QMessageBox.information(self, "Info", f"No se ha encontrado el archivo .s2p correspondiente a la network:\n{self.network_file_path}")
+                QMessageBox.information(self, "Info", f"File .s2p corresponding to the selected network not found:\n{self.network_file_path}")
                 self.dataset_s2p_file_path = None
 
             ads.create_SchematicAndSymbol_lossyBVD(lib, library_name)
@@ -975,24 +975,27 @@ class MainWindow(QMainWindow):
         except Exception as e:
             error_detallado = traceback.format_exc()
             QMessageBox.critical(self, "Error", 
-                f"Error al crear el esquema.\n\n"
-                f"Tipo: {type(e).__name__}\n"
-                f"Mensaje: {str(e)}\n\n"+
+                f"Error creating the schematic.\n\n"
+                f"Type: {type(e).__name__}\n"
+                f"Message: {str(e)}\n\n"+
                 error_detallado)
             return
         
-        QMessageBox.information(self, "Éxito", f"Workspace '{workspace_name}' creado con éxito en:\n{full_workspace_path}")
+        QMessageBox.information(self, "Success", f"Workspace '{workspace_name}' created successfully in:\n{full_workspace_path}")
 
     def btn_duplicar_resonadores_clicked(self):
         if self.list_BVD is None:
             QMessageBox.critical(self, "Error", 
-                                 "Error: No hay datos de BVD. \n"
-                                 "Asegúrate de haber leído un archivo .ntw primero.")
+                                 "Error: No BVD data. \n"
+                                 "Select a network file first")
+            return
         
-        elif self.list_COM is None:
+        
+        if self.list_COM is None:
             QMessageBox.critical(self, "Error", 
-                                 "Error: No hay datos de COM. \n"
-                                 "Asegúrate de haber convertido los datos BVD a COM primero.")
+                                 "Error: No COM data. \n"
+                                 "Convert BVD -> COM parameters first")
+            return
 
         try:
             # Duplicamos los BVDs de la lista que sean necesarios según digitsNidt del COM
@@ -1009,7 +1012,7 @@ class MainWindow(QMainWindow):
 
             self.combo_elemento_graf.clear()
             for bvd in self.list_BVD:
-                self.combo_elemento_graf.addItem(bvd.name.replace("BVD", "Elemento"))
+                self.combo_elemento_graf.addItem(bvd.name.replace("BVD", "Element"))
 
             # Ponemos todos los combos en la primera posición
             self.radio_bvd.setChecked(True)
@@ -1026,9 +1029,9 @@ class MainWindow(QMainWindow):
         except Exception as e:
             error_detallado = traceback.format_exc()
             QMessageBox.critical(self, "Error", 
-                f"Error al leer el archivo Network.\n\n"
-                f"Tipo: {type(e).__name__}\n"
-                f"Mensaje: {str(e)}\n\n"+
+                f"Error duplicating the resonators.\n\n"
+                f"Type: {type(e).__name__}\n"
+                f"Message: {str(e)}\n\n"+
                 error_detallado)
             return
         
