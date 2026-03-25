@@ -214,16 +214,17 @@ def compute_list_COM(list_BVD: list[BVD], parameters: dict) -> list[COM]:
 
         # Assign all values to the COM block
         name = bvd.name.replace("BVD", "COM")
-        com = COM(name=name, d=p, Ap=Ap, digitsN=Nidt*2, digitsNR=NR, alpha=alpha, alpha_n=alpha_n, Ct=Ct, fs=bvd.fs, fp=bvd.fp)
+        com = COM(name=name, d=p, Ap=Ap, digitsN=Nidt*2, digitsNR=DIGITS_NR, alpha=alpha, alpha_n=alpha_n, Ct=Ct, fs=bvd.fs, fp=bvd.fp)
         com = compute_admitance_COM(com, parameters)
         
         list_COM.append(com)
     
     list_COM = reajuste_pitch(list_BVD, list_COM, parameters)
+    # list_COM = reajuste_digitsNR(list_BVD, list_COM, parameters)
 
     return list_COM
 
-def compute_admitance_COM(com, parameters: dict) -> COM:
+def compute_admitance_COM(com: COM, parameters: dict) -> COM:
     # Sweep parameters
     fstart = float(parameters["fstart1"])
     fstop = float(parameters["fstop1"])
@@ -236,13 +237,14 @@ def compute_admitance_COM(com, parameters: dict) -> COM:
     lambda0 = 2*com.d
     k0 = np.pi/com.d
     Nidt = com.digitsN/2
+    Nrefl = com.digitsNR/2
 
     delta = k - k0
     beta = np.sqrt((delta+K11)**2 - K12**2)
     pe = (beta-delta-K11)/K12
 
     theta = beta*Nidt*lambda0/2
-    theta_R = beta*NR*lambda0/2
+    theta_R = beta*Nrefl*lambda0/2
 
     z_0 = (1-pe)/(1+pe)*Z0_PRIMA
     z_0R = (1+pe)/(1-pe)*Z0_PRIMA
@@ -271,9 +273,47 @@ def compute_admitance_COM(com, parameters: dict) -> COM:
 def reajuste_pitch(list_BVD: list[BVD], list_COM: list[COM], parameters: dict) -> list[COM]:
     for bvd, com in zip(list_BVD, list_COM):
         f_correction = bvd.fs / com.fs 
-        com.d = com.d * f_correction
+        com.d = com.d / f_correction
 
         com = compute_admitance_COM(com, parameters)
+
+    return list_COM
+
+def reajuste_digitsNR(list_BVD: list[BVD], list_COM: list[COM], parameters: dict) -> list[COM]:
+    for bvd, com in zip(list_BVD, list_COM):
+        # 1. Definimos la máscara para frecuencias <= fs
+        mask = bvd.f <= bvd.fs
+        f_target = bvd.f[mask]
+        Y_target = bvd.Y[mask]
+
+        # 2. Definimos la función de error que usará least_squares
+        def objetivo(nr_val):
+            # Actualizamos el valor de NR en el objeto COM (nr_val viene como array de 1 elemento)
+            com.digitsNR = round(nr_val[0])
+            
+            # Recalculamos la admitancia con el nuevo NR
+            # Asumimos que esta función actualiza com.Y internamente
+            com_actualizado = compute_admitance_COM(com, parameters)
+            
+            # El error es la diferencia entre la curva real y la calculada
+            # Solo comparamos en el rango de frecuencias definido por la máscara
+            error = Y_target - com_actualizado.Y[mask]
+            
+            # Si Y es compleja (admitancia), devolvemos el valor absoluto o separamos real/imag
+            # least_squares requiere valores reales, así que devolvemos la magnitud del error
+            return np.abs(error)
+
+        # 3. Ejecutamos la optimización
+        # x0 es el valor inicial de NR que ya tiene el objeto
+        res = least_squares(
+            objetivo, 
+            x0=[com.digitsNR], 
+            bounds=(10, 100)  # Opcional: evita que NR sea negativo si no tiene sentido físico
+        )
+
+        # 4. Aplicamos el resultado final optimizado al objeto
+        com.digitsNR = res.x[0]
+        com = compute_admitance_COM(com, parameters) # Cálculo final definitivo
 
     return list_COM
 

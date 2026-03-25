@@ -580,8 +580,8 @@ class MainWindow(QMainWindow):
         com_seleccionado = self.list_COM[index]
         
         # Rellenamos los campos
-        self.input_pitch.setText(str(com_seleccionado.d))
-        self.input_aperture.setText(str(com_seleccionado.Ap))
+        self.input_pitch.setText(formato_ingenieria(com_seleccionado.d))
+        self.input_aperture.setText(formato_ingenieria(com_seleccionado.Ap))
         self.input_digitsIDT.setText(str(com_seleccionado.digitsN))
         self.input_digitsREFL.setText(str(com_seleccionado.digitsNR))
         self.input_alpha.setText(str(com_seleccionado.alpha))
@@ -1033,7 +1033,7 @@ class MainWindow(QMainWindow):
             return
         
 
-def formato_ingenieria(valor, precision=8):
+def formato_ingenieria(valor, precision=6):
     if valor == 0:
         return "0"
     
@@ -1043,6 +1043,9 @@ def formato_ingenieria(valor, precision=8):
     eng_exp = (exp // 3) * 3
     # 3. Calcular el coeficiente
     coef = valor / (10**eng_exp)
+
+    if eng_exp == 0:
+        return f"{coef:.{precision}f}"
     
     return f"{coef:.{precision}f}e{eng_exp}"
 
