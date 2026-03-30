@@ -1069,7 +1069,7 @@ def create_Schematic_ladderFilter_COM(library: de.Library, library_name: str, da
             if not list_COM[num_COM].name.endswith("_1s"):
                 inst = design.add_instance("ads_rflib:GROUND", name="G"+str(num_COM+1), origin=(xpos, ypos-1.0), angle=-90.0, ads_annot=False)
         
-        inst = design.add_instance((library_name, CELL_COM_LOSSY, "symbol"), origin=(xpos, ypos), name="COM_"+str(num_COM), angle=angle_COM)
+        inst = design.add_instance((library_name, CELL_COM_LOSSY, "symbol"), origin=(xpos, ypos), name=list_COM[num_COM].name, angle=angle_COM)
         inst.parameters["d"].value = str(list_COM[num_COM].d)
         inst.parameters["Ap"].value = str(list_COM[num_COM].Ap)
         inst.parameters["DigitsActiveIDT"].value = str(list_COM[num_COM].digitsN)
@@ -1111,7 +1111,7 @@ def create_Schematic_ladderFilter_COM(library: de.Library, library_name: str, da
 
         if duplicate:
             num_COM += 1
-            inst = design.add_instance((library_name, CELL_COM_LOSSY, "symbol"), origin=(xpos, ypos), name="COM_"+str(num_COM), angle=angle_COM)
+            inst = design.add_instance((library_name, CELL_COM_LOSSY, "symbol"), origin=(xpos, ypos), name=list_COM[num_COM].name, angle=angle_COM)
             inst.parameters["d"].value = str(list_COM[num_COM].d)
             inst.parameters["Ap"].value = str(list_COM[num_COM].Ap)
             inst.parameters["DigitsActiveIDT"].value = str(list_COM[num_COM].digitsN)
@@ -1144,7 +1144,7 @@ def create_Schematic_ladderFilter_COM(library: de.Library, library_name: str, da
                 if not list_COM[num_COM].name.endswith("_1s"):
                     inst = design.add_instance("ads_rflib:GROUND", name="G"+str(num_COM+1), origin=(xpos, ypos-1.0), angle=-90.0, ads_annot=False)
             
-            inst = design.add_instance((library_name, CELL_COM_LOSSY, "symbol"), origin=(xpos, ypos), name="COM_"+str(num_COM), angle=angle_COM)
+            inst = design.add_instance((library_name, CELL_COM_LOSSY, "symbol"), origin=(xpos, ypos), name=list_COM[num_COM].name, angle=angle_COM)
             inst.parameters["d"].value = str(list_COM[num_COM].d)
             inst.parameters["Ap"].value = str(list_COM[num_COM].Ap)
             inst.parameters["DigitsActiveIDT"].value = str(list_COM[num_COM].digitsN)
@@ -1186,7 +1186,7 @@ def create_Schematic_ladderFilter_COM(library: de.Library, library_name: str, da
 
             if duplicate:
                 num_COM += 1
-                inst = design.add_instance((library_name, CELL_COM_LOSSY, "symbol"), origin=(xpos, ypos), name="COM_"+str(num_COM), angle=angle_COM)
+                inst = design.add_instance((library_name, CELL_COM_LOSSY, "symbol"), origin=(xpos, ypos), name=list_COM[num_COM].name, angle=angle_COM)
                 inst.parameters["d"].value = str(list_COM[num_COM].d)
                 inst.parameters["Ap"].value = str(list_COM[num_COM].Ap)
                 inst.parameters["DigitsActiveIDT"].value = str(list_COM[num_COM].digitsN)

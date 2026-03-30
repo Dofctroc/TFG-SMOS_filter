@@ -27,8 +27,9 @@ class BVD():
         self.f = f
 
 class COM():
-    def __init__(self, name: str, d: float, Ap: float, digitsN: int, digitsNR: int, fs: float, fp: float, 
-                 alpha: float, alpha_n: float, Ct: float, Y=None, f=None):
+    def __init__(self, name: str = None, d: float = None, Ap: float = None, 
+        digitsN: int = None, digitsNR: int = None, fs: float = None, fp: float = None, 
+        alpha: float = None, alpha_n: float = None, Ct: float = None, Y = None, f = None):
         self.name = name
         self.d = d
         self.Ap = Ap
@@ -146,83 +147,107 @@ def compute_admitance_BVD(bvd: BVD, parameters: dict) -> BVD:
 def compute_list_COM(list_BVD: list[BVD], parameters: dict) -> list[COM]:
     list_COM: list[COM] = []
 
-    # Aquí se pueden agregar cálculos adicionales para obtener los parámetros necesarios para el bloque COM
-    # Por ejemplo, podríamos calcular la frecuencia de resonancia, la impedancia característica, etc.
     for bvd in list_BVD:
+        com = COM()
         # 1) ============================= CÁLCULO DEL PITCH =============================
         # Cálculo constantes de entrada y pitch directo
-        k_fs = (2*np.pi*bvd.fs)/VP
-        p = np.pi / (k_fs+K11_REAL+K12)
-
-        # Cálculo de variables definidas por el pitch
-        lambda0 = 2*p
-        k0 = np.pi/p
+        com.d = compute_pitch_COM(bvd)
 
         # 2) ======================== CÁLCULO DE APERTURE Y N_IDT ========================
         # Cálculo constantes de entrada
-        Ct = bvd.cp
-        Nidt = 150
-
-        # Primer cálculo de Aperture
-        Ap = Ct / (Nidt * EPS_R * EPS_0 *np.exp(0.71866*np.tan(DUTY-0.5))) / lambda0
-        
-        # Comprobación de los límites para Ap y ajuste de Nidt
-        if Ap > AP_MAX:
-            Ap = AP_MAX
-            Nidt = Ct / (Ap * EPS_R * EPS_0 *np.exp(0.71866*np.tan(DUTY-0.5))) / lambda0
-            Nidt = round(Nidt)
-            
-            # Recalculamos la Apertura debido al redondeo de Nidt
-            Ap = Ct / (Nidt * EPS_R * EPS_0 *np.exp(0.71866*np.tan(DUTY-0.5))) / lambda0
-
-        elif Ap < AP_MIN:
-            Ap = AP_MIN
-            Nidt = Ct / (Ap * EPS_R * EPS_0 *np.exp(0.71866*np.tan(DUTY-0.5))) / lambda0
-            Nidt = round(Nidt)
-            
-            # Recalculamos la Apertura debido al redondeo de Nidt
-            Ap = Ct / (Nidt * EPS_R * EPS_0 *np.exp(0.71866*np.tan(DUTY-0.5))) / lambda0
+        com.Ct = bvd.cp
+        com = compute_Nidt_Aperture_COM(com)
 
         # 3) ============================= CÁLCULO DE ALPHA =============================
-        # Cálculo constantes de entrada
-        k_fp = (2*np.pi*bvd.fp)/VP
+        com = compute_alpha_COM(bvd, com)
 
-        delta = k_fp - k0
-        beta = np.sqrt((delta+K11)**2 - K12**2)
-        pe = (beta-delta-K11)/K12
-
-        theta = beta*Nidt*lambda0/2
-        theta_R = beta*NR*lambda0/2
-
-        z_0 = (1-pe)/(1+pe)*Z0_PRIMA
-        z_0R = (1+pe)/(1-pe)*Z0_PRIMA
-        z_inR = 1 / ( 1 / (1j*z_0R*np.tan(theta_R)+Z0_PRIMA) + 1j*np.sin(2*theta_R)/z_0R) + 1j*z_0R*np.tan(theta_R)
-
-        # Variables para la resolución de la ecuación cuadrática
-        A = 1j*2*np.pi*bvd.fp*Ct
-        B = 1 / (1j*2*theta*z_0)
-        C = (1j*z_0R*np.tan(theta) + z_inR) / 2 + z_0R / (1j*np.sin(2*theta))
-        D = (Z0_PRIMA / (2*theta*z_0))**2
-
-        # Resolución de la ecuación cuadrática
-        # Nos quedamos solo con la solución positiva
-        phi = abs(np.sqrt(-1/R_SHUNT - A / (B + D/C)))
-
-        # Cálculo final de alpha
-        alpha = phi / (2*Nidt*lambda0*np.sqrt(Z0_PRIMA))
-        alpha_n = alpha / np.sqrt(Ap)
-
-        # Assign all values to the COM block
-        name = bvd.name.replace("BVD", "COM")
-        com = COM(name=name, d=p, Ap=Ap, digitsN=Nidt*2, digitsNR=DIGITS_NR, alpha=alpha, alpha_n=alpha_n, Ct=Ct, fs=bvd.fs, fp=bvd.fp)
+        com.name = bvd.name.replace("BVD", "COM")
         com = compute_admitance_COM(com, parameters)
         
         list_COM.append(com)
     
-    list_COM = reajuste_pitch(list_BVD, list_COM, parameters)
+    # list_COM = reajuste_pitch(list_BVD, list_COM, parameters)
     # list_COM = reajuste_digitsNR(list_BVD, list_COM, parameters)
 
     return list_COM
+
+def compute_pitch_COM(bvd: BVD) -> float:
+    k_fs = (2*np.pi*bvd.fs)/VP
+    p =  np.pi / (k_fs+K11_REAL+K12)
+    return p
+
+def compute_Nidt_Aperture_COM(com: COM) -> COM:
+    # Primer cálculo de Aperture
+    Ct = com.Ct
+    lambda0 = 2*com.d
+    Nidt = 150
+
+    const = EPS_R * EPS_0 *np.exp(0.71866*np.tan(DUTY-0.5))
+
+    Ap = Ct / (Nidt * const) / lambda0
+    
+    # Comprobación de los límites para Ap y ajuste de Nidt
+    if Ap > AP_MAX:
+        Ap = AP_MAX
+        Nidt = Ct / (Ap * const) / lambda0
+        Nidt = round(Nidt)
+        
+        # Recalculamos la Apertura debido al redondeo de Nidt
+        Ap = Ct / (Nidt * const) / lambda0
+
+    elif Ap < AP_MIN:
+        Ap = AP_MIN
+        Nidt = Ct / (Ap * const) / lambda0
+        Nidt = round(Nidt)
+        
+        # Recalculamos la Apertura debido al redondeo de Nidt
+        Ap = Ct / (Nidt * const) / lambda0
+
+    com.Ap = Ap
+    com.digitsN = Nidt*2
+    com.digitsNR = DIGITS_NR
+
+    return com
+
+def compute_alpha_COM(bvd: BVD, com: COM) -> COM:
+    # Cálculo constantes de entrada
+    Ct = com.Ct
+    k0 = np.pi/com.d
+    lambda0 = 2*com.d
+    Nidt = com.digitsN/2
+    Ap = com.Ap
+    k_fp = (2*np.pi*bvd.fp)/VP
+
+    delta = k_fp - k0
+    beta = np.sqrt((delta+K11)**2 - K12**2)
+    pe = (beta-delta-K11)/K12
+
+    theta = beta*Nidt*lambda0/2
+    theta_R = beta*NR*lambda0/2
+
+    z_0 = (1-pe)/(1+pe)*Z0_PRIMA
+    z_0R = (1+pe)/(1-pe)*Z0_PRIMA
+    z_inR = 1 / ( 1 / (1j*z_0R*np.tan(theta_R)+Z0_PRIMA) + 1j*np.sin(2*theta_R)/z_0R) + 1j*z_0R*np.tan(theta_R)
+
+    # Variables para la resolución de la ecuación cuadrática
+    A = 1j*2*np.pi*bvd.fp*Ct
+    B = 1 / (1j*2*theta*z_0)
+    C = (1j*z_0R*np.tan(theta) + z_inR) / 2 + z_0R / (1j*np.sin(2*theta))
+    D = (Z0_PRIMA / (2*theta*z_0))**2
+
+    # Resolución de la ecuación cuadrática
+    # Nos quedamos solo con la solución positiva
+    phi = abs(np.sqrt(-1/R_SHUNT - A / (B + D/C)))
+
+    # Cálculo final de alpha
+    alpha = phi / (2*Nidt*lambda0*np.sqrt(Z0_PRIMA))
+    alpha_n = alpha / np.sqrt(Ap)
+
+    # Assign values
+    com.alpha = alpha
+    com.alpha_n = alpha_n
+
+    return com
 
 def compute_admitance_COM(com: COM, parameters: dict) -> COM:
     # Sweep parameters
@@ -260,11 +285,11 @@ def compute_admitance_COM(com: COM, parameters: dict) -> COM:
     Z_com = (R_SERIE + 1 / (1/R_SHUNT + A + B*phi**2 + D/C * phi**2))
     Y_com = 1 / Z_com
 
+    # Asignar variables
     com.Y = Y_com
     com.f = f
 
     Y_com_dB = 20 * np.log10(np.abs(Y_com) + 1e-20)
-
     com.fs = f[np.argmax(Y_com_dB)]
     com.fp = f[np.argmin(Y_com_dB)]
 
@@ -381,7 +406,7 @@ def duplicate_resonators(list_BVD: list[BVD], list_COM: list[COM], parameters: d
             bvd_2 = compute_admitance_BVD(bvd_2, parameters)
             list_BVD_duplicados.extend([bvd_1, bvd_2])
 
-            # Dividimos camos el valor de DigitsActiveIDT del COM
+            # Dividimosc el valor de DigitsActiveIDT del COM
             com_base = list_COM[idx]
             com_1 = copy.copy(com_base)
             com_1.digitsN = round(com_base.digitsN/2)

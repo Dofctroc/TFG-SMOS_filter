@@ -20,7 +20,7 @@ import bvd_com_computations as mat_bvd_com
 
 from PySide6.QtWidgets import (QApplication, QMainWindow, QPushButton, QWidget, QVBoxLayout, QHBoxLayout, 
                                QLabel, QLineEdit, QMessageBox, QGroupBox, QSizePolicy, QRadioButton, QButtonGroup,
-                               QComboBox, QFormLayout, QGridLayout)
+                               QComboBox, QFormLayout, QCheckBox)
 from PySide6.QtCore import Qt, QSize
 from PySide6.QtGui import QCursor
 
@@ -142,16 +142,14 @@ class MainWindow(QMainWindow):
         self.btn_convertir.clicked.connect(self.btn_convertBVD2COM_clicked)
         self.btn_convertir.setStyleSheet("background-color: #e0efff; color: black; font-weight: bold;")
 
-        self.btn_duplicar = QPushButton("Duplicate Resonators")
-        self.btn_duplicar.setEnabled(False)
-        self.btn_duplicar.clicked.connect(self.btn_duplicar_resonadores_clicked)
-        self.btn_duplicar.setStyleSheet("background-color: #e0efff; color: black; font-weight: bold;")
+        self.chb_duplicar = QCheckBox("Duplicate Resonators")
+        self.chb_duplicar.setChecked(False)
         
         self.barra_superior.addWidget(self.btn_archivo)
         self.barra_superior.addWidget(self.btn_directorio)
         self.barra_superior.addStretch() # Empuja el botón convertir a la derecha
         self.barra_superior.addWidget(self.btn_convertir)
-        self.barra_superior.addWidget(self.btn_duplicar)
+        self.barra_superior.addWidget(self.chb_duplicar)
 
     def setup_sub_header(self):
         self.sub_barra_superior = QVBoxLayout()
@@ -520,15 +518,16 @@ class MainWindow(QMainWindow):
         self.input_aperture = QLineEdit()
         self.input_digitsIDT = QLineEdit()
         self.input_digitsREFL = QLineEdit()
-        self.input_alpha = QLineEdit()
         
         # Nuevos campos para la segunda columna
+        self.input_alpha = QLineEdit()
+        self.input_alpha_n = QLineEdit()
         self.input_fs_COM = QLineEdit()
         self.input_fp_COM = QLineEdit()
         
         # Configuramos como "Solo lectura" y ponemos placeholders
         self.campos_form_com = [self.input_pitch, self.input_aperture, self.input_digitsIDT, 
-                    self.input_digitsREFL, self.input_alpha, self.input_fs_COM, self.input_fp_COM]
+                    self.input_digitsREFL, self.input_alpha, self.input_alpha_n, self.input_fs_COM, self.input_fp_COM]
         for inp in self.campos_form_com:
             inp.setReadOnly(True)
             inp.setPlaceholderText("---")
@@ -543,10 +542,11 @@ class MainWindow(QMainWindow):
         self.form_layout_COM_izq.addRow("Ap (λ0):", self.input_aperture)
         self.form_layout_COM_izq.addRow("Digits IDT (-):", self.input_digitsIDT)
         self.form_layout_COM_izq.addRow("Digits REFL (-):", self.input_digitsREFL)
-        self.form_layout_COM_izq.addRow("α (-):", self.input_alpha)
 
         # Formulario Derecho: Resultados de Frecuencia
         self.form_layout_COM_der = QFormLayout()
+        self.form_layout_COM_der.addRow("α (-):", self.input_alpha)
+        self.form_layout_COM_der.addRow("α (-):", self.input_alpha_n)
         self.form_layout_COM_der.addRow("fs (Hz):", self.input_fs_COM)
         self.form_layout_COM_der.addRow("fp (Hz):", self.input_fp_COM)
 
@@ -585,6 +585,7 @@ class MainWindow(QMainWindow):
         self.input_digitsIDT.setText(str(com_seleccionado.digitsN))
         self.input_digitsREFL.setText(str(com_seleccionado.digitsNR))
         self.input_alpha.setText(str(com_seleccionado.alpha))
+        self.input_alpha.setText(str(com_seleccionado.alpha_n))
 
         self.input_fs_COM.setText(formato_ingenieria(com_seleccionado.fs))
         self.input_fp_COM.setText(formato_ingenieria(com_seleccionado.fp))
@@ -784,7 +785,6 @@ class MainWindow(QMainWindow):
                 self.radio_both.setEnabled(False)
 
                 self.btn_convertir.setEnabled(True)
-                self.btn_duplicar.setEnabled(False)
                 self.plot_admitancia()
 
         except Exception as e:
@@ -874,7 +874,6 @@ class MainWindow(QMainWindow):
 
                 # Habilitamos el botón de convertir
                 self.btn_convertir.setEnabled(False)
-                self.btn_duplicar.setEnabled(True)
 
             except Exception as e:
                 error_detallado = traceback.format_exc()
@@ -944,6 +943,13 @@ class MainWindow(QMainWindow):
             
         # Crear los esquemáticos y los símbolos correspondientes
         try:
+            # Dependiendo del checkbox "duplicar resonadores"
+            if self.chb_duplicar.isChecked():
+                list_BVD_ADSfilter, list_COM_ADSfilter = mat_bvd_com.duplicate_resonators(self.list_BVD, self.list_COM, self.network_parameters)
+            else:
+                list_BVD_ADSfilter = self.list_BVD
+                list_COM_ADSfilter = self.list_COM
+
             # Buscamos si existe archivo .s2p con mismo nombre que el archivo network
             network_file_clean_path = pathlib.Path(self.network_file_path.strip('"'))
             datasets_folder = network_file_clean_path.parent.parent / "Datasets"
@@ -965,9 +971,9 @@ class MainWindow(QMainWindow):
                 self.dataset_s2p_file_path = None
 
             ads.create_SchematicAndSymbol_lossyBVD(lib, library_name)
-            ads.create_Schematic_ladderFilter_BVDlossy(lib, library_name, self.dataset_s2p_file_path, self.network_parameters, self.list_BVD)
+            ads.create_Schematic_ladderFilter_BVDlossy(lib, library_name, self.dataset_s2p_file_path, self.network_parameters, list_BVD_ADSfilter)
             ads.create_SchematicAndSymbol_lossyCOM(lib, library_name)
-            ads.create_Schematic_ladderFilter_COM(lib, library_name, self.dataset_s2p_file_path, self.network_parameters, self.list_COM)
+            ads.create_Schematic_ladderFilter_COM(lib, library_name, self.dataset_s2p_file_path, self.network_parameters, list_COM_ADSfilter)
 
         except Exception as e:
             error_detallado = traceback.format_exc()
@@ -980,58 +986,6 @@ class MainWindow(QMainWindow):
         
         QMessageBox.information(self, "Success", f"Workspace '{workspace_name}' created successfully in:\n{full_workspace_path}")
 
-    def btn_duplicar_resonadores_clicked(self):
-        if self.list_BVD is None:
-            QMessageBox.critical(self, "Error", 
-                                 "Error: No BVD data. \n"
-                                 "Select a network file first")
-            return
-        
-        
-        if self.list_COM is None:
-            QMessageBox.critical(self, "Error", 
-                                 "Error: No COM data. \n"
-                                 "Convert BVD -> COM parameters first")
-            return
-
-        try:
-            # Duplicamos los BVDs de la lista que sean necesarios según digitsNidt del COM
-            self.list_BVD, self.list_COM = mat_bvd_com.duplicate_resonators(self.list_BVD, self.list_COM, self.network_parameters)
-            
-            # Rellenar los campos de Matching Network y Lossy BVD con los parámetros leídos
-            self.combo_bvd.clear()
-            for bvd in self.list_BVD:
-                self.combo_bvd.addItem(bvd.name)
-
-            self.combo_com.clear()
-            for com in self.list_COM:
-                self.combo_com.addItem(com.name)
-
-            self.combo_elemento_graf.clear()
-            for bvd in self.list_BVD:
-                self.combo_elemento_graf.addItem(bvd.name.replace("BVD", "Element"))
-
-            # Ponemos todos los combos en la primera posición
-            self.radio_bvd.setChecked(True)
-
-            self.combo_bvd.setCurrentIndex(0)
-            self.combo_com.setCurrentIndex(0)
-            self.combo_elemento_graf.setCurrentIndex(0)
-
-            self.assign_input_GeneralBVDParams()
-
-            # Desactivamos el botón de duplicar resonadores
-            self.btn_duplicar.setEnabled(False)
-
-        except Exception as e:
-            error_detallado = traceback.format_exc()
-            QMessageBox.critical(self, "Error", 
-                f"Error duplicating the resonators.\n\n"
-                f"Type: {type(e).__name__}\n"
-                f"Message: {str(e)}\n\n"+
-                error_detallado)
-            return
-        
 
 def formato_ingenieria(valor, precision=6):
     if valor == 0:
