@@ -1,18 +1,17 @@
 import os
 import shutil
+import pathlib
+from decimal import Decimal
 
 from keysight.ads import de
 from keysight.ads.de import PointF
 from keysight.ads.de import db_uu as db
 from keysight.ads.de.db import Transaction
-
-import pathlib
+from keysight.edatoolbox import ads as eda_ads
 import keysight.ads.dds as dds
 
 from bvd_com_computations import BVD
 from bvd_com_computations import COM
-
-from decimal import Decimal
 
 FORCE_RECREATE = True
 
@@ -970,7 +969,7 @@ def create_SchematicAndSymbol_lossyCOM(library: de.Library, library_name: str) -
     design.save_design()
     design = None
 
-def create_Schematic_ladderFilter_COM(library: de.Library, library_name: str, dataset_s2p_path: str, parameters: dict, list_COM: list[COM]) -> None:
+def create_Schematic_ladderFilter_COM(workspace_path: str, library: de.Library, library_name: str, dataset_s2p_path: str, parameters: dict, list_COM: list[COM]) -> None:
     assert de.version() >= 630
 
     design = db.create_schematic(f"{library_name}:{CELL_FILTER_COM}:schematic")
@@ -1327,24 +1326,68 @@ def create_Schematic_ladderFilter_COM(library: de.Library, library_name: str, da
         transaction.commit()
 
     design.save_design()
+
+    # ===========================================
+    # 1. EXTRAER EL NETLIST Y SIMULAR
+    # ===========================================
+    netlist = design.generate_netlist()
+
+    # Definimos dónde queremos que se guarde el archivo de datos (.ds)
+    output_dir = os.path.join(workspace_path, "data")
+    os.makedirs(output_dir, exist_ok=True)
+
+    simulator = eda_ads.CircuitSimulator()
+    
+    # Esto bloqueará la ejecución de Python hasta que la simulación termine
+    simulator.run_netlist(netlist, output_dir=output_dir)
+
+    # Limpiamos
     design = None
 
     return
 
-def createDataDisplay_basic_Sparameters():
-    examples_path = pathlib.Path(__file__).parent.resolve()
-    dds_file = dds.new_dds_file("amplifier.ds", examples_path)
-    page = dds_file.pages[0]
+def create_dds_and_plot_Sparameters(workspace_path: str) -> None:
+    """
+    Crea un Data Display (.dds), añade dos gráficas rectangulares y lo deja abierto en ADS.
+    Plot 1: dB(S(1,1)) y dB(S(3,3))
+    Plot 2: dB(S(2,1)) y dB(S(4,3))
+    """
+    # ========= 1) Crear el documento DDS =========
+    # Esto inicializa el documento en memoria y lo enlaza al workspace y dataset.
+    dataset_name = CELL_FILTER_COM
+    doc = dds.new_dds_file(dataset_name, workspace_path)
+    
+    # ========= 2) Configurar la página =========
+    page = doc.pages[0]
+    page.name = "S_Parameters"
 
-    plot1 = page.add_plot()
-    plot1.add_traces(["dB(S11)"])
+    # ========= 3) Crear Plot 1 (S11 y S33) =========
+    traces_plot1 = [
+        f"dB({dataset_name}..S(1,1))", 
+        f"dB({dataset_name}..S(3,3))"
+    ]
+    plot1 = page.add_plot((4000, 3000), traces_plot1, "Return Loss")
 
-    plot2 = page.add_plot()
-    plot2.add_traces(["dB(S21)"])
+    # ========= 4) Crear Plot 2 (S21 y S43) =========
+    traces_plot2 = [
+        f"dB({dataset_name}..S(2,1))", 
+        f"dB({dataset_name}..S(4,3))"
+    ]
+    plot2 = page.add_plot((4000, 3000), traces_plot2, "Insertion Loss")
 
-    plot3 = page.add_plot(traces="dB(S12)")
-    plot4 = page.add_plot(traces=["dB(S12)"])
+    # ========= 5) Posicionar Plot 2 para evitar solapamiento =========
+    spacing = 100  # Espacio entre gráficas
+    new_x = plot1.children_bbox.right + spacing
+    plot2.move(dds.Point(new_x, 0))
 
-    page.align_grid([plot1, plot2, plot3, plot4], 2, 2)
+    # ========= 6) Guardar (y DEJAR ABIERTO) =========
+    dds_file_path = os.path.join(workspace_path, f"{CELL_FILTER_COM}.dds")
+    
+    # Intentamos forzar el guardado con el nombre de archivo específico.
+    doc.save(dds_file_path)
 
-    dds_file.save("simple.dds")
+    # ¡Nota importante! 
+    # HEMOS ELIMINADO `dds.close_dds_file(doc)`
+    # Al no cerrar el documento, la ventana se quedará abierta y visible en la interfaz de ADS.
+    
+    print(f"Data Display creado con éxito y abierto en: {dds_file_path}")

@@ -961,7 +961,8 @@ class MainWindow(QMainWindow):
             ads.create_SchematicAndSymbol_lossyBVD(lib, library_name)
             ads.create_Schematic_ladderFilter_BVDlossy(lib, library_name, self.dataset_s2p_file_path, self.network_parameters, list_BVD_ADSfilter)
             ads.create_SchematicAndSymbol_lossyCOM(lib, library_name)
-            ads.create_Schematic_ladderFilter_COM(lib, library_name, self.dataset_s2p_file_path, self.network_parameters, list_COM_ADSfilter)
+            ads.create_Schematic_ladderFilter_COM(full_workspace_path, lib, library_name, self.dataset_s2p_file_path, self.network_parameters, list_COM_ADSfilter)
+            ads.create_dds_and_plot_Sparameters(full_workspace_path)
 
         except Exception as e:
             error_detallado = traceback.format_exc()
@@ -971,7 +972,7 @@ class MainWindow(QMainWindow):
                 f"Message: {str(e)}\n\n"+
                 error_detallado)
             return
-        
+                
         QMessageBox.information(self, "Success", f"Workspace '{workspace_name}' created successfully in:\n{full_workspace_path}")
 
 
