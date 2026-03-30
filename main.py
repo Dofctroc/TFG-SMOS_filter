@@ -266,9 +266,6 @@ class MainWindow(QMainWindow):
 
         # 3. Montaje en el panel izquierdo (el que ya tenías)
         # Limpiamos el layout_bvd por si acaso y añadimos
-        bvd_label=QLabel("BVD parameters:")
-        bvd_label.setStyleSheet("font-weight: bold; color: darkgray;")
-        self.layout_bvd.addWidget(bvd_label)
         self.layout_bvd.addWidget(self.combo_bvd)
         self.layout_bvd.addSpacing(10) # Espacio visual
         self.layout_bvd.addLayout(self.form_layout_BVD)
@@ -384,9 +381,6 @@ class MainWindow(QMainWindow):
 
         # 3. Montaje en el panel derecho
         # Limpiamos el layout_com por si acaso y añadimos
-        matchnetw_label=QLabel("Matching Network Parameters:")
-        matchnetw_label.setStyleSheet("font-weight: bold; color: darkgray;")
-        self.layout_matchnetw.addWidget(matchnetw_label)
         self.layout_matchnetw.addSpacing(10) # Espacio visual
         self.layout_matchnetw.addLayout(self.form_layout_MN)
         self.layout_matchnetw.addStretch()
@@ -449,9 +443,6 @@ class MainWindow(QMainWindow):
 
         # 3. Montaje en el panel derecho
         # Limpiamos el layout_com por si acaso y añadimos
-        matchnetw_label=QLabel("COM Design Constants:")
-        matchnetw_label.setStyleSheet("font-weight: bold; color: darkgray;")
-        self.layout_constsCOM.addWidget(matchnetw_label)
         self.layout_constsCOM.addSpacing(10) # Espacio visual
         self.layout_constsCOM.addLayout(self.form_layout_constCOM)
         self.layout_constsCOM.addStretch()
@@ -546,7 +537,7 @@ class MainWindow(QMainWindow):
         # Formulario Derecho: Resultados de Frecuencia
         self.form_layout_COM_der = QFormLayout()
         self.form_layout_COM_der.addRow("α (-):", self.input_alpha)
-        self.form_layout_COM_der.addRow("α (-):", self.input_alpha_n)
+        self.form_layout_COM_der.addRow("α_n (-):", self.input_alpha_n)
         self.form_layout_COM_der.addRow("fs (Hz):", self.input_fs_COM)
         self.form_layout_COM_der.addRow("fp (Hz):", self.input_fp_COM)
 
@@ -557,9 +548,6 @@ class MainWindow(QMainWindow):
 
         # 3. Montaje en el panel derecho
         # Limpiamos el layout_com por si acaso y añadimos
-        com_label=QLabel("COM Parameters:")
-        com_label.setStyleSheet("font-weight: bold; color: darkgray;")
-        self.layout_com.addWidget(com_label)
         self.layout_com.addWidget(self.combo_com)
         self.layout_com.addSpacing(10) # Espacio visual
         self.layout_com.addLayout(self.layout_horizontal_formularios)
@@ -585,7 +573,7 @@ class MainWindow(QMainWindow):
         self.input_digitsIDT.setText(str(com_seleccionado.digitsN))
         self.input_digitsREFL.setText(str(com_seleccionado.digitsNR))
         self.input_alpha.setText(str(com_seleccionado.alpha))
-        self.input_alpha.setText(str(com_seleccionado.alpha_n))
+        self.input_alpha_n.setText(str(com_seleccionado.alpha_n))
 
         self.input_fs_COM.setText(formato_ingenieria(com_seleccionado.fs))
         self.input_fp_COM.setText(formato_ingenieria(com_seleccionado.fp))

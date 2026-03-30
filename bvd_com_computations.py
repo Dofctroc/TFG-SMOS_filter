@@ -166,8 +166,9 @@ def compute_list_COM(list_BVD: list[BVD], parameters: dict) -> list[COM]:
         
         list_COM.append(com)
     
-    # list_COM = reajuste_pitch(list_BVD, list_COM, parameters)
-    # list_COM = reajuste_digitsNR(list_BVD, list_COM, parameters)
+    list_COM = reajuste_pitch(list_BVD, list_COM, parameters)
+    # list_COM = reajuste_alpha(list_BVD, list_COM, parameters)
+    list_COM = reajuste_digitsNR(list_BVD, list_COM, parameters)
 
     return list_COM
 
@@ -304,6 +305,16 @@ def reajuste_pitch(list_BVD: list[BVD], list_COM: list[COM], parameters: dict) -
 
     return list_COM
 
+def reajuste_alpha(list_BVD: list[BVD], list_COM: list[COM], parameters: dict) -> list[COM]:
+    for bvd, com in zip(list_BVD, list_COM):
+        f_correction = bvd.fp / com.fp 
+        com.alpha_n = com.alpha_n / f_correction
+        com.alpha = com.alpha_n * np.sqrt(com.Ap)
+
+        com = compute_admitance_COM(com, parameters)
+
+    return list_COM
+
 def reajuste_digitsNR(list_BVD: list[BVD], list_COM: list[COM], parameters: dict) -> list[COM]:
     for bvd, com in zip(list_BVD, list_COM):
         # 1. Definimos la máscara para frecuencias <= fs
@@ -314,7 +325,7 @@ def reajuste_digitsNR(list_BVD: list[BVD], list_COM: list[COM], parameters: dict
         # 2. Definimos la función de error que usará least_squares
         def objetivo(nr_val):
             # Actualizamos el valor de NR en el objeto COM (nr_val viene como array de 1 elemento)
-            com.digitsNR = round(nr_val[0])
+            com.digitsNR = nr_val[0]
             
             # Recalculamos la admitancia con el nuevo NR
             # Asumimos que esta función actualiza com.Y internamente
@@ -337,7 +348,7 @@ def reajuste_digitsNR(list_BVD: list[BVD], list_COM: list[COM], parameters: dict
         )
 
         # 4. Aplicamos el resultado final optimizado al objeto
-        com.digitsNR = res.x[0]
+        com.digitsNR = round(res.x[0])
         com = compute_admitance_COM(com, parameters) # Cálculo final definitivo
 
     return list_COM
