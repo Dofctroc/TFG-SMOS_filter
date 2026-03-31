@@ -1347,13 +1347,7 @@ def create_Schematic_ladderFilter_COM(workspace_path: str, library: de.Library, 
     return
 
 def create_dds_and_plot_Sparameters(workspace_path: str) -> None:
-    """
-    Crea un Data Display (.dds), añade dos gráficas rectangulares y lo deja abierto en ADS.
-    Plot 1: dB(S(1,1)) y dB(S(3,3))
-    Plot 2: dB(S(2,1)) y dB(S(4,3))
-    """
     # ========= 1) Crear el documento DDS =========
-    # Esto inicializa el documento en memoria y lo enlaza al workspace y dataset.
     dataset_name = CELL_FILTER_COM
     doc = dds.new_dds_file(dataset_name, workspace_path)
     
@@ -1363,31 +1357,26 @@ def create_dds_and_plot_Sparameters(workspace_path: str) -> None:
 
     # ========= 3) Crear Plot 1 (S11 y S33) =========
     traces_plot1 = [
-        f"dB({dataset_name}..S(1,1))", 
-        f"dB({dataset_name}..S(3,3))"
+        f"dB({dataset_name}_S(1,1))", 
+        f"dB({dataset_name}_S(3,3))"
     ]
     plot1 = page.add_plot((4000, 3000), traces_plot1, "Return Loss")
 
     # ========= 4) Crear Plot 2 (S21 y S43) =========
     traces_plot2 = [
-        f"dB({dataset_name}..S(2,1))", 
-        f"dB({dataset_name}..S(4,3))"
+        f"dB({dataset_name}_S(2,1))", 
+        f"dB({dataset_name}_S(4,3))"
     ]
     plot2 = page.add_plot((4000, 3000), traces_plot2, "Insertion Loss")
 
     # ========= 5) Posicionar Plot 2 para evitar solapamiento =========
-    spacing = 100  # Espacio entre gráficas
+    spacing = 10  # Espacio entre gráficas
     new_x = plot1.children_bbox.right + spacing
-    plot2.move(dds.Point(new_x, 0))
+    plot2.move(dds.Point(100, 0))
 
     # ========= 6) Guardar (y DEJAR ABIERTO) =========
     dds_file_path = os.path.join(workspace_path, f"{CELL_FILTER_COM}.dds")
-    
-    # Intentamos forzar el guardado con el nombre de archivo específico.
     doc.save(dds_file_path)
-
-    # ¡Nota importante! 
-    # HEMOS ELIMINADO `dds.close_dds_file(doc)`
-    # Al no cerrar el documento, la ventana se quedará abierta y visible en la interfaz de ADS.
+    dds.close_dds_file(doc)
     
     print(f"Data Display creado con éxito y abierto en: {dds_file_path}")
