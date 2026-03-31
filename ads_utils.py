@@ -1,15 +1,17 @@
 import os
 import shutil
+import pathlib
+from decimal import Decimal
 
 from keysight.ads import de
 from keysight.ads.de import PointF
 from keysight.ads.de import db_uu as db
 from keysight.ads.de.db import Transaction
-
-import pathlib
+from keysight.edatoolbox import ads as eda_ads
 import keysight.ads.dds as dds
 
-from decimal import Decimal
+from bvd_com_computations import BVD
+from bvd_com_computations import COM
 
 FORCE_RECREATE = True
 
@@ -105,7 +107,7 @@ def create_SchematicAndSymbol_lossyBVD(library: de.Library, library_name: str) -
 
         # Instances
         inst = design.add_var_instance(name="VAR1", origin=(4.75, 3.0))
-        inst.vars.update({'fs': '1/(2*pi*sqrt(La*Ca))', 'Cp': 'C0-Ca', 'Ra': '2*pi*fs*La/Qa'})
+        inst.vars.update({'fs': '1/(2*pi*sqrt(La*Ca))', 'Ra': '2*pi*fs*La/Qa'})
         # Since inst.vars does not contain 'X', we need to remove the first repeat.
         param = inst.parameters[0]
         assert isinstance(param, db.ParamRepeated)
@@ -133,25 +135,25 @@ def create_SchematicAndSymbol_lossyBVD(library: de.Library, library_name: str) -
 
         inst = design.add_instance("ads_rflib:L", name="Ladd_gnd", origin=(7.5, 0.0))
         inst.parameters["L"].value = "Ladd_ground H"
-        inst.parameters["R"].value = "2*pi*fs*Ladd_ground/Ql"
+        inst.parameters["R"].value = "2*pi*fs*Ladd_ground/Ql Ohm"
         inst.update_item_annotation()
 
         inst = design.add_instance("ads_rflib:L", name="Ladd_ser", origin=(4.0, 0.0))
         inst.parameters["L"].value = "Ladd_ser H"
-        inst.parameters["R"].value = "2*pi*fs*Ladd_ser/Ql"
+        inst.parameters["R"].value = "2*pi*fs*Ladd_ser/Ql Ohm"
         inst.update_item_annotation()
 
         inst = design.add_instance("ads_rflib:L", name="Ladd_shu", origin=(1.0, -1.5))
         inst.parameters["L"].value = "Ladd_shu H"
-        inst.parameters["R"].value = "2*pi*fs*Ladd_shu/Ql"
+        inst.parameters["R"].value = "2*pi*fs*Ladd_shu/Ql Ohm"
         inst.update_item_annotation()
 
         inst = design.add_instance("ads_rflib:R", name="R1", origin=(1.0, 2.5))
-        inst.parameters["R"].value = "2*pi*fs*Cadd_ser/qc Ohm"
+        inst.parameters["R"].value = "Qc/(2*pi*fs*Cadd_shu) Ohm"
         inst.update_item_annotation()
 
         inst = design.add_instance("ads_rflib:R", name="R2", origin=(6.0, 1.0))
-        inst.parameters["R"].value = "2*pi*fs*Cadd_ser/Qc Ohm"
+        inst.parameters["R"].value = "Qc/(2*pi*fs*Cadd_ser) Ohm"
         inst.update_item_annotation()
 
         inst = design.add_instance("ads_rflib:R", name="Ra", origin=(3.0, -0.5))
@@ -175,9 +177,9 @@ def create_SchematicAndSymbol_lossyBVD(library: de.Library, library_name: str) -
     formset = de.db_uu.model_lib.formsets["StdFormSet"]
 
     # MAIN BVD parameters
-    varC0 = de.db_uu.ModelParam("C0", "Capacitance", formset, de.db_uu.ModelUnitType.CAPACITANCE)
-    varC0.default_value = de.db_uu.ParamItemString("C0", "StdForm", str("1"))
-    varC0.is_displayed_by_default = True
+    varCp = de.db_uu.ModelParam("Cp", "Capacitance", formset, de.db_uu.ModelUnitType.CAPACITANCE)
+    varCp.default_value = de.db_uu.ParamItemString("Cp", "StdForm", str("1"))
+    varCp.is_displayed_by_default = True
 
     varCa = de.db_uu.ModelParam("Ca", "Capacitance", formset, de.db_uu.ModelUnitType.CAPACITANCE)
     varCa.default_value = de.db_uu.ParamItemString("Ca", "StdForm", str("1"))
@@ -232,7 +234,7 @@ def create_SchematicAndSymbol_lossyBVD(library: de.Library, library_name: str) -
     model_def = de.db_uu.ModelDef(CELL_BVD_LOSSY, CELL_BVD_LOSSY)
     model_def.inst_name_prefix = "lossyBVD"
     model_def.is_sub_design = True
-    model_def.parameters = [varC0, varCa, varLa, varLadd_ser, varLadd_shu, varCadd_ser, varCadd_shu, varLadd_ground, varRs, varRp, varQl, varQc, varQa]
+    model_def.parameters = [varCp, varCa, varLa, varLadd_ser, varLadd_shu, varCadd_ser, varCadd_shu, varLadd_ground, varRs, varRp, varQl, varQc, varQa]
 
     de.add_model_definition(library, model_def)
 
@@ -284,7 +286,7 @@ def create_SchematicAndSymbol_lossyBVD(library: de.Library, library_name: str) -
     design.save_design()
     design = None
 
-def create_Schematic_ladderFilter_BVDlossy(library: de.Library, library_name: str, parameters: dict) -> None:
+def create_Schematic_ladderFilter_BVDlossy(workspace_path: str, library_name: str, dataset_s2p_path: str, parameters: dict, list_BVD: list[BVD]) -> None:
     assert de.version() >= 630
 
     design = db.create_schematic(f"{library_name}:{CELL_FILTER_BVD}:schematic")
@@ -294,63 +296,24 @@ def create_Schematic_ladderFilter_BVDlossy(library: de.Library, library_name: st
     order = int(parameters["norder_ini"])
     startBVD_type = parameters["typeseriesshunt_ini"]
     endBVD_type = ""
-    option = int(parameters["option"])
 
     # Determine the type of the last BVD based on the order and the type of the first BVD
     if order % 2 == 0:
-        if startBVD_type == "series":
-            endBVD_type = "shunt"
-        else:            
-            endBVD_type = "series"
+        endBVD_type = "shunt" if startBVD_type == "series" else "series"
     else:
-        if startBVD_type == "series":
-            endBVD_type = "series"
-        else:            
-            endBVD_type = "shunt"
+        endBVD_type = "series" if startBVD_type == "series" else "shunt"
+
+    current_BVD_type = startBVD_type
 
     # READ Matching network parameters
     matching_network = parameters["matching_network"]
     mntype1 = parameters["mntype1"]
-    mntype2 = parameters["mntype2"]
     input_l = parameters["input_l"]
     lfini1 = parameters["lfini1"]
     lfini2 = parameters["lfini2"]
     cfini1 = parameters["cfini1"]
     cfini2 = parameters["cfini2"]
-
-    # READ BVD parameters
-    c0 = parameters["c0_vals"]       #float[]
-    ca = parameters["ca_vals"]       #float[]
-    la = parameters["la_vals"]       #float[]
-
-    c0_list = parameters["c0"]
-    ca_list = parameters["ca"]
-    la_list = parameters["la"]
-
-    fs_list = parameters["fs"]
-    ra_list = parameters["ra"]
-
-    # READ Additional BVD parameters
-    ladd_ser = parameters["ladd_ser_vals"]           #float[]
-    ladd_shu = parameters["ladd_shu_vals"]           #float[]
-    cadd_ser = parameters["cadd_ser_vals"]           #float[]
-    cadd_shu = parameters["cadd_shu_vals"]           #float[]
-    ladd_ground = parameters["ladd_ground_vals"]     #float[]
-
-    ladd_ser_list = parameters["ladd_ser"]
-    ladd_shu_list = parameters["ladd_shu"]
-    cadd_ser_list = parameters["cadd_ser"]
-    cadd_shu_list = parameters["cadd_shu"]
-    ladd_ground_list = parameters["ladd_ground"]
-
-    rs = parameters["rs"]
-    qlim = parameters["qlim"]
-    q50 = parameters["q50"]
-    ql = parameters["ql"]
-    qc = parameters["qc"]
-    qa = parameters["qa"]
-    rp = parameters["rp"]
-
+    
     # Sweep parameters
     fstart = parameters["fstart1"]
     fstop = parameters["fstop1"]
@@ -358,226 +321,309 @@ def create_Schematic_ladderFilter_BVDlossy(library: de.Library, library_name: st
     
     # Grid positon parameters
     xpos = 0.0
-    xpos_max = xpos
-    max_size_symb = 3.0
-    max_size_input = 3.0
-    max_size_output = 4.0
     ypos = 0.0
 
-    xpos_firststep = 1.25
-    xstep = -1
+    x_margin = 1.0
+    y_margin = 1.0
+
     num_BVD = 0
 
-    space_parallel = 1.0
-
     with Transaction(design) as transaction:
+        # =========================================== Ladder Filter of Lossy BVDs ===========================================
         # TermG1
         inst = design.add_instance("ads_simulation:TermG", name="TermG1", origin=(xpos, ypos), angle=-90.0)
         inst.parameters["Num"].value = "1"
         inst.update_item_annotation()
 
-        xpos = xpos_max
-        ypos = 0.0
-
         # INPUT MATCHING NETWORK: (need to know if first BVD is series or shunt)
-        xstep += 1
-
         if startBVD_type == "series":
             # Add shunt inductor at the input
             d = Decimal(input_l)
             exp10 = d.adjusted()   # exponente base 10
 
             if exp10 > -10:
-                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+xpos_firststep*2, y=ypos)])
-                xpos += xpos_firststep*2
+                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+x_margin, y=ypos)])
+                xpos += x_margin
 
                 inst = design.add_instance("ads_rflib:L", name="L_input", origin=(xpos, ypos), angle=-90.0)
-                inst.parameters["L"].value = "input_l H"
+                inst.parameters["L"].value = input_l + "H"
                 inst.update_item_annotation()
                 ypos -= 1.0
 
-                inst = design.add_instance("ads_rflib:GROUND", name="G"+str(xstep), origin=(xpos, ypos), angle=-90.0, ads_annot=False)
+                inst = design.add_instance("ads_rflib:GROUND", name="G"+str(num_BVD), origin=(xpos, ypos), angle=-90.0, ads_annot=False)
                 ypos += 1.0
 
-            design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos_max + max_size_input, y=ypos)])
+            design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos + x_margin, y=ypos)])
+            xpos += x_margin
 
         else:
             # Add series inductor at the input
-            design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+xpos_firststep, y=ypos)])
-            xpos += xpos_firststep
+            design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+x_margin, y=ypos)])
+            xpos += x_margin
 
             inst = design.add_instance("ads_rflib:L", name="L_input", origin=(xpos, ypos))
-            inst.parameters["L"].value = "input_l H"
+            inst.parameters["L"].value = input_l + "H"
             inst.update_item_annotation()
             xpos += 1.0
 
-            design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos_max + max_size_input, y=ypos)])
+            design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos + x_margin, y=ypos)])
+            xpos += x_margin
 
-        xpos_max += max_size_input
-        xpos = xpos_max
         ypos = 0.0
 
         # FIRST BVD: Start BVD ladder depending on if it is series or shunt
         # Remember to put a GROUND if BVD is shunt
-        xstep += 1
+        design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+x_margin, y=ypos)])
+        xpos += x_margin
 
-        if startBVD_type == "series":
+        if current_BVD_type == "series":
             # SERIES BVD start
             angle_BVD = 0.0
-            design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+xpos_firststep, y=ypos)])
-            xpos += xpos_firststep
-
-            design.add_wire([PointF(x=xpos+1.0, y=ypos), PointF(x=xpos_max + max_size_symb, y=ypos)])
         else:
             # SHUNT BVD start
             angle_BVD = -90.0
-            xpos += max_size_symb/2
-
-            points = [PointF(x=xpos-max_size_symb/2, y=ypos), PointF(x=xpos, y=ypos), PointF(x=xpos+max_size_symb/2, y=ypos)]
-            design.add_wire(points)
-
-            inst = design.add_instance("ads_rflib:GROUND", name="G"+str(xstep), origin=(xpos, ypos-1.0), angle=-90.0, ads_annot=False)
+            if not list_BVD[num_BVD].name.endswith("_1s"):
+                inst = design.add_instance("ads_rflib:GROUND", name="G"+str(num_BVD+1), origin=(xpos, ypos-1.0), angle=-90.0, ads_annot=False)
         
-        inst = design.add_instance((library_name, CELL_BVD_LOSSY, "symbol"), origin=(xpos, ypos), name="lossyBVD_"+str(num_BVD), angle=angle_BVD)
-        inst.parameters["C0"].value = str(c0[num_BVD])
-        inst.parameters["Ca"].value = str(ca[num_BVD])
-        inst.parameters["La"].value = str(la[num_BVD])
-        inst.parameters["Ladd_ser"].value = str(ladd_ser[num_BVD])
-        inst.parameters["Ladd_shu"].value = str(ladd_shu[num_BVD])
-        inst.parameters["Cadd_ser"].value = str(cadd_ser[num_BVD])
-        inst.parameters["Cadd_shu"].value = str(cadd_shu[num_BVD])
-        inst.parameters["Ladd_ground"].value = str(ladd_ground[num_BVD])
-        inst.parameters["Rs"].value = rs
-        inst.parameters["Rp"].value = rp
-        inst.parameters["Ql"].value = ql
-        inst.parameters["Qc"].value = qc
-        inst.parameters["Qa"].value = qa
+        inst = design.add_instance((library_name, CELL_BVD_LOSSY, "symbol"), origin=(xpos, ypos), name=list_BVD[num_BVD].name, angle=angle_BVD)
+        inst.parameters["Cp"].value = str(list_BVD[num_BVD].cp)
+        inst.parameters["Ca"].value = str(list_BVD[num_BVD].ca)
+        inst.parameters["La"].value = str(list_BVD[num_BVD].la)
+        inst.parameters["Ladd_ser"].value = str(list_BVD[num_BVD].ladd_ser if list_BVD[num_BVD].ladd_ser != 0.0 else 1e-20)
+        inst.parameters["Ladd_shu"].value = str(list_BVD[num_BVD].ladd_shu if list_BVD[num_BVD].ladd_shu != 0.0 else 1e-20)
+        inst.parameters["Cadd_ser"].value = str(list_BVD[num_BVD].cadd_ser if list_BVD[num_BVD].cadd_ser != 0.0 else 1e-20)
+        inst.parameters["Cadd_shu"].value = str(list_BVD[num_BVD].cadd_shu if list_BVD[num_BVD].cadd_shu != 0.0 else 1e-20)
+        inst.parameters["Ladd_ground"].value = str(list_BVD[num_BVD].ladd_ground if list_BVD[num_BVD].ladd_ground != 0.0 else 1e-20)
+        inst.parameters["Rs"].value = str(list_BVD[num_BVD].rs)
+        inst.parameters["Rp"].value = str(list_BVD[num_BVD].rp)
+        inst.parameters["Ql"].value = str(list_BVD[num_BVD].ql)
+        inst.parameters["Qc"].value = str(list_BVD[num_BVD].qc)
+        inst.parameters["Qa"].value = str(list_BVD[num_BVD].qa)
+        inst.update_item_annotation()
 
-        try:
+        xpos += 1.0 if current_BVD_type == "series" else 0.0
+        ypos -= 1.0 if current_BVD_type == "shunt" else 0.0
+
+        duplicate = False
+
+        if list_BVD[num_BVD].name.endswith("_1s"):
+            duplicate = True
+            if current_BVD_type == "series":
+                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+x_margin, y=ypos)])
+                xpos += x_margin
+                angle_BVD = 0.0
+            else:
+                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos, y=ypos-y_margin)])
+                ypos -= y_margin
+                inst = design.add_instance("ads_rflib:GROUND", name="G"+str(num_BVD), origin=(xpos, ypos-1.0), angle=-90.0, ads_annot=False)
+                angle_BVD = -90.0
+
+        elif list_BVD[num_BVD].name.endswith("_1p"):
+            duplicate = True
+            if current_BVD_type == "series":
+                xpos -= 1.0
+                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos, y=ypos-y_margin)])
+                design.add_wire([PointF(x=xpos + 1.0, y=ypos), PointF(x=xpos + 1.0, y=ypos-y_margin)])
+                ypos -= y_margin
+                angle_BVD = 0.0
+            else:
+                ypos += 1.0
+                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos + x_margin, y=ypos)])
+                design.add_wire([PointF(x=xpos, y=ypos-y_margin), PointF(x=xpos + x_margin, y=ypos-y_margin)])
+                xpos += x_margin
+                angle_BVD = -90.0
+
+        if duplicate:
+            num_BVD += 1
+            inst = design.add_instance((library_name, CELL_BVD_LOSSY, "symbol"), origin=(xpos, ypos), name=list_BVD[num_BVD].name, angle=angle_BVD)
+            inst.parameters["Cp"].value = str(list_BVD[num_BVD].cp)
+            inst.parameters["Ca"].value = str(list_BVD[num_BVD].ca)
+            inst.parameters["La"].value = str(list_BVD[num_BVD].la)
+            inst.parameters["Ladd_ser"].value = str(list_BVD[num_BVD].ladd_ser if list_BVD[num_BVD].ladd_ser != 0.0 else 1e-20)
+            inst.parameters["Ladd_shu"].value = str(list_BVD[num_BVD].ladd_shu if list_BVD[num_BVD].ladd_shu != 0.0 else 1e-20)
+            inst.parameters["Cadd_ser"].value = str(list_BVD[num_BVD].cadd_ser if list_BVD[num_BVD].cadd_ser != 0.0 else 1e-20)
+            inst.parameters["Cadd_shu"].value = str(list_BVD[num_BVD].cadd_shu if list_BVD[num_BVD].cadd_shu != 0.0 else 1e-20)
+            inst.parameters["Ladd_ground"].value = str(list_BVD[num_BVD].ladd_ground if list_BVD[num_BVD].ladd_ground != 0.0 else 1e-20)
+            inst.parameters["Rs"].value = str(list_BVD[num_BVD].rs)
+            inst.parameters["Rp"].value = str(list_BVD[num_BVD].rp)
+            inst.parameters["Ql"].value = str(list_BVD[num_BVD].ql)
+            inst.parameters["Qc"].value = str(list_BVD[num_BVD].qc)
+            inst.parameters["Qa"].value = str(list_BVD[num_BVD].qa)
             inst.update_item_annotation()
-        except Exception:
-            pass
 
-        xpos_max += max_size_symb
-        xpos = xpos_max
+        xpos += 1.0 if current_BVD_type == "series" and (list_BVD[num_BVD-1].name.endswith("_1p") or list_BVD[num_BVD-1].name.endswith("_1s")) else 0.0
+        ypos += 1.0 if (current_BVD_type == "series" and list_BVD[num_BVD-1].name.endswith("_1p")) or (current_BVD_type == "shunt" and list_BVD[num_BVD-1].name.endswith("_1s")) else 0.0
+
         ypos = 0.0
+        design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+x_margin, y=ypos)])
+        xpos += x_margin
         num_BVD += 1
+
+        current_BVD_type = "series" if current_BVD_type == "shunt" else "shunt"
 
 
         # BVD LADDER: Add the rest of the ladder depending on the number of BVDs
-        for num_BVD in range(1, order):
-            if (num_BVD % 2 == 0 and startBVD_type == "series") or (num_BVD % 2 != 0 and startBVD_type == "shunt"):
-                # SERIES BVD
+        while num_BVD < len(list_BVD):
+            design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+x_margin, y=ypos)])
+            xpos += x_margin
+
+            if current_BVD_type == "series":
+                # SERIES BVD start
                 angle_BVD = 0.0
-                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+xpos_firststep, y=ypos)])
-                xpos += xpos_firststep
-
-                design.add_wire([PointF(x=xpos+1.0, y=ypos), PointF(x=xpos_max + max_size_symb, y=ypos)])
             else:
-                # SHUNT BVD
+                # SHUNT BVD start
                 angle_BVD = -90.0
-                xpos += max_size_symb/2
+                if not list_BVD[num_BVD].name.endswith("_1s"):
+                    inst = design.add_instance("ads_rflib:GROUND", name="G"+str(num_BVD+1), origin=(xpos, ypos-1.0), angle=-90.0, ads_annot=False)
+            
+            inst = design.add_instance((library_name, CELL_BVD_LOSSY, "symbol"), origin=(xpos, ypos), name=list_BVD[num_BVD].name, angle=angle_BVD)
+            inst.parameters["Cp"].value = str(list_BVD[num_BVD].cp)
+            inst.parameters["Ca"].value = str(list_BVD[num_BVD].ca)
+            inst.parameters["La"].value = str(list_BVD[num_BVD].la)
+            inst.parameters["Ladd_ser"].value = str(list_BVD[num_BVD].ladd_ser if list_BVD[num_BVD].ladd_ser != 0.0 else 1e-20)
+            inst.parameters["Ladd_shu"].value = str(list_BVD[num_BVD].ladd_shu if list_BVD[num_BVD].ladd_shu != 0.0 else 1e-20)
+            inst.parameters["Cadd_ser"].value = str(list_BVD[num_BVD].cadd_ser if list_BVD[num_BVD].cadd_ser != 0.0 else 1e-20)
+            inst.parameters["Cadd_shu"].value = str(list_BVD[num_BVD].cadd_shu if list_BVD[num_BVD].cadd_shu != 0.0 else 1e-20)
+            inst.parameters["Ladd_ground"].value = str(list_BVD[num_BVD].ladd_ground if list_BVD[num_BVD].ladd_ground != 0.0 else 1e-20)
+            inst.parameters["Rs"].value = str(list_BVD[num_BVD].rs)
+            inst.parameters["Rp"].value = str(list_BVD[num_BVD].rp)
+            inst.parameters["Ql"].value = str(list_BVD[num_BVD].ql)
+            inst.parameters["Qc"].value = str(list_BVD[num_BVD].qc)
+            inst.parameters["Qa"].value = str(list_BVD[num_BVD].qa)
+            inst.update_item_annotation()
 
-                points = [PointF(x=xpos-max_size_symb/2, y=ypos), PointF(x=xpos, y=ypos), PointF(x=xpos+max_size_symb/2, y=ypos)]
-                design.add_wire(points)
+            xpos += 1.0 if current_BVD_type == "series" else 0.0
+            ypos -= 1.0 if current_BVD_type == "shunt" else 0.0
 
-                inst = design.add_instance("ads_rflib:GROUND", name="G"+str(xstep), origin=(xpos, ypos-1.0), angle=-90.0, ads_annot=False)
+            duplicate = False
 
-            inst = design.add_instance((library_name, CELL_BVD_LOSSY, "symbol"), origin=(xpos, ypos), name="lossyBVD_"+str(num_BVD), angle=angle_BVD)
-            inst.parameters["C0"].value = str(c0[num_BVD])
-            inst.parameters["Ca"].value = str(ca[num_BVD])
-            inst.parameters["La"].value = str(la[num_BVD])
-            inst.parameters["Ladd_ser"].value = str(ladd_ser[num_BVD])
-            inst.parameters["Ladd_shu"].value = str(ladd_shu[num_BVD])
-            inst.parameters["Cadd_ser"].value = str(cadd_ser[num_BVD])
-            inst.parameters["Cadd_shu"].value = str(cadd_shu[num_BVD])
-            inst.parameters["Ladd_ground"].value = str(ladd_ground[num_BVD])
-            inst.parameters["Rs"].value = rs
-            inst.parameters["Rp"].value = rp
-            inst.parameters["Ql"].value = ql
-            inst.parameters["Qc"].value = qc
-            inst.parameters["Qa"].value = qa
+            if list_BVD[num_BVD].name.endswith("_1s"):
+                duplicate = True
+                if current_BVD_type == "series":
+                    design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+x_margin, y=ypos)])
+                    xpos += x_margin
+                    angle_BVD = 0.0
+                else:
+                    design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos, y=ypos-y_margin)])
+                    ypos -= y_margin
+                    inst = design.add_instance("ads_rflib:GROUND", name="G"+str(num_BVD), origin=(xpos, ypos-1.0), angle=-90.0, ads_annot=False)
+                    angle_BVD = -90.0
 
-            try:
+            elif list_BVD[num_BVD].name.endswith("_1p"):
+                duplicate = True
+                if current_BVD_type == "series":
+                    xpos -= 1.0
+                    design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos, y=ypos-y_margin)])
+                    design.add_wire([PointF(x=xpos + 1.0, y=ypos), PointF(x=xpos + 1.0, y=ypos-y_margin)])
+                    ypos -= y_margin
+                    angle_BVD = 0.0
+                else:
+                    ypos += 1.0
+                    design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos + x_margin, y=ypos)])
+                    design.add_wire([PointF(x=xpos, y=ypos-y_margin), PointF(x=xpos + x_margin, y=ypos-y_margin)])
+                    xpos += x_margin
+                    angle_BVD = -90.0
+
+            if duplicate:
+                num_BVD += 1
+                inst = design.add_instance((library_name, CELL_BVD_LOSSY, "symbol"), origin=(xpos, ypos), name=list_BVD[num_BVD].name, angle=angle_BVD)
+                inst.parameters["Cp"].value = str(list_BVD[num_BVD].cp)
+                inst.parameters["Ca"].value = str(list_BVD[num_BVD].ca)
+                inst.parameters["La"].value = str(list_BVD[num_BVD].la)
+                inst.parameters["Ladd_ser"].value = str(list_BVD[num_BVD].ladd_ser if list_BVD[num_BVD].ladd_ser != 0.0 else 1e-20)
+                inst.parameters["Ladd_shu"].value = str(list_BVD[num_BVD].ladd_shu if list_BVD[num_BVD].ladd_shu != 0.0 else 1e-20)
+                inst.parameters["Cadd_ser"].value = str(list_BVD[num_BVD].cadd_ser if list_BVD[num_BVD].cadd_ser != 0.0 else 1e-20)
+                inst.parameters["Cadd_shu"].value = str(list_BVD[num_BVD].cadd_shu if list_BVD[num_BVD].cadd_shu != 0.0 else 1e-20)
+                inst.parameters["Ladd_ground"].value = str(list_BVD[num_BVD].ladd_ground if list_BVD[num_BVD].ladd_ground != 0.0 else 1e-20)
+                inst.parameters["Rs"].value = str(list_BVD[num_BVD].rs)
+                inst.parameters["Rp"].value = str(list_BVD[num_BVD].rp)
+                inst.parameters["Ql"].value = str(list_BVD[num_BVD].ql)
+                inst.parameters["Qc"].value = str(list_BVD[num_BVD].qc)
+                inst.parameters["Qa"].value = str(list_BVD[num_BVD].qa)
                 inst.update_item_annotation()
-            except Exception:
-                pass
-                
-            xpos_max += max_size_symb
-            xpos = xpos_max
+
+            xpos += 1.0 if current_BVD_type == "series" and (list_BVD[num_BVD-1].name.endswith("_1p") or list_BVD[num_BVD-1].name.endswith("_1s")) else 0.0
+            ypos += 1.0 if (current_BVD_type == "series" and list_BVD[num_BVD-1].name.endswith("_1p")) or (current_BVD_type == "shunt" and list_BVD[num_BVD-1].name.endswith("_1s")) else 0.0
+
             ypos = 0.0
-            xstep += 1
+            design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+x_margin, y=ypos)])
+            xpos += x_margin
+            num_BVD += 1
+
+            current_BVD_type = "series" if current_BVD_type == "shunt" else "shunt"
 
 
         # OUTPUT MATCHING NETWORK: (need to know if last BVD is series or shunt)
-        xstep += 1
-
-        design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+xpos_firststep*2, y=ypos)])
-        xpos += xpos_firststep*2
+        design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+x_margin, y=ypos)])
+        xpos += x_margin
 
         if matching_network == "0.0":
             if endBVD_type == "series":
                 # Bobina en shunt (lfini2)
-                inst = design.add_instance("ads_rflib:L", name="L_output", origin=(xpos, ypos), angle=-90.0)
-                inst.parameters["L"].value = "lfini2 H"
-                inst.update_item_annotation()
-                ypos -= 1.0
+                if float(lfini2) > 0.0:
+                    inst = design.add_instance("ads_rflib:L", name="L_output", origin=(xpos, ypos), angle=-90.0)
+                    inst.parameters["L"].value = lfini2 + "H"
+                    inst.update_item_annotation()
+                    ypos -= 1.0
 
-                inst = design.add_instance("ads_rflib:GROUND", name="G"+str(xstep), origin=(xpos, ypos), angle=-90.0, ads_annot=False)
-                ypos += 1.0
-                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=float(max_size_symb*xstep), y=ypos)])
+                    inst = design.add_instance("ads_rflib:GROUND", name="G"+str(num_BVD), origin=(xpos, ypos), angle=-90.0, ads_annot=False)
+                    ypos += 1.0
+                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+x_margin, y=ypos)])
+                xpos += x_margin
 
             else:
-                # Bobina en serie (lfini2)
-                inst = design.add_instance("ads_rflib:L", name="L_output", origin=(xpos, ypos))
-                inst.parameters["L"].value = "lfini2 H"
-                inst.update_item_annotation()
-                xpos += 1.0
+                if float(lfini2) > 0.0:
+                    # Bobina en serie (lfini2)
+                    inst = design.add_instance("ads_rflib:L", name="L_output", origin=(xpos, ypos))
+                    inst.parameters["L"].value = lfini2 + "H"
+                    inst.update_item_annotation()
+                    xpos += 1.0
 
-                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=float(max_size_symb*xstep), y=ypos)])
+                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+x_margin, y=ypos)])
+                xpos += x_margin
         else:
             # Add the matching network for the output
             if mntype1 == "s":
-                # Bobina Serie (lfini1) seguida de Condensador Shunt (Cfini2)
-                inst = design.add_instance("ads_rflib:L", name="L_output", origin=(xpos, ypos))
-                inst.parameters["L"].value = "lfini1 H"
-                inst.update_item_annotation()
-                xpos += 1.0
-                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+space_parallel, y=ypos)])
-                xpos += space_parallel
+                if float(lfini1) > 0.0:
+                    # Bobina Serie (lfini1) seguida de Condensador Shunt (Cfini2)
+                    inst = design.add_instance("ads_rflib:L", name="L_output", origin=(xpos, ypos))
+                    inst.parameters["L"].value = lfini1 + "H"
+                    inst.update_item_annotation()
+                    xpos += 1.0
+                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+x_margin, y=ypos)])
+                xpos += x_margin
 
-                inst = design.add_instance("ads_rflib:C", name="C_output", origin=(xpos, ypos), angle=-90.0)
-                inst.parameters["C"].value = "cfini2 F"
-                inst.update_item_annotation()
-                ypos -= 1.0
+                if float(cfini2) > 0.0:
+                    inst = design.add_instance("ads_rflib:C", name="C_output", origin=(xpos, ypos), angle=-90.0)
+                    inst.parameters["C"].value = cfini2 + "F"
+                    inst.update_item_annotation()
+                    ypos -= 1.0
 
-                inst = design.add_instance("ads_rflib:GROUND", name="G"+str(xstep), origin=(xpos, ypos), angle=-90.0, ads_annot=False)
-                ypos += 1.0
-
-                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos + 2.0, y=ypos)])
+                    inst = design.add_instance("ads_rflib:GROUND", name="G"+str(num_BVD), origin=(xpos, ypos), angle=-90.0, ads_annot=False)
+                    ypos += 1.0
+                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos + x_margin, y=ypos)])
+                xpos += x_margin
 
             else:
-                #  Condensador Shunt (Cfini1) seguido de Bobina Serie (lfini2)
-                inst = design.add_instance("ads_rflib:C", name="C_output", origin=(xpos, ypos), angle=-90.0)
-                inst.parameters["C"].value = "cfini1 F"
-                inst.update_item_annotation()
-                ypos -= 1.0
+                if float(cfini1) > 0.0:
+                    #  Condensador Shunt (Cfini1) seguido de Bobina Serie (lfini2)
+                    inst = design.add_instance("ads_rflib:C", name="C_output", origin=(xpos, ypos), angle=-90.0)
+                    inst.parameters["C"].value = cfini1 + "F"
+                    inst.update_item_annotation()
+                    ypos -= 1.0
 
-                inst = design.add_instance("ads_rflib:GROUND", name="G"+str(xstep), origin=(xpos, ypos), angle=-90.0, ads_annot=False)
-                ypos += 1.0
-                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+space_parallel, y=ypos)])
-                xpos += space_parallel
+                    inst = design.add_instance("ads_rflib:GROUND", name="G"+str(num_BVD), origin=(xpos, ypos), angle=-90.0, ads_annot=False)
+                    ypos += 1.0
+                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos + x_margin, y=ypos)])
+                xpos += x_margin
 
-                inst = design.add_instance("ads_rflib:L", name="L_output", origin=(xpos, ypos))
-                inst.parameters["L"].value = "lfini2 H"
-                inst.update_item_annotation()
-                xpos += 1.0
-
-                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos + 2.0, y=ypos)])
-
-        xpos_max += max_size_output
-        xpos += 2.0
-        ypos = 0.0
+                if float(lfini2) > 0.0:
+                    inst = design.add_instance("ads_rflib:L", name="L_output", origin=(xpos, ypos))
+                    inst.parameters["L"].value = lfini2 + "H"
+                    inst.update_item_annotation()
+                    xpos += 1.0
+                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos + x_margin, y=ypos)])
+                xpos += x_margin
 
 
         # TermG2
@@ -585,9 +631,39 @@ def create_Schematic_ladderFilter_BVDlossy(library: de.Library, library_name: st
         inst.parameters["Num"].value = "2"
         inst.update_item_annotation()
 
+        # Variables 
+        inst = design.add_var_instance(name="VAR_Sweep", origin=(3.0, 3.0))
+        inst.vars.update({'fstart': fstart, 'fstop': fstop, 'npoints': npoints})
+        # Since inst.vars does not contain 'X', we need to remove the first repeat.
+        assert isinstance(inst.parameters[0], db.ParamRepeated)
+        del(inst.parameters[0].repeats[0])
 
-        # S parameters simulation
-        inst = design.add_instance("ads_simulation:S_Param", name="SP1", origin=(0.0, 6.0))
+
+        # =========================================== Sparameters Data Item for Comparison ===========================================
+        if dataset_s2p_path is not None:
+            inst = design.add_instance("ads_simulation:TermG", name="TermG3", origin=(6.0, 3.0), angle=-90.0)
+            inst.parameters["Num"].value = "3"
+            inst.update_item_annotation()
+            design.add_wire([PointF(6.0, 3.0), PointF(7.0, 3.0)])
+
+            inst = design.add_instance("ads_datacmps:SnP", name="SnP1", origin=(7.0, 3.0))
+            inst.parameters["NumPorts"].value = "2"
+            inst.parameters["File"].value = dataset_s2p_path
+            inst.parameters["Type"].value = '"touchstone"'
+            inst.parameters["port_name_list"].value = "0 "
+            with de.db.ExpressionContext(design) as expr_context, db.Transaction(design) as trans:
+                expr_context.update_pcell_params(inst)
+                trans.commit()
+            inst.update_item_annotation()
+
+            design.add_wire([PointF(7.75, 3.0), PointF(9.0, 3.0)])
+            inst = design.add_instance("ads_simulation:TermG", name="TermG4", origin=(9.0, 3.0), angle=-90.0)
+            inst.parameters["Num"].value = "4"
+            inst.update_item_annotation()
+
+
+        # =========================================== S parameters simulation ===========================================
+        inst = design.add_instance("ads_simulation:S_Param", name="SP1", origin=(0.0, 3.0))
         inst.parameters["Start"].value = "fstart Hz"
         inst.parameters["Stop"].value = "fstop Hz"
         # inst.parameters["Step"].value = "(fstop-fstart)/npoints Hz"
@@ -595,36 +671,24 @@ def create_Schematic_ladderFilter_BVDlossy(library: de.Library, library_name: st
         inst.update_item_annotation()
 
 
-        # Variables 
-        inst = design.add_var_instance(name="VAR_Sweep", origin=(3.0, 6.0))
-        inst.vars.update({'fstart': fstart, 'fstop': fstop, 'npoints': npoints})
-        # Since inst.vars does not contain 'X', we need to remove the first repeat.
-        assert isinstance(inst.parameters[0], db.ParamRepeated)
-        del(inst.parameters[0].repeats[0])
-
-        inst = design.add_var_instance(name="VAR_BVDs", origin=(6.0, 6.0))
-        inst.vars.update({"c_0": c0_list, "ca": ca_list, "la": la_list, "fs": fs_list, "ra": ra_list, "rs": rs, "rp": rp, "qa": qa, "ql": ql, "qc": qc})
-        # Since inst.vars does not contain 'X', we need to remove the first repeat.
-        assert isinstance(inst.parameters[0], db.ParamRepeated)
-        del(inst.parameters[0].repeats[0])
-
-        inst = design.add_var_instance(name="VAR_BVDs_extra", origin=(6.0, 3.5))
-        inst.vars.update({"ladd_ser": ladd_ser_list, "ladd_shu": ladd_shu_list, "cadd_ser": cadd_ser_list, "cadd_shu": cadd_shu_list, "ladd_ground": ladd_ground_list})
-        # Since inst.vars does not contain 'X', we need to remove the first repeat.
-        assert isinstance(inst.parameters[0], db.ParamRepeated)
-        del(inst.parameters[0].repeats[0])
-
-        inst = design.add_var_instance(name="VAR_MNs", origin=(24.0, 6.0))
-        inst.vars.update({"input_l": input_l, "lfini1": lfini1, "lfini2": lfini2, "cfini1": cfini1, "cfini2": cfini2})
-        # Since inst.vars does not contain 'X', we need to remove the first repeat.
-        assert isinstance(inst.parameters[0], db.ParamRepeated)
-        del(inst.parameters[0].repeats[0])
-
-
         # FINISH
         transaction.commit()
 
     design.save_design()
+
+    # =========================================== EXTRAER EL NETLIST Y SIMULAR ===========================================
+    netlist = design.generate_netlist()
+
+    # Definimos dónde queremos que se guarde el archivo de datos (.ds)
+    output_dir = os.path.join(workspace_path, "data")
+    os.makedirs(output_dir, exist_ok=True)
+
+    simulator = eda_ads.CircuitSimulator()
+    
+    # Esto bloqueará la ejecución de Python hasta que la simulación termine
+    simulator.run_netlist(netlist, output_dir=output_dir)
+
+    # Limpiamos
     design = None
 
     return
@@ -919,20 +983,412 @@ def create_SchematicAndSymbol_lossyCOM(library: de.Library, library_name: str) -
     design.save_design()
     design = None
 
-def createDataDisplay_basic_Sparameters():
-    examples_path = pathlib.Path(__file__).parent.resolve()
-    dds_file = dds.new_dds_file("amplifier.ds", examples_path)
-    page = dds_file.pages[0]
+def create_Schematic_ladderFilter_COM(workspace_path: str, library_name: str, dataset_s2p_path: str, parameters: dict, list_COM: list[COM]) -> None:
+    assert de.version() >= 630
 
-    plot1 = page.add_plot()
-    plot1.add_traces(["dB(S11)"])
+    design = db.create_schematic(f"{library_name}:{CELL_FILTER_COM}:schematic")
+    design = db.open_design(f"{library_name}:{CELL_FILTER_COM}:schematic")
 
-    plot2 = page.add_plot()
-    plot2.add_traces(["dB(S21)"])
+    # READ Basic Ladder parameters
+    order = int(parameters["norder_ini"])
+    startCOM_type = parameters["typeseriesshunt_ini"]
+    endCOM_type = ""
 
-    plot3 = page.add_plot(traces="dB(S12)")
-    plot4 = page.add_plot(traces=["dB(S12)"])
+    # Determine the type of the last COM based on the order and the type of the first COM
+    if order % 2 == 0:
+        endCOM_type = "shunt" if startCOM_type == "series" else "series"
+    else:
+        endCOM_type = "series" if startCOM_type == "series" else "shunt"
 
-    page.align_grid([plot1, plot2, plot3, plot4], 2, 2)
+    current_COM_type = startCOM_type
 
-    dds_file.save("simple.dds")
+    # READ Matching network parameters
+    matching_network = parameters["matching_network"]
+    mntype1 = parameters["mntype1"]
+    input_l = parameters["input_l"]
+    lfini1 = parameters["lfini1"]
+    lfini2 = parameters["lfini2"]
+    cfini1 = parameters["cfini1"]
+    cfini2 = parameters["cfini2"]
+    
+    # Sweep parameters
+    fstart = parameters["fstart1"]
+    fstop = parameters["fstop1"]
+    npoints = parameters["npoints1"]
+    
+    # Grid positon parameters
+    xpos = 0.0
+    ypos = 0.0
+
+    x_margin = 1.0
+    y_margin = 1.0
+
+    num_COM = 0
+
+    with Transaction(design) as transaction:
+        # =========================================== Ladder Filter of Lossy COMs ===========================================
+        # TermG1
+        inst = design.add_instance("ads_simulation:TermG", name="TermG1", origin=(xpos, ypos), angle=-90.0)
+        inst.parameters["Num"].value = "1"
+        inst.update_item_annotation()
+
+        # INPUT MATCHING NETWORK: (need to know if first COM is series or shunt)
+        if startCOM_type == "series":
+            # Add shunt inductor at the input
+            d = Decimal(input_l)
+            exp10 = d.adjusted()   # exponente base 10
+
+            if exp10 > -10:
+                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+x_margin, y=ypos)])
+                xpos += x_margin
+
+                inst = design.add_instance("ads_rflib:L", name="L_input", origin=(xpos, ypos), angle=-90.0)
+                inst.parameters["L"].value = input_l + "H"
+                inst.update_item_annotation()
+                ypos -= 1.0
+
+                inst = design.add_instance("ads_rflib:GROUND", name="G"+str(num_COM), origin=(xpos, ypos), angle=-90.0, ads_annot=False)
+                ypos += 1.0
+
+            design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos + x_margin, y=ypos)])
+            xpos += x_margin
+
+        else:
+            # Add series inductor at the input
+            design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+x_margin, y=ypos)])
+            xpos += x_margin
+
+            inst = design.add_instance("ads_rflib:L", name="L_input", origin=(xpos, ypos))
+            inst.parameters["L"].value = input_l + "H"
+            inst.update_item_annotation()
+            xpos += 1.0
+
+            design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos + x_margin, y=ypos)])
+            xpos += x_margin
+
+        ypos = 0.0
+
+        # FIRST COM: Start COM ladder depending on if it is series or shunt
+        # Remember to put a GROUND if COM is shunt
+        design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+x_margin, y=ypos)])
+        xpos += x_margin
+
+        if current_COM_type == "series":
+            # SERIES COM start
+            angle_COM = 0.0
+        else:
+            # SHUNT COM start
+            angle_COM = -90.0
+            if not list_COM[num_COM].name.endswith("_1s"):
+                inst = design.add_instance("ads_rflib:GROUND", name="G"+str(num_COM+1), origin=(xpos, ypos-1.0), angle=-90.0, ads_annot=False)
+        
+        inst = design.add_instance((library_name, CELL_COM_LOSSY, "symbol"), origin=(xpos, ypos), name=list_COM[num_COM].name, angle=angle_COM)
+        inst.parameters["d"].value = str(list_COM[num_COM].d)
+        inst.parameters["Ap"].value = str(list_COM[num_COM].Ap)
+        inst.parameters["DigitsActiveIDT"].value = str(list_COM[num_COM].digitsN)
+        inst.parameters["DigitsReflector"].value = str(list_COM[num_COM].digitsNR)
+        inst.parameters["alpha"].value = str(list_COM[num_COM].alpha)
+        inst.update_item_annotation()
+
+        xpos += 1.0 if current_COM_type == "series" else 0.0
+        ypos -= 1.0 if current_COM_type == "shunt" else 0.0
+
+        duplicate = False
+
+        if list_COM[num_COM].name.endswith("_1s"):
+            duplicate = True
+            if current_COM_type == "series":
+                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+x_margin, y=ypos)])
+                xpos += x_margin
+                angle_COM = 0.0
+            else:
+                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos, y=ypos-y_margin)])
+                ypos -= y_margin
+                inst = design.add_instance("ads_rflib:GROUND", name="G"+str(num_COM), origin=(xpos, ypos-1.0), angle=-90.0, ads_annot=False)
+                angle_COM = -90.0
+
+        elif list_COM[num_COM].name.endswith("_1p"):
+            duplicate = True
+            if current_COM_type == "series":
+                xpos -= 1.0
+                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos, y=ypos-y_margin)])
+                design.add_wire([PointF(x=xpos + 1.0, y=ypos), PointF(x=xpos + 1.0, y=ypos-y_margin)])
+                ypos -= y_margin
+                angle_COM = 0.0
+            else:
+                ypos += 1.0
+                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos + x_margin, y=ypos)])
+                design.add_wire([PointF(x=xpos, y=ypos-y_margin), PointF(x=xpos + x_margin, y=ypos-y_margin)])
+                xpos += x_margin
+                angle_COM = -90.0
+
+        if duplicate:
+            num_COM += 1
+            inst = design.add_instance((library_name, CELL_COM_LOSSY, "symbol"), origin=(xpos, ypos), name=list_COM[num_COM].name, angle=angle_COM)
+            inst.parameters["d"].value = str(list_COM[num_COM].d)
+            inst.parameters["Ap"].value = str(list_COM[num_COM].Ap)
+            inst.parameters["DigitsActiveIDT"].value = str(list_COM[num_COM].digitsN)
+            inst.parameters["DigitsReflector"].value = str(list_COM[num_COM].digitsNR)
+            inst.parameters["alpha"].value = str(list_COM[num_COM].alpha)
+            inst.update_item_annotation()
+
+        xpos += 1.0 if current_COM_type == "series" and (list_COM[num_COM-1].name.endswith("_1p") or list_COM[num_COM-1].name.endswith("_1s")) else 0.0
+        ypos += 1.0 if (current_COM_type == "series" and list_COM[num_COM-1].name.endswith("_1p")) or (current_COM_type == "shunt" and list_COM[num_COM-1].name.endswith("_1s")) else 0.0
+
+        ypos = 0.0
+        design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+x_margin, y=ypos)])
+        xpos += x_margin
+        num_COM += 1
+
+        current_COM_type = "series" if current_COM_type == "shunt" else "shunt"
+
+
+        # COM LADDER: Add the rest of the ladder depending on the number of COMs
+        while num_COM < len(list_COM):
+            design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+x_margin, y=ypos)])
+            xpos += x_margin
+
+            if current_COM_type == "series":
+                # SERIES COM start
+                angle_COM = 0.0
+            else:
+                # SHUNT COM start
+                angle_COM = -90.0
+                if not list_COM[num_COM].name.endswith("_1s"):
+                    inst = design.add_instance("ads_rflib:GROUND", name="G"+str(num_COM+1), origin=(xpos, ypos-1.0), angle=-90.0, ads_annot=False)
+            
+            inst = design.add_instance((library_name, CELL_COM_LOSSY, "symbol"), origin=(xpos, ypos), name=list_COM[num_COM].name, angle=angle_COM)
+            inst.parameters["d"].value = str(list_COM[num_COM].d)
+            inst.parameters["Ap"].value = str(list_COM[num_COM].Ap)
+            inst.parameters["DigitsActiveIDT"].value = str(list_COM[num_COM].digitsN)
+            inst.parameters["DigitsReflector"].value = str(list_COM[num_COM].digitsNR)
+            inst.parameters["alpha"].value = str(list_COM[num_COM].alpha)
+            inst.update_item_annotation()
+
+            xpos += 1.0 if current_COM_type == "series" else 0.0
+            ypos -= 1.0 if current_COM_type == "shunt" else 0.0
+
+            duplicate = False
+
+            if list_COM[num_COM].name.endswith("_1s"):
+                duplicate = True
+                if current_COM_type == "series":
+                    design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+x_margin, y=ypos)])
+                    xpos += x_margin
+                    angle_COM = 0.0
+                else:
+                    design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos, y=ypos-y_margin)])
+                    ypos -= y_margin
+                    inst = design.add_instance("ads_rflib:GROUND", name="G"+str(num_COM), origin=(xpos, ypos-1.0), angle=-90.0, ads_annot=False)
+                    angle_COM = -90.0
+
+            elif list_COM[num_COM].name.endswith("_1p"):
+                duplicate = True
+                if current_COM_type == "series":
+                    xpos -= 1.0
+                    design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos, y=ypos-y_margin)])
+                    design.add_wire([PointF(x=xpos + 1.0, y=ypos), PointF(x=xpos + 1.0, y=ypos-y_margin)])
+                    ypos -= y_margin
+                    angle_COM = 0.0
+                else:
+                    ypos += 1.0
+                    design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos + x_margin, y=ypos)])
+                    design.add_wire([PointF(x=xpos, y=ypos-y_margin), PointF(x=xpos + x_margin, y=ypos-y_margin)])
+                    xpos += x_margin
+                    angle_COM = -90.0
+
+            if duplicate:
+                num_COM += 1
+                inst = design.add_instance((library_name, CELL_COM_LOSSY, "symbol"), origin=(xpos, ypos), name=list_COM[num_COM].name, angle=angle_COM)
+                inst.parameters["d"].value = str(list_COM[num_COM].d)
+                inst.parameters["Ap"].value = str(list_COM[num_COM].Ap)
+                inst.parameters["DigitsActiveIDT"].value = str(list_COM[num_COM].digitsN)
+                inst.parameters["DigitsReflector"].value = str(list_COM[num_COM].digitsNR)
+                inst.parameters["alpha"].value = str(list_COM[num_COM].alpha)
+                inst.update_item_annotation()
+
+            xpos += 1.0 if current_COM_type == "series" and (list_COM[num_COM-1].name.endswith("_1p") or list_COM[num_COM-1].name.endswith("_1s")) else 0.0
+            ypos += 1.0 if (current_COM_type == "series" and list_COM[num_COM-1].name.endswith("_1p")) or (current_COM_type == "shunt" and list_COM[num_COM-1].name.endswith("_1s")) else 0.0
+
+            ypos = 0.0
+            design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+x_margin, y=ypos)])
+            xpos += x_margin
+            num_COM += 1
+
+            current_COM_type = "series" if current_COM_type == "shunt" else "shunt"
+
+
+        # OUTPUT MATCHING NETWORK: (need to know if last COM is series or shunt)
+        design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+x_margin, y=ypos)])
+        xpos += x_margin
+
+        if matching_network == "0.0":
+            if endCOM_type == "series":
+                # Bobina en shunt (lfini2)
+                if float(lfini2) > 0.0:
+                    inst = design.add_instance("ads_rflib:L", name="L_output", origin=(xpos, ypos), angle=-90.0)
+                    inst.parameters["L"].value = lfini2 + "H"
+                    inst.update_item_annotation()
+                    ypos -= 1.0
+
+                    inst = design.add_instance("ads_rflib:GROUND", name="G"+str(num_COM), origin=(xpos, ypos), angle=-90.0, ads_annot=False)
+                    ypos += 1.0
+                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+x_margin, y=ypos)])
+                xpos += x_margin
+
+            else:
+                if float(lfini2) > 0.0:
+                    # Bobina en serie (lfini2)
+                    inst = design.add_instance("ads_rflib:L", name="L_output", origin=(xpos, ypos))
+                    inst.parameters["L"].value = lfini2 + "H"
+                    inst.update_item_annotation()
+                    xpos += 1.0
+
+                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+x_margin, y=ypos)])
+                xpos += x_margin
+        else:
+            # Add the matching network for the output
+            if mntype1 == "s":
+                if float(lfini1) > 0.0:
+                    # Bobina Serie (lfini1) seguida de Condensador Shunt (Cfini2)
+                    inst = design.add_instance("ads_rflib:L", name="L_output", origin=(xpos, ypos))
+                    inst.parameters["L"].value = lfini1 + "H"
+                    inst.update_item_annotation()
+                    xpos += 1.0
+                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos+x_margin, y=ypos)])
+                xpos += x_margin
+
+                if float(cfini2) > 0.0:
+                    inst = design.add_instance("ads_rflib:C", name="C_output", origin=(xpos, ypos), angle=-90.0)
+                    inst.parameters["C"].value = cfini2 + "F"
+                    inst.update_item_annotation()
+                    ypos -= 1.0
+
+                    inst = design.add_instance("ads_rflib:GROUND", name="G"+str(num_COM), origin=(xpos, ypos), angle=-90.0, ads_annot=False)
+                    ypos += 1.0
+                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos + x_margin, y=ypos)])
+                xpos += x_margin
+
+            else:
+                if float(cfini1) > 0.0:
+                    #  Condensador Shunt (Cfini1) seguido de Bobina Serie (lfini2)
+                    inst = design.add_instance("ads_rflib:C", name="C_output", origin=(xpos, ypos), angle=-90.0)
+                    inst.parameters["C"].value = cfini1 + "F"
+                    inst.update_item_annotation()
+                    ypos -= 1.0
+
+                    inst = design.add_instance("ads_rflib:GROUND", name="G"+str(num_COM), origin=(xpos, ypos), angle=-90.0, ads_annot=False)
+                    ypos += 1.0
+                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos + x_margin, y=ypos)])
+                xpos += x_margin
+
+                if float(lfini2) > 0.0:
+                    inst = design.add_instance("ads_rflib:L", name="L_output", origin=(xpos, ypos))
+                    inst.parameters["L"].value = lfini2 + "H"
+                    inst.update_item_annotation()
+                    xpos += 1.0
+                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos + x_margin, y=ypos)])
+                xpos += x_margin
+
+
+        # TermG2
+        inst = design.add_instance("ads_simulation:TermG", name="TermG2", origin=(xpos, ypos), angle=-90.0)
+        inst.parameters["Num"].value = "2"
+        inst.update_item_annotation()
+
+        # Variables 
+        inst = design.add_var_instance(name="VAR_Sweep", origin=(3.0, 3.0))
+        inst.vars.update({'fstart': fstart, 'fstop': fstop, 'npoints': npoints})
+        # Since inst.vars does not contain 'X', we need to remove the first repeat.
+        assert isinstance(inst.parameters[0], db.ParamRepeated)
+        del(inst.parameters[0].repeats[0])
+
+
+        # =========================================== Sparameters Data Item for Comparison ===========================================
+        if dataset_s2p_path is not None:
+            inst = design.add_instance("ads_simulation:TermG", name="TermG3", origin=(6.0, 3.0), angle=-90.0)
+            inst.parameters["Num"].value = "3"
+            inst.update_item_annotation()
+            design.add_wire([PointF(6.0, 3.0), PointF(7.0, 3.0)])
+
+            inst = design.add_instance("ads_datacmps:SnP", name="SnP1", origin=(7.0, 3.0))
+            inst.parameters["NumPorts"].value = "2"
+            inst.parameters["File"].value = dataset_s2p_path
+            inst.parameters["Type"].value = '"touchstone"'
+            inst.parameters["port_name_list"].value = "0 "
+            with de.db.ExpressionContext(design) as expr_context, db.Transaction(design) as trans:
+                expr_context.update_pcell_params(inst)
+                trans.commit()
+            inst.update_item_annotation()
+
+            design.add_wire([PointF(7.75, 3.0), PointF(9.0, 3.0)])
+            inst = design.add_instance("ads_simulation:TermG", name="TermG4", origin=(9.0, 3.0), angle=-90.0)
+            inst.parameters["Num"].value = "4"
+            inst.update_item_annotation()
+
+
+        # =========================================== S parameters simulation ===========================================
+        inst = design.add_instance("ads_simulation:S_Param", name="SP1", origin=(0.0, 3.0))
+        inst.parameters["Start"].value = "fstart Hz"
+        inst.parameters["Stop"].value = "fstop Hz"
+        # inst.parameters["Step"].value = "(fstop-fstart)/npoints Hz"
+        inst.parameters["Step"].value = "1e6 Hz"
+        inst.update_item_annotation()
+
+
+        # FINISH
+        transaction.commit()
+
+    design.save_design()
+
+    # =========================================== EXTRAER EL NETLIST Y SIMULAR ===========================================
+    netlist = design.generate_netlist()
+
+    # Definimos dónde queremos que se guarde el archivo de datos (.ds)
+    output_dir = os.path.join(workspace_path, "data")
+    os.makedirs(output_dir, exist_ok=True)
+
+    simulator = eda_ads.CircuitSimulator()
+    
+    # Esto bloqueará la ejecución de Python hasta que la simulación termine
+    simulator.run_netlist(netlist, output_dir=output_dir)
+
+    # Limpiamos
+    design = None
+
+    return
+
+def create_dds_and_plot_Sparameters(workspace_path: str) -> None:
+    # ========= 1) Crear el documento DDS =========
+    dataset_name = CELL_FILTER_COM
+    doc = dds.new_dds_file(dataset_name, workspace_path)
+    
+    # ========= 2) Configurar la página =========
+    page = doc.pages[0]
+    page.name = "S_Parameters"
+
+    # ========= 3) Crear Plot 1 (S11 y S33) =========
+    traces_plot1 = [
+        f"dB({dataset_name}_S(1,1))", 
+        f"dB({dataset_name}_S(3,3))"
+    ]
+    plot1 = page.add_plot((4000, 3000), traces_plot1, "Return Loss")
+
+    # ========= 4) Crear Plot 2 (S21 y S43) =========
+    traces_plot2 = [
+        f"dB({dataset_name}_S(2,1))", 
+        f"dB({dataset_name}_S(4,3))"
+    ]
+    plot2 = page.add_plot((4000, 3000), traces_plot2, "Insertion Loss")
+
+    # ========= 5) Posicionar Plot 2 para evitar solapamiento =========
+    spacing = 10  # Espacio entre gráficas
+    new_x = plot1.children_bbox.right + spacing
+    plot2.move(dds.Point(100, 0))
+
+    # ========= 6) Guardar (y DEJAR ABIERTO) =========
+    dds_file_path = os.path.join(workspace_path, f"{CELL_FILTER_COM}.dds")
+    doc.save(dds_file_path)
+    dds.close_dds_file(doc)
+    
+    print(f"Data Display creado con éxito y abierto en: {dds_file_path}")
