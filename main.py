@@ -34,7 +34,7 @@ importlib.reload(ads)
 importlib.reload(fs)
 importlib.reload(mat_bvd_com)
 
-# ============= VARIABLES GLOBALES ==============
+# ========================== VARIABLES GLOBALES ===========================
 class MplCanvas(FigureCanvas):
     def __init__(self, parent=None, width=5, height=4, dpi=100):
         # Usamos layout='constrained' o llamamos a tight_layout()
@@ -42,7 +42,7 @@ class MplCanvas(FigureCanvas):
         self.axes = self.fig.add_subplot(111)
         super().__init__(self.fig)
 
-# ============= CLASE PRINCIPAL DE LA APLICACIÓN ==============
+# ========================== CLASE PRINCIPAL DE LA APLICACIÓN ===========================
 
 class MainWindow(QMainWindow):
     def __init__(self):
