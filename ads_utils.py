@@ -286,7 +286,7 @@ def create_SchematicAndSymbol_lossyBVD(library: de.Library, library_name: str) -
     design.save_design()
     design = None
 
-def create_Schematic_ladderFilter_BVDlossy(library: de.Library, library_name: str, dataset_s2p_path: str, parameters: dict, list_BVD: list[BVD]) -> None:
+def create_Schematic_ladderFilter_BVDlossy(workspace_path: str, library_name: str, dataset_s2p_path: str, parameters: dict, list_BVD: list[BVD]) -> None:
     assert de.version() >= 630
 
     design = db.create_schematic(f"{library_name}:{CELL_FILTER_BVD}:schematic")
@@ -675,6 +675,20 @@ def create_Schematic_ladderFilter_BVDlossy(library: de.Library, library_name: st
         transaction.commit()
 
     design.save_design()
+
+    # =========================================== EXTRAER EL NETLIST Y SIMULAR ===========================================
+    netlist = design.generate_netlist()
+
+    # Definimos dónde queremos que se guarde el archivo de datos (.ds)
+    output_dir = os.path.join(workspace_path, "data")
+    os.makedirs(output_dir, exist_ok=True)
+
+    simulator = eda_ads.CircuitSimulator()
+    
+    # Esto bloqueará la ejecución de Python hasta que la simulación termine
+    simulator.run_netlist(netlist, output_dir=output_dir)
+
+    # Limpiamos
     design = None
 
     return
@@ -969,7 +983,7 @@ def create_SchematicAndSymbol_lossyCOM(library: de.Library, library_name: str) -
     design.save_design()
     design = None
 
-def create_Schematic_ladderFilter_COM(workspace_path: str, library: de.Library, library_name: str, dataset_s2p_path: str, parameters: dict, list_COM: list[COM]) -> None:
+def create_Schematic_ladderFilter_COM(workspace_path: str, library_name: str, dataset_s2p_path: str, parameters: dict, list_COM: list[COM]) -> None:
     assert de.version() >= 630
 
     design = db.create_schematic(f"{library_name}:{CELL_FILTER_COM}:schematic")
@@ -1327,9 +1341,7 @@ def create_Schematic_ladderFilter_COM(workspace_path: str, library: de.Library, 
 
     design.save_design()
 
-    # ===========================================
-    # 1. EXTRAER EL NETLIST Y SIMULAR
-    # ===========================================
+    # =========================================== EXTRAER EL NETLIST Y SIMULAR ===========================================
     netlist = design.generate_netlist()
 
     # Definimos dónde queremos que se guarde el archivo de datos (.ds)

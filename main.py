@@ -958,10 +958,15 @@ class MainWindow(QMainWindow):
                 QMessageBox.information(self, "Info", f"File .s2p corresponding to the selected network not found:\n{self.network_file_path}")
                 self.dataset_s2p_file_path = None
 
+            # Generate BVD and COM symbols
             ads.create_SchematicAndSymbol_lossyBVD(lib, library_name)
-            ads.create_Schematic_ladderFilter_BVDlossy(lib, library_name, self.dataset_s2p_file_path, self.network_parameters, list_BVD_ADSfilter)
             ads.create_SchematicAndSymbol_lossyCOM(lib, library_name)
-            ads.create_Schematic_ladderFilter_COM(full_workspace_path, lib, library_name, self.dataset_s2p_file_path, self.network_parameters, list_COM_ADSfilter)
+
+            # Generate BVD and COM LADDER FILTERS
+            ads.create_Schematic_ladderFilter_BVDlossy(full_workspace_path, library_name, self.dataset_s2p_file_path, self.network_parameters, list_BVD_ADSfilter)
+            ads.create_Schematic_ladderFilter_COM(full_workspace_path, library_name, self.dataset_s2p_file_path, self.network_parameters, list_COM_ADSfilter)
+            
+            # Generate BVD and COM filters' DDS pages
             ads.create_dds_and_plot_Sparameters(full_workspace_path)
 
         except Exception as e:
