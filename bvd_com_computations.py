@@ -159,16 +159,22 @@ def compute_list_COM(list_BVD: list[BVD], parameters: dict) -> list[COM]:
         com = compute_Nidt_Aperture_COM(com)
 
         # 3) ============================= CÁLCULO DE ALPHA =============================
-        com = compute_alpha_COM(bvd, com)
+        com = compute_alpha_COM(bvd, com) # Primera aproximació
 
         com.name = bvd.name.replace("BVD", "COM")
         com = compute_admitance_COM(com, parameters)
         
         list_COM.append(com)
+
+        # Recalcul pitch
+        # Rescalar apertura amb ratio fora banda (correcció en apertura (aquesta) o en nombre de digits)
+            # Si limita Ap, recalculem Ct i a partir d'aquesta calculem digitsN limitant Ap
+            # digitsN ha de quedar enter (rodonejar a l'alça o a la baixa) -> recalculo l'apertura 
+        # Recalcul alpha (a partir de l'alpha normalitzada i el canvi de l'apertura o a partir d'alpha fent el coeficient d'arrels d'apertura)
     
-    list_COM = reajuste_pitch(list_BVD, list_COM, parameters)
+    # list_COM = reajuste_pitch(list_BVD, list_COM, parameters)
     # list_COM = reajuste_alpha(list_BVD, list_COM, parameters)
-    list_COM = reajuste_digitsNR(list_BVD, list_COM, parameters)
+    # list_COM = reajuste_digitsNR(list_BVD, list_COM, parameters)
 
     return list_COM
 
