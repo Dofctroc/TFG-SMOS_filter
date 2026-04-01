@@ -149,16 +149,14 @@ def compute_list_COM(list_BVD: list[BVD], parameters: dict) -> list[COM]:
 
     for bvd in list_BVD:
         com = COM()
-        # 1) ============================= CÁLCULO DEL PITCH =============================
-        # Cálculo constantes de entrada y pitch directo
-        com.d = compute_pitch_COM(bvd)
+        # 1) ============= CÁLCULO DEL PITCH =============
+        com = compute_pitch_COM(bvd, com)
 
-        # 2) ======================== CÁLCULO DE APERTURE Y N_IDT ========================
-        # Cálculo constantes de entrada
+        # 2) ============= CÁLCULO DE APERTURE Y N_IDT =============
         com.Ct = bvd.cp
         com = compute_Nidt_Aperture_COM(com)
 
-        # 3) ============================= CÁLCULO DE ALPHA =============================
+        # 3) ============= CÁLCULO DE ALPHA =============
         com = compute_alpha_COM(bvd, com) # Primera aproximació
 
         com.name = bvd.name.replace("BVD", "COM")
@@ -167,6 +165,8 @@ def compute_list_COM(list_BVD: list[BVD], parameters: dict) -> list[COM]:
         list_COM.append(com)
 
         # Recalcul pitch
+        com = reajuste_pitch(bvd, com, parameters)
+
         # Rescalar apertura amb ratio fora banda (correcció en apertura (aquesta) o en nombre de digits)
             # Si limita Ap, recalculem Ct i a partir d'aquesta calculem digitsN limitant Ap
             # digitsN ha de quedar enter (rodonejar a l'alça o a la baixa) -> recalculo l'apertura 
@@ -178,10 +178,10 @@ def compute_list_COM(list_BVD: list[BVD], parameters: dict) -> list[COM]:
 
     return list_COM
 
-def compute_pitch_COM(bvd: BVD) -> float:
+def compute_pitch_COM(bvd: BVD, com: COM) -> float:
     k_fs = (2*np.pi*bvd.fs)/VP
-    p =  np.pi / (k_fs+K11_REAL+K12)
-    return p
+    com.d =  np.pi / (k_fs+K11_REAL+K12)
+    return com
 
 def compute_Nidt_Aperture_COM(com: COM) -> COM:
     # Primer cálculo de Aperture
@@ -302,14 +302,13 @@ def compute_admitance_COM(com: COM, parameters: dict) -> COM:
 
     return com
 
-def reajuste_pitch(list_BVD: list[BVD], list_COM: list[COM], parameters: dict) -> list[COM]:
-    for bvd, com in zip(list_BVD, list_COM):
-        f_correction = bvd.fs / com.fs 
-        com.d = com.d / f_correction
+def reajuste_pitch(bvd: BVD, com: COM, parameters: dict) -> list[COM]:
+    f_correction = bvd.fs / com.fs 
+    com.d = com.d / f_correction
 
-        com = compute_admitance_COM(com, parameters)
+    com = compute_admitance_COM(com, parameters)
 
-    return list_COM
+    return com
 
 def reajuste_alpha(list_BVD: list[BVD], list_COM: list[COM], parameters: dict) -> list[COM]:
     for bvd, com in zip(list_BVD, list_COM):
@@ -358,6 +357,7 @@ def reajuste_digitsNR(list_BVD: list[BVD], list_COM: list[COM], parameters: dict
         com = compute_admitance_COM(com, parameters) # Cálculo final definitivo
 
     return list_COM
+
 
 def duplicate_resonators(list_BVD: list[BVD], list_COM: list[COM], parameters: dict) -> tuple[list[BVD], list[COM]]:
     # Dejaremos la apertura tal cual la teniamos

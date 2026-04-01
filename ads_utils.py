@@ -1,6 +1,6 @@
 import os
 import shutil
-import pathlib
+from pathlib import Path
 from decimal import Decimal
 
 from keysight.ads import de
@@ -9,6 +9,7 @@ from keysight.ads.de import db_uu as db
 from keysight.ads.de.db import Transaction
 from keysight.edatoolbox import ads as eda_ads
 import keysight.ads.dds as dds
+import keysight.ads.dataset as dataset
 
 from bvd_com_computations import BVD
 from bvd_com_computations import COM
@@ -474,8 +475,7 @@ def create_Schematic_ladderFilter_BVDlossy(workspace_path: str, library_name: st
         inst = design.add_instance("ads_simulation:S_Param", name="SP1", origin=(0.0, 3.0))
         inst.parameters["Start"].value = "fstart Hz"
         inst.parameters["Stop"].value = "fstop Hz"
-        # inst.parameters["Step"].value = "(fstop-fstart)/npoints Hz"
-        inst.parameters["Step"].value = "1e6 Hz"
+        inst.parameters["Step"].value = "(fstop-fstart)/1000 Hz"
         inst.parameters["Sort"].value = "LINEAR START STEP "
         inst.parameters["CalcY"].value = "yes"
         inst.parameters["Freq"].value = " "
@@ -992,8 +992,7 @@ def create_Schematic_ladderFilter_COM(workspace_path: str, library_name: str, da
         inst = design.add_instance("ads_simulation:S_Param", name="SP1", origin=(0.0, 3.0))
         inst.parameters["Start"].value = "fstart Hz"
         inst.parameters["Stop"].value = "fstop Hz"
-        # inst.parameters["Step"].value = "(fstop-fstart)/npoints Hz"
-        inst.parameters["Step"].value = "1e6 Hz"
+        inst.parameters["Step"].value = "(fstop-fstart)/1000 Hz"
         inst.parameters["Sort"].value = "LINEAR START STEP "
         inst.parameters["CalcY"].value = "yes"
         inst.parameters["Freq"].value = " "
@@ -1089,8 +1088,7 @@ def create_Schematic_debugging(workspace_path: str, library_name: str, parameter
         inst = design.add_instance("ads_simulation:S_Param", name="SP1", origin=(0.0, 3.0))
         inst.parameters["Start"].value = "fstart Hz"
         inst.parameters["Stop"].value = "fstop Hz"
-        # inst.parameters["Step"].value = "(fstop-fstart)/npoints Hz"
-        inst.parameters["Step"].value = "1e6 Hz"
+        inst.parameters["Step"].value = "(fstop-fstart)/1000 Hz"
         inst.parameters["Sort"].value = "LINEAR START STEP "
         inst.parameters["CalcY"].value = "yes"
         inst.parameters["Freq"].value = " "
@@ -1119,7 +1117,7 @@ def create_Schematic_debugging(workspace_path: str, library_name: str, parameter
 
     return
 
-def create_DDS_and_plot_ladderFilter_COM(workspace_path: str) -> None:
+def create_DDS_ladderFilter_COM(workspace_path: str) -> None:
     # ========= 1) Crear el documento DDS =========
     dataset_name = CELL_FILTER_COM
     doc = dds.new_dds_file(dataset_name, workspace_path)
@@ -1150,7 +1148,8 @@ def create_DDS_and_plot_ladderFilter_COM(workspace_path: str) -> None:
     doc.save(dds_file_path)
     dds.close_dds_file(doc)
 
-def create_DDS_and_plot_debugging(workspace_path: str, order: int, startType: str) -> None:
+def create_extract_DDS_debugging(workspace_path: str, order: int, startType: str, 
+                                 list_BVD: list[BVD], list_COM: list[COM]) -> tuple[list[BVD], list[COM]]:
     # ========= 1) Crear el documento DDS =========
     dataset_name = CELL_DEBUG  # Asegúrate de que CELL_DEBUG esté definida
     doc = dds.new_dds_file(dataset_name, workspace_path)
@@ -1186,7 +1185,7 @@ def create_DDS_and_plot_debugging(workspace_path: str, order: int, startType: st
         
         # Nota: Si add_plot en tu versión de ADS espera un único string para el título,
         # te recomiendo cambiar esto a algo como: f"Y({port_num},{port_num}) BVD vs COM"
-        title = f"Admitance Comparison of {currentType}_{i}"
+        title = f"Admitance Comparison of {currentType}_{i+1}"
         plot = page.add_plot((plot_width, plot_height), traces, title)
         plot.move(dds.Point(x_pos, y_pos))
 
@@ -1196,6 +1195,63 @@ def create_DDS_and_plot_debugging(workspace_path: str, order: int, startType: st
     dds_file_path = os.path.join(workspace_path, f"{dataset_name}.dds")
     doc.save(dds_file_path)
     dds.close_dds_file(doc)
+
+    # Extract data
+    output_dir = os.path.join(workspace_path, "data")
+    output_data = dataset.open(Path(os.path.join(output_dir, f"{dataset_name}.ds")))
+    dataf = output_data["SP1.SP"].to_dataframe().reset_index()
+
+    print_data_txt(output_data, output_dir, dataset_name)
+    
+    idx = 1
+    f = dataf["freq"]
+    for bvd, com in zip(list_BVD, list_COM):
+        bvd.f = f
+        com.f = f
+        bvd.Y = dataf[f"Y[{idx},{idx}]"]
+        com.Y = dataf[f"Y[{idx+order},{idx+order}]"]
+        idx += 1
+
+    return list_BVD, list_COM
+
+def print_data_txt(output_data: any, output_dir: any, dataset_name: any) -> None:
+    # ==========================================
+    # VOLCAR CONTENIDO DEL DATASET A UN .TXT
+    # ==========================================
+    txt_file_path = os.path.join(output_dir, f"{dataset_name}_debug.txt")
+    
+    with open(txt_file_path, "w") as f:
+        f.write(f"=== CONTENIDO DEL DATASET: {dataset_name}.ds ===\n\n")
+        
+        # Obtenemos los nombres de las variables guardadas en el dataset
+        try:
+            # Forma estándar en la API de Keysight
+            variable_names = output_data.keys() 
+        except AttributeError:
+            # Por si en tu versión específica se accede como un diccionario de otra forma
+            variable_names = [v for v in dir(output_data) if not v.startswith("_")]
+
+        for var_name in variable_names:
+            f.write(f"Variable: {var_name}\n")
+            f.write("-" * 50 + "\n")
+            
+            try:
+                # Extraemos los datos matemáticos de esa variable
+                data_value = output_data[var_name]
+                
+                # Si es una variable compleja (como los Parámetros S), la pasamos a tabla
+                if hasattr(data_value, 'to_dataframe'):
+                    df = data_value.to_dataframe()
+                    f.write(df.to_string() + "\n")
+                else:
+                    # Si es un valor simple (un número o string)
+                    f.write(str(data_value) + "\n")
+            except Exception as e:
+                f.write(f"  [!] No se pudo leer el valor de esta variable: {e}\n")
+                
+            f.write("\n" + "=" * 50 + "\n\n")
+            
+    return
 
 def instantiate_rflib_element(design: object, element_type: str, name: str, origin: tuple[float, float], 
                               value: str, angle: float = 0.0, param_name: str = None) -> None:

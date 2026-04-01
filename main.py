@@ -930,13 +930,6 @@ class MainWindow(QMainWindow):
             
         # Crear los esquemáticos y los símbolos correspondientes
         try:
-            # Dependiendo del checkbox "duplicar resonadores"
-            if self.chb_duplicar.isChecked():
-                list_BVD_ADSfilter, list_COM_ADSfilter = mat_bvd_com.duplicate_resonators(self.list_BVD, self.list_COM, self.network_parameters)
-            else:
-                list_BVD_ADSfilter = self.list_BVD
-                list_COM_ADSfilter = self.list_COM
-
             # Buscamos si existe archivo .s2p con mismo nombre que el archivo network
             network_file_clean_path = pathlib.Path(self.network_file_path.strip('"'))
             datasets_folder = network_file_clean_path.parent.parent / "Datasets"
@@ -961,14 +954,26 @@ class MainWindow(QMainWindow):
             ads.create_SchematicAndSymbol_lossyBVD(lib, library_name)
             ads.create_SchematicAndSymbol_lossyCOM(lib, library_name)
 
+            # Debugging and tunning schematic and DDS
+            ads.create_Schematic_debugging(full_workspace_path, library_name, self.network_parameters, self.list_BVD, self.list_COM)
+            self.list_BVD, self.list_COM = ads.create_extract_DDS_debugging(full_workspace_path, len(self.list_BVD), self.network_parameters["typeseriesshunt_ini"], self.list_BVD, self.list_COM)
+            self.plot_admitancia()
+
+            # Adjust the BVD -> COM mapping with extracted data from debbuging
+            
+            # Dependiendo del checkbox "duplicar resonadores"
+            if self.chb_duplicar.isChecked():
+                list_BVD_ADSfilter, list_COM_ADSfilter = mat_bvd_com.duplicate_resonators(self.list_BVD, self.list_COM, self.network_parameters)
+            else:
+                list_BVD_ADSfilter = self.list_BVD
+                list_COM_ADSfilter = self.list_COM
+
             # Generate BVD and COM LADDER FILTERS
             ads.create_Schematic_ladderFilter_BVDlossy(full_workspace_path, library_name, self.dataset_s2p_file_path, self.network_parameters, list_BVD_ADSfilter)
             ads.create_Schematic_ladderFilter_COM(full_workspace_path, library_name, self.dataset_s2p_file_path, self.network_parameters, list_COM_ADSfilter)
-            ads.create_Schematic_debugging(full_workspace_path, library_name, self.network_parameters, self.list_BVD, self.list_COM)
 
             # Generate BVD and COM filters' DDS pages
-            ads.create_DDS_and_plot_ladderFilter_COM(full_workspace_path)
-            ads.create_DDS_and_plot_debugging(full_workspace_path, len(self.list_BVD), self.network_parameters["typeseriesshunt_ini"])
+            ads.create_DDS_ladderFilter_COM(full_workspace_path)
 
         except Exception as e:
             error_detallado = traceback.format_exc()
