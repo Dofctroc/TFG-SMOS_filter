@@ -19,6 +19,7 @@ CELL_BVD_LOSSY = "BVD_Lossy_symb"       # celda jerárquica (schematic+symbol)
 CELL_FILTER_BVD = "Ladder_Filter_BVD"   # celda jerárquica (schematic)
 CELL_COM_LOSSY = "COM_Lossy_symb"       # celda jerárquica (schematic+symbol)
 CELL_FILTER_COM = "Ladder_Filter_COM"   # celda jerárquica (schematic)
+CELL_DEBUG = "Debugging"
 
 def test_import_keysight_ads_de_example() -> None:
     try:
@@ -1021,7 +1022,104 @@ def create_Schematic_ladderFilter_COM(workspace_path: str, library_name: str, da
 
     return
 
-def create_dds_and_plot_Sparameters(workspace_path: str) -> None:
+def create_Schematic_debugging(workspace_path: str, library_name: str, parameters: dict, list_BVD: list[BVD], list_COM: list[COM]) -> None:
+    assert de.version() >= 630
+
+    design = db.create_schematic(f"{library_name}:{CELL_DEBUG}:schematic")
+    design = db.open_design(f"{library_name}:{CELL_DEBUG}:schematic")
+    
+    # Sweep parameters
+    fstart = parameters["fstart1"]
+    fstop = parameters["fstop1"]
+    npoints = parameters["npoints1"]
+    
+    # Grid positon parameters
+    xpos = 0.0
+    ypos = 0.0
+    num_BVD = 0
+    num_COM = 0
+
+    with Transaction(design) as transaction:
+        # =========================================== BVDs for debugging ===========================================
+        idx = 1
+        while num_BVD < len(list_BVD):
+            # Pongo un TermG según index
+            instantiate_term_g(design, f"TermG{idx}", idx, (xpos, ypos))
+
+            # Pongo el elemento BVD/COM
+            instantiate_BVD_in_schematic(design, library_name, list_BVD, num_BVD, 0.0, (xpos, ypos))
+            xpos += 1
+
+            # Pongo el terminal ground según index
+            instantiate_ground(design, f"G{idx}", (xpos, ypos))
+
+            # Recolocamos el pointer más adelante
+            xpos += 2
+            num_BVD += 1
+            idx += 1
+
+        # =========================================== COMs for debugging ===========================================
+        xpos = 0.0
+        ypos = -3.0
+        while num_COM < len(list_COM):
+            # Pongo un TermG según index
+            instantiate_term_g(design, f"TermG{idx}", idx, (xpos, ypos))
+
+            # Pongo el elemento BVD/COM
+            instantiate_COM_in_schematic(design, library_name, list_COM, num_COM, 0.0, (xpos, ypos))
+            xpos += 1
+
+            # Pongo el terminal ground según index
+            instantiate_ground(design, f"G{idx}", (xpos, ypos))
+
+            # Recolocamos el pointer más adelante
+            xpos += 2
+            num_COM += 1
+            idx += 1
+
+        # Variables 
+        inst = design.add_var_instance(name="VAR_Sweep", origin=(3.0, 3.0))
+        inst.vars.update({'fstart': fstart, 'fstop': fstop, 'npoints': npoints})
+        # Since inst.vars does not contain 'X', we need to remove the first repeat.
+        assert isinstance(inst.parameters[0], db.ParamRepeated)
+        del(inst.parameters[0].repeats[0])
+
+
+        # =========================================== S parameters simulation ===========================================
+        inst = design.add_instance("ads_simulation:S_Param", name="SP1", origin=(0.0, 3.0))
+        inst.parameters["Start"].value = "fstart Hz"
+        inst.parameters["Stop"].value = "fstop Hz"
+        # inst.parameters["Step"].value = "(fstop-fstart)/npoints Hz"
+        inst.parameters["Step"].value = "1e6 Hz"
+        inst.parameters["Sort"].value = "LINEAR START STEP "
+        inst.parameters["CalcY"].value = "yes"
+        inst.parameters["Freq"].value = " "
+        inst.update_item_annotation()
+
+
+        # FINISH
+        transaction.commit()
+
+    design.save_design()
+
+    # =========================================== EXTRAER EL NETLIST Y SIMULAR ===========================================
+    netlist = design.generate_netlist()
+
+    # Definimos dónde queremos que se guarde el archivo de datos (.ds)
+    output_dir = os.path.join(workspace_path, "data")
+    os.makedirs(output_dir, exist_ok=True)
+
+    simulator = eda_ads.CircuitSimulator()
+    
+    # Esto bloqueará la ejecución de Python hasta que la simulación termine
+    simulator.run_netlist(netlist, output_dir=output_dir)
+
+    # Limpiamos
+    design = None
+
+    return
+
+def create_DDS_and_plot_ladderFilter_COM(workspace_path: str) -> None:
     # ========= 1) Crear el documento DDS =========
     dataset_name = CELL_FILTER_COM
     doc = dds.new_dds_file(dataset_name, workspace_path)
@@ -1049,6 +1147,53 @@ def create_dds_and_plot_Sparameters(workspace_path: str) -> None:
 
     # ========= 6) Guardar (y DEJAR ABIERTO) =========
     dds_file_path = os.path.join(workspace_path, f"{CELL_FILTER_COM}.dds")
+    doc.save(dds_file_path)
+    dds.close_dds_file(doc)
+
+def create_DDS_and_plot_debugging(workspace_path: str, order: int, startType: str) -> None:
+    # ========= 1) Crear el documento DDS =========
+    dataset_name = CELL_DEBUG  # Asegúrate de que CELL_DEBUG esté definida
+    doc = dds.new_dds_file(dataset_name, workspace_path)
+    
+    # ========= 2) Configurar la página =========
+    page = doc.pages[0]
+    page.name = "S_Parameters"
+
+    # Definimos el tamaño de los plots, márgenes y límite de columnas
+    plot_width = 4000
+    plot_height = 3000
+    margin_x = 500  # Espaciado horizontal
+    margin_y = 500  # Espaciado vertical entre filas
+    max_cols = 3    # Máximo número de plots por fila
+
+    # --- CREACIÓN DE PLOTS ---
+    currentType = startType
+    for i in range(order):
+        port_num = i + 1  # Empieza en 1 y llega hasta 'order'
+        
+        # Calcular la fila y columna actual en base al límite de 3 columnas
+        row = i // max_cols
+        col = i % max_cols
+        
+        # Calcular coordenadas X e Y
+        x_pos = col * (plot_width + margin_x)
+        y_pos = row * (plot_height + margin_y)
+        
+        traces = [
+            f"dB({dataset_name}..Y({port_num},{port_num}))",
+            f"dB({dataset_name}..Y({port_num+order},{port_num+order}))"
+        ]
+        
+        # Nota: Si add_plot en tu versión de ADS espera un único string para el título,
+        # te recomiendo cambiar esto a algo como: f"Y({port_num},{port_num}) BVD vs COM"
+        title = f"Admitance Comparison of {currentType}_{i}"
+        plot = page.add_plot((plot_width, plot_height), traces, title)
+        plot.move(dds.Point(x_pos, y_pos))
+
+        currentType = "series" if currentType == "shunt" else "shunt"
+
+    # ========= 3) Guardar (y DEJAR ABIERTO) =========
+    dds_file_path = os.path.join(workspace_path, f"{dataset_name}.dds")
     doc.save(dds_file_path)
     dds.close_dds_file(doc)
 

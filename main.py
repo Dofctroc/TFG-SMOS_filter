@@ -918,7 +918,6 @@ class MainWindow(QMainWindow):
             if workspace is None: 
                 QMessageBox.critical(self, "Error", "Error: A workspace with that name already exists")
                 return
-
             lib = ads.create_a_library_and_add_it_to_the_workspace(workspace, library_name)
         except Exception as e:
             error_detallado = traceback.format_exc()
@@ -965,9 +964,11 @@ class MainWindow(QMainWindow):
             # Generate BVD and COM LADDER FILTERS
             ads.create_Schematic_ladderFilter_BVDlossy(full_workspace_path, library_name, self.dataset_s2p_file_path, self.network_parameters, list_BVD_ADSfilter)
             ads.create_Schematic_ladderFilter_COM(full_workspace_path, library_name, self.dataset_s2p_file_path, self.network_parameters, list_COM_ADSfilter)
-            
+            ads.create_Schematic_debugging(full_workspace_path, library_name, self.network_parameters, self.list_BVD, self.list_COM)
+
             # Generate BVD and COM filters' DDS pages
-            ads.create_dds_and_plot_Sparameters(full_workspace_path)
+            ads.create_DDS_and_plot_ladderFilter_COM(full_workspace_path)
+            ads.create_DDS_and_plot_debugging(full_workspace_path, len(self.list_BVD), self.network_parameters["typeseriesshunt_ini"])
 
         except Exception as e:
             error_detallado = traceback.format_exc()
