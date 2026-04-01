@@ -668,6 +668,9 @@ def create_Schematic_ladderFilter_BVDlossy(workspace_path: str, library_name: st
         inst.parameters["Stop"].value = "fstop Hz"
         # inst.parameters["Step"].value = "(fstop-fstart)/npoints Hz"
         inst.parameters["Step"].value = "1e6 Hz"
+        inst.parameters["Sort"].value = "LINEAR START STEP "
+        inst.parameters["CalcY"].value = "yes"
+        inst.parameters["Freq"].value = " "
         inst.update_item_annotation()
 
 
@@ -1333,6 +1336,9 @@ def create_Schematic_ladderFilter_COM(workspace_path: str, library_name: str, da
         inst.parameters["Stop"].value = "fstop Hz"
         # inst.parameters["Step"].value = "(fstop-fstart)/npoints Hz"
         inst.parameters["Step"].value = "1e6 Hz"
+        inst.parameters["Sort"].value = "LINEAR START STEP "
+        inst.parameters["CalcY"].value = "yes"
+        inst.parameters["Freq"].value = " "
         inst.update_item_annotation()
 
 
@@ -1369,22 +1375,20 @@ def create_dds_and_plot_Sparameters(workspace_path: str) -> None:
 
     # ========= 3) Crear Plot 1 (S11 y S33) =========
     traces_plot1 = [
-        f"dB({dataset_name}_S(1,1))", 
-        f"dB({dataset_name}_S(3,3))"
+        f"dB({dataset_name}..S(1,1))", 
+        f"dB({dataset_name}..S(3,3))"
     ]
     plot1 = page.add_plot((4000, 3000), traces_plot1, "Return Loss")
 
     # ========= 4) Crear Plot 2 (S21 y S43) =========
     traces_plot2 = [
-        f"dB({dataset_name}_S(2,1))", 
-        f"dB({dataset_name}_S(4,3))"
+        f"dB({dataset_name}..S(2,1))", 
+        f"dB({dataset_name}..S(4,3))"
     ]
     plot2 = page.add_plot((4000, 3000), traces_plot2, "Insertion Loss")
 
     # ========= 5) Posicionar Plot 2 para evitar solapamiento =========
-    spacing = 10  # Espacio entre gráficas
-    new_x = plot1.children_bbox.right + spacing
-    plot2.move(dds.Point(100, 0))
+    plot2.move(dds.Point(plot1.children_bbox.right, 0))
 
     # ========= 6) Guardar (y DEJAR ABIERTO) =========
     dds_file_path = os.path.join(workspace_path, f"{CELL_FILTER_COM}.dds")
