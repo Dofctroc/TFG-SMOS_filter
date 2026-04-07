@@ -1044,6 +1044,7 @@ def create_Schematic_debugging(workspace_path: str, library_name: str, parameter
         while num_BVD < len(list_BVD):
             # Pongo un TermG según index
             instantiate_term_g(design, f"TermG{idx}", idx, (xpos, ypos))
+            xpos = advance_x(design, xpos, ypos, 1.0)
 
             # Pongo el elemento BVD/COM
             instantiate_BVD_in_schematic(design, library_name, list_BVD, num_BVD, 0.0, (xpos, ypos))
@@ -1059,10 +1060,11 @@ def create_Schematic_debugging(workspace_path: str, library_name: str, parameter
 
         # =========================================== COMs for debugging ===========================================
         xpos = 0.0
-        ypos = -3.0
+        ypos = -4.0
         while num_COM < len(list_COM):
             # Pongo un TermG según index
             instantiate_term_g(design, f"TermG{idx}", idx, (xpos, ypos))
+            xpos = advance_x(design, xpos, ypos, 1.0)
 
             # Pongo el elemento BVD/COM
             instantiate_COM_in_schematic(design, library_name, list_COM, num_COM, 0.0, (xpos, ypos))
@@ -1148,8 +1150,7 @@ def create_DDS_ladderFilter_COM(workspace_path: str) -> None:
     doc.save(dds_file_path)
     dds.close_dds_file(doc)
 
-def create_extract_DDS_debugging(workspace_path: str, order: int, startType: str, 
-                                 list_BVD: list[BVD], list_COM: list[COM]) -> tuple[list[BVD], list[COM]]:
+def create_DDS_debugging(workspace_path: str, order: int, startType: str) -> None:
     # ========= 1) Crear el documento DDS =========
     dataset_name = CELL_DEBUG  # Asegúrate de que CELL_DEBUG esté definida
     doc = dds.new_dds_file(dataset_name, workspace_path)
@@ -1195,6 +1196,11 @@ def create_extract_DDS_debugging(workspace_path: str, order: int, startType: str
     dds_file_path = os.path.join(workspace_path, f"{dataset_name}.dds")
     doc.save(dds_file_path)
     dds.close_dds_file(doc)
+
+    return
+
+def extract_DDS_debugging(workspace_path: str, order: int,list_BVD: list[BVD], list_COM: list[COM]) -> tuple[list[BVD], list[COM]]:
+    dataset_name = CELL_DEBUG
 
     # Extract data
     output_dir = os.path.join(workspace_path, "data")

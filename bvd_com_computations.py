@@ -1,4 +1,5 @@
 import numpy as np
+import math
 from scipy.optimize import least_squares
 import copy
 
@@ -358,6 +359,44 @@ def reajuste_digitsNR(list_BVD: list[BVD], list_COM: list[COM], parameters: dict
 
     return list_COM
 
+def reajuste_Ap_Nidt(list_BVD: list[BVD], list_COM: list[COM]) -> list[COM]:
+    for bvd, com in zip(list_BVD, list_COM):
+        # Tomamos el primer valor de la admitancia (fuera banda)
+        nivel_bvd = abs(bvd.Y[0])
+        nivel_com = abs(com.Y[0])
+        AP_COEF_FACTOR = 1.15
+        coeficiente_FueraBanda = nivel_bvd / nivel_com * AP_COEF_FACTOR
+
+        # Reajustamos la Apertura
+        Ap_temp = com.Ap / coeficiente_FueraBanda
+
+        # Comprobamos que caiga en rango 
+        if not (AP_MIN < Ap_temp < AP_MAX):
+            # Recalculamos Ct a partir de la nueva Ap y Nidt            
+            lambda0 = 2*com.d
+            Nidt = com.digitsN/2
+            const = EPS_R * EPS_0 *np.exp(0.71866*np.tan(DUTY-0.5))
+            Ct = Ap_temp * lambda0 * (Nidt * const)
+            com.Ct = Ct
+
+            # Ajustamos la Ap al límite y recalculamos Nidt y redondeamos
+            # Recalculamos la Ap por el redondeo de Nidt
+            if Ap_temp < AP_MIN:
+                Ap_temp = AP_MIN
+                Nidt = math.floor(Ct / (Ap_temp * lambda0 * const))
+                com.digitsN = Nidt * 2
+                com.Ap = Ct / (Nidt * const) / lambda0
+
+            else:
+                Ap_temp = AP_MAX
+                Nidt = math.ceil(Ct / (Ap_temp * lambda0 * const))
+                com.digitsN = Nidt * 2
+                com.Ap = Ct / (Nidt * const) / lambda0
+        
+        else:
+            com.Ap = Ap_temp
+
+    return list_COM
 
 def duplicate_resonators(list_BVD: list[BVD], list_COM: list[COM], parameters: dict) -> tuple[list[BVD], list[COM]]:
     # Dejaremos la apertura tal cual la teniamos
