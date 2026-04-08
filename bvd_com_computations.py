@@ -54,7 +54,7 @@ K11 = -82053.9 - 1j*450
 K12 = 59340.0
 
 DIGITS_NR = 40
-NR = DIGITS_NR*2
+NR = DIGITS_NR/2
 DIGITS_NIDT_MIN = 100
 DIGITS_NIDT_MAX = 400
 AP_MIN = 10
@@ -158,6 +158,7 @@ def compute_list_COM(list_BVD: list[BVD], parameters: dict) -> list[COM]:
         com = compute_Nidt_Aperture_COM(com)
 
         # 3) ============= CÁLCULO DE ALPHA =============
+        com.digitsNR = DIGITS_NR
         com = compute_alpha_COM(bvd, com) # Primera aproximació
 
         com.name = bvd.name.replace("BVD", "COM")
@@ -223,6 +224,7 @@ def compute_alpha_COM(bvd: BVD, com: COM) -> COM:
     k0 = np.pi/com.d
     lambda0 = 2*com.d
     Nidt = com.digitsN/2
+    Nrefl = com.digitsNR/2
     Ap = com.Ap
     k_fp = (2*np.pi*bvd.fp)/VP
 
@@ -231,7 +233,7 @@ def compute_alpha_COM(bvd: BVD, com: COM) -> COM:
     pe = (beta-delta-K11)/K12
 
     theta = beta*Nidt*lambda0/2
-    theta_R = beta*NR*lambda0/2
+    theta_R = beta*Nrefl*lambda0/2
 
     z_0 = (1-pe)/(1+pe)*Z0_PRIMA
     z_0R = (1+pe)/(1-pe)*Z0_PRIMA
@@ -245,7 +247,7 @@ def compute_alpha_COM(bvd: BVD, com: COM) -> COM:
 
     # Resolución de la ecuación cuadrática
     # Nos quedamos solo con la solución positiva
-    phi = abs(np.sqrt(-1/R_SHUNT - A / (B + D/C)))
+    phi = abs(np.sqrt((-1/R_SHUNT - A) / (B + D/C)))
 
     # Cálculo final de alpha
     alpha = phi / (2*Nidt*lambda0*np.sqrt(Z0_PRIMA))
@@ -311,16 +313,6 @@ def reajuste_pitch(bvd: BVD, com: COM, parameters: dict) -> list[COM]:
 
     return com
 
-def reajuste_alpha(list_BVD: list[BVD], list_COM: list[COM], parameters: dict) -> list[COM]:
-    for bvd, com in zip(list_BVD, list_COM):
-        f_correction = bvd.fp / com.fp 
-        com.alpha_n = com.alpha_n / f_correction
-        com.alpha = com.alpha_n * np.sqrt(com.Ap)
-
-        com = compute_admitance_COM(com, parameters)
-
-    return list_COM
-
 def reajuste_digitsNR(list_BVD: list[BVD], list_COM: list[COM], parameters: dict) -> list[COM]:
     for bvd, com in zip(list_BVD, list_COM):
         # 1. Definimos la máscara para frecuencias <= fs
@@ -365,10 +357,10 @@ def reajuste_Ap_Nidt(list_BVD: list[BVD], list_COM: list[COM]) -> list[COM]:
         nivel_bvd = abs(bvd.Y[0])
         nivel_com = abs(com.Y[0])
         AP_COEF_FACTOR = 1.15
-        coeficiente_FueraBanda = nivel_bvd / nivel_com * AP_COEF_FACTOR
+        coeficiente_FueraBanda = nivel_bvd / nivel_com
 
         # Reajustamos la Apertura
-        Ap_temp = com.Ap / coeficiente_FueraBanda
+        Ap_temp = com.Ap / (coeficiente_FueraBanda * AP_COEF_FACTOR)
 
         # Comprobamos que caiga en rango 
         if not (AP_MIN < Ap_temp < AP_MAX):
@@ -395,7 +387,17 @@ def reajuste_Ap_Nidt(list_BVD: list[BVD], list_COM: list[COM]) -> list[COM]:
         
         else:
             com.Ap = Ap_temp
+            
+        # if "shunt" in com.name:
+        #     com.alpha = com.alpha * coeficiente_FueraBanda
+        # else:
+        #     com.alpha = com.alpha / (coeficiente_FueraBanda / 1.005)
 
+    return list_COM
+
+def reajuste_alpha(list_BVD: list[BVD], list_COM: list[COM]) -> list[COM]:
+    for bvd, com in zip(list_BVD, list_COM):
+        com = compute_alpha_COM(bvd, com)
     return list_COM
 
 def duplicate_resonators(list_BVD: list[BVD], list_COM: list[COM], parameters: dict) -> tuple[list[BVD], list[COM]]:
