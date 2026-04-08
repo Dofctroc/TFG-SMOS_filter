@@ -959,7 +959,7 @@ class MainWindow(QMainWindow):
             self.list_BVD, self.list_COM = ads.extract_DDS_debugging(full_workspace_path, len(self.list_BVD), self.list_BVD, self.list_COM)
 
             # Adjust the BVD -> COM mapping with extracted data from debbuging
-            # self.list_COM = mat_bvd_com.reajuste_Ap_Nidt(self.list_BVD, self.list_COM)
+            self.list_COM = mat_bvd_com.reajuste_Ap_Nidt(self.list_BVD, self.list_COM)
             ads.create_Schematic_debugging(full_workspace_path, library_name, self.network_parameters, self.list_BVD, self.list_COM)
             ads.create_DDS_debugging(full_workspace_path, len(self.list_BVD), self.network_parameters["typeseriesshunt_ini"])
             self.list_BVD, self.list_COM = ads.extract_DDS_debugging(full_workspace_path, len(self.list_BVD), self.list_BVD, self.list_COM)
