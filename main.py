@@ -893,8 +893,9 @@ class MainWindow(QMainWindow):
         # Obtener el nombre del workspace del input
         workspace_name = self.input_workspace_name.text().strip()
         if not workspace_name:
-            QMessageBox.critical(self, "Error", "Error: Input a workspace name first")
-            return
+            # QMessageBox.critical(self, "Error", "Error: Input a workspace name first")
+            # return
+            workspace_name = "Try_wkpc"
 
         # Crear la ruta completa del workspace
         full_workspace_path = self.workspace_path + "/" + workspace_name
@@ -950,19 +951,21 @@ class MainWindow(QMainWindow):
                 QMessageBox.information(self, "Info", f"File .s2p corresponding to the selected network not found:\n{self.network_file_path}")
                 self.dataset_s2p_file_path = None
 
-            # Generate BVD and COM symbols
+            # =============================================== 1) Generate BVD and COM symbols ===============================================
             ads.create_SchematicAndSymbol_lossyBVD(lib, library_name)
             ads.create_SchematicAndSymbol_lossyCOM(lib, library_name)
 
-            # Debugging and tunning schematic and DDS
+            # ========================================== 2) Debugging and tunning schematic and DDS ==========================================
+            # Primeramente recalculamos pitch
+            self.list_COM = mat_bvd_com.reajuste_pitch(self.list_BVD, self.list_COM, self.network_parameters)
             ads.create_Schematic_debugging(full_workspace_path, library_name, self.network_parameters, self.list_BVD, self.list_COM)
-            self.list_BVD, self.list_COM = ads.extract_DDS_debugging(full_workspace_path, len(self.list_BVD), self.list_BVD, self.list_COM)
+            self.list_BVD, self.list_COM = ads.extract_data_debugging(full_workspace_path, len(self.list_BVD), self.list_BVD, self.list_COM)
 
-            # Adjust the BVD -> COM mapping with extracted data from debbuging
-            self.list_COM = mat_bvd_com.reajuste_Ap_Nidt(self.list_BVD, self.list_COM)
+            # ============================== 3) Adjust the BVD -> COM mapping with extracted data from debbuging ==============================
+            self.list_COM = mat_bvd_com.reajuste_postDebugging(self.list_BVD, self.list_COM)
             ads.create_Schematic_debugging(full_workspace_path, library_name, self.network_parameters, self.list_BVD, self.list_COM)
             ads.create_DDS_debugging(full_workspace_path, len(self.list_BVD), self.network_parameters["typeseriesshunt_ini"])
-            self.list_BVD, self.list_COM = ads.extract_DDS_debugging(full_workspace_path, len(self.list_BVD), self.list_BVD, self.list_COM)
+            self.list_BVD, self.list_COM = ads.extract_data_debugging(full_workspace_path, len(self.list_BVD), self.list_BVD, self.list_COM)
             self.plot_admitancia()
 
             # Dependiendo del checkbox "duplicar resonadores"
@@ -972,11 +975,11 @@ class MainWindow(QMainWindow):
                 list_BVD_ADSfilter = self.list_BVD
                 list_COM_ADSfilter = self.list_COM
 
-            # Generate BVD and COM LADDER FILTERS
+            # ============================================ 4) Generate BVD and COM LADDER FILTERS ============================================
             ads.create_Schematic_ladderFilter_BVDlossy(full_workspace_path, library_name, self.dataset_s2p_file_path, self.network_parameters, list_BVD_ADSfilter)
             ads.create_Schematic_ladderFilter_COM(full_workspace_path, library_name, self.dataset_s2p_file_path, self.network_parameters, list_COM_ADSfilter)
 
-            # Generate BVD and COM filters' DDS pages
+            # ========================================== 5) Generate BVD and COM filters' DDS pages ==========================================
             ads.create_DDS_ladderFilter_COM(full_workspace_path)
 
         except Exception as e:

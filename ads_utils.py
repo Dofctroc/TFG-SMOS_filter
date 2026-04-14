@@ -1199,7 +1199,7 @@ def create_DDS_debugging(workspace_path: str, order: int, startType: str) -> Non
 
     return
 
-def extract_DDS_debugging(workspace_path: str, order: int,list_BVD: list[BVD], list_COM: list[COM]) -> tuple[list[BVD], list[COM]]:
+def extract_data_debugging(workspace_path: str, order: int,list_BVD: list[BVD], list_COM: list[COM]) -> tuple[list[BVD], list[COM]]:
     dataset_name = CELL_DEBUG
 
     # Extract data

@@ -72,6 +72,10 @@ R_SERIE = 0.1
 N_POINTS_GRAPH = int(1e4)
 R_TERMG = 50
 
+# COEFICIENTES "EMPÍRICOS" PUEDEN DAR PROBLEMAS
+AP_COEF_FACTOR = 1.15
+ALPHA_FACTOR = 1.018
+
 def create_list_BVD(parametersBVD: dict) -> list[BVD]:
     list_BVD: list[BVD] = []
 
@@ -166,9 +170,6 @@ def compute_list_COM(list_BVD: list[BVD], parameters: dict) -> list[COM]:
         
         list_COM.append(com)
 
-        # Recalcul pitch
-        com = reajuste_pitch(bvd, com, parameters)
-
         # Rescalar apertura amb ratio fora banda (correcció en apertura (aquesta) o en nombre de digits)
             # Si limita Ap, recalculem Ct i a partir d'aquesta calculem digitsN limitant Ap
             # digitsN ha de quedar enter (rodonejar a l'alça o a la baixa) -> recalculo l'apertura 
@@ -250,7 +251,7 @@ def compute_alpha_COM(bvd: BVD, com: COM) -> COM:
     phi = abs(np.sqrt((-1/R_SHUNT - A) / (B + D/C)))
 
     # Cálculo final de alpha
-    alpha = phi / (2*Nidt*lambda0*np.sqrt(Z0_PRIMA))
+    alpha = phi / (2*Nidt*lambda0*np.sqrt(Z0_PRIMA)) * ALPHA_FACTOR
     alpha_n = alpha / np.sqrt(Ap)
 
     # Assign values
@@ -305,58 +306,18 @@ def compute_admitance_COM(com: COM, parameters: dict) -> COM:
 
     return com
 
-def reajuste_pitch(bvd: BVD, com: COM, parameters: dict) -> list[COM]:
-    f_correction = bvd.fs / com.fs 
-    com.d = com.d / f_correction
-
-    com = compute_admitance_COM(com, parameters)
-
-    return com
-
-def reajuste_digitsNR(list_BVD: list[BVD], list_COM: list[COM], parameters: dict) -> list[COM]:
+def reajuste_pitch(list_BVD: list[BVD], list_COM: list[COM], parameters: dict) -> list[COM]:
     for bvd, com in zip(list_BVD, list_COM):
-        # 1. Definimos la máscara para frecuencias <= fs
-        mask = bvd.f <= bvd.fs
-        f_target = bvd.f[mask]
-        Y_target = bvd.Y[mask]
-
-        # 2. Definimos la función de error que usará least_squares
-        def objetivo(nr_val):
-            # Actualizamos el valor de NR en el objeto COM (nr_val viene como array de 1 elemento)
-            com.digitsNR = nr_val[0]
-            
-            # Recalculamos la admitancia con el nuevo NR
-            # Asumimos que esta función actualiza com.Y internamente
-            com_actualizado = compute_admitance_COM(com, parameters)
-            
-            # El error es la diferencia entre la curva real y la calculada
-            # Solo comparamos en el rango de frecuencias definido por la máscara
-            error = Y_target - com_actualizado.Y[mask]
-            
-            # Si Y es compleja (admitancia), devolvemos el valor absoluto o separamos real/imag
-            # least_squares requiere valores reales, así que devolvemos la magnitud del error
-            return np.abs(error)
-
-        # 3. Ejecutamos la optimización
-        # x0 es el valor inicial de NR que ya tiene el objeto
-        res = least_squares(
-            objetivo, 
-            x0=[com.digitsNR], 
-            bounds=(10, 100)  # Opcional: evita que NR sea negativo si no tiene sentido físico
-        )
-
-        # 4. Aplicamos el resultado final optimizado al objeto
-        com.digitsNR = round(res.x[0])
-        com = compute_admitance_COM(com, parameters) # Cálculo final definitivo
+        f_correction = bvd.fs / com.fs 
+        com.d = com.d / f_correction
 
     return list_COM
 
-def reajuste_Ap_Nidt(list_BVD: list[BVD], list_COM: list[COM]) -> list[COM]:
+def reajuste_postDebugging(list_BVD: list[BVD], list_COM: list[COM]) -> list[COM]:
     for bvd, com in zip(list_BVD, list_COM):
         # Tomamos el primer valor de la admitancia (fuera banda)
         nivel_bvd = abs(bvd.Y[0])
         nivel_com = abs(com.Y[0])
-        AP_COEF_FACTOR = 1.1
         coeficiente_FueraBanda = nivel_bvd / nivel_com
 
         # Reajustamos la Apertura
@@ -388,16 +349,16 @@ def reajuste_Ap_Nidt(list_BVD: list[BVD], list_COM: list[COM]) -> list[COM]:
             # Si cae dentro del rango [AP_MIN, AP_MAX]
             com.Ap = Ap_temp
 
-    list_COM = reajuste_alpha(list_BVD, list_COM)
+    list_COM = reajuste_alpha(list_BVD, list_COM, coeficiente_FueraBanda)
 
     return list_COM
 
-def reajuste_alpha(list_BVD: list[BVD], list_COM: list[COM]) -> list[COM]:
+def reajuste_alpha(list_BVD: list[BVD], list_COM: list[COM], coeficiente: float) -> list[COM]:
     for bvd, com in zip(list_BVD, list_COM):
         com = compute_alpha_COM(bvd, com)
     return list_COM
 
-def duplicate_resonators(list_BVD: list[BVD], list_COM: list[COM], parameters: dict) -> tuple[list[BVD], list[COM]]:
+def duplicate_resonators(list_BVD: list[BVD], list_COM: list[COM], parameters: dict) -> list[COM]:
     # Dejaremos la apertura tal cual la teniamos
     # Doblaremos en serie si    Nidt > max
     # Doblaremos en paralelo si Nidt < min
@@ -511,6 +472,44 @@ def Zl(f: list[complex], L: float, Q=None):
 
 
 # ======================================== DEPRECATED ========================================
+def reajuste_digitsNR(list_BVD: list[BVD], list_COM: list[COM], parameters: dict) -> list[COM]:
+    for bvd, com in zip(list_BVD, list_COM):
+        # 1. Definimos la máscara para frecuencias <= fs
+        mask = bvd.f <= bvd.fs
+        f_target = bvd.f[mask]
+        Y_target = bvd.Y[mask]
+
+        # 2. Definimos la función de error que usará least_squares
+        def objetivo(nr_val):
+            # Actualizamos el valor de NR en el objeto COM (nr_val viene como array de 1 elemento)
+            com.digitsNR = nr_val[0]
+            
+            # Recalculamos la admitancia con el nuevo NR
+            # Asumimos que esta función actualiza com.Y internamente
+            com_actualizado = compute_admitance_COM(com, parameters)
+            
+            # El error es la diferencia entre la curva real y la calculada
+            # Solo comparamos en el rango de frecuencias definido por la máscara
+            error = Y_target - com_actualizado.Y[mask]
+            
+            # Si Y es compleja (admitancia), devolvemos el valor absoluto o separamos real/imag
+            # least_squares requiere valores reales, así que devolvemos la magnitud del error
+            return np.abs(error)
+
+        # 3. Ejecutamos la optimización
+        # x0 es el valor inicial de NR que ya tiene el objeto
+        res = least_squares(
+            objetivo, 
+            x0=[com.digitsNR], 
+            bounds=(10, 100)  # Opcional: evita que NR sea negativo si no tiene sentido físico
+        )
+
+        # 4. Aplicamos el resultado final optimizado al objeto
+        com.digitsNR = round(res.x[0])
+        com = compute_admitance_COM(com, parameters) # Cálculo final definitivo
+
+    return list_COM
+
 def compute_filter_admitance(list: list, parameters: dict) -> FilterResponse:
     # General Parameter
     start_type = parameters["typeseriesshunt_ini"]
