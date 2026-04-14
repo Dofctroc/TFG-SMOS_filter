@@ -970,14 +970,15 @@ class MainWindow(QMainWindow):
 
             # Dependiendo del checkbox "duplicar resonadores"
             if self.chb_duplicar.isChecked():
-                list_BVD_ADSfilter, list_COM_ADSfilter = mat_bvd_com.duplicate_resonators(self.list_BVD, self.list_COM, self.network_parameters)
+                list_COM_duplicated = mat_bvd_com.duplicate_resonators(self.list_COM, self.network_parameters)
+                ads.create_Schematic_debugging(full_workspace_path, library_name, self.network_parameters, self.list_BVD, list_COM_duplicated)
+                ads.create_DDS_debugging(full_workspace_path, len(self.list_BVD), self.network_parameters["typeseriesshunt_ini"])
             else:
-                list_BVD_ADSfilter = self.list_BVD
-                list_COM_ADSfilter = self.list_COM
+                list_COM_duplicated = self.list_COM
 
             # ============================================ 4) Generate BVD and COM LADDER FILTERS ============================================
-            ads.create_Schematic_ladderFilter_BVDlossy(full_workspace_path, library_name, self.dataset_s2p_file_path, self.network_parameters, list_BVD_ADSfilter)
-            ads.create_Schematic_ladderFilter_COM(full_workspace_path, library_name, self.dataset_s2p_file_path, self.network_parameters, list_COM_ADSfilter)
+            ads.create_Schematic_ladderFilter_BVDlossy(full_workspace_path, library_name, self.dataset_s2p_file_path, self.network_parameters, self.list_BVD)
+            ads.create_Schematic_ladderFilter_COM(full_workspace_path, library_name, self.dataset_s2p_file_path, self.network_parameters, list_COM_duplicated)
 
             # ========================================== 5) Generate BVD and COM filters' DDS pages ==========================================
             ads.create_DDS_ladderFilter_COM(full_workspace_path)

@@ -1070,11 +1070,26 @@ def create_Schematic_debugging(workspace_path: str, library_name: str, parameter
             instantiate_COM_in_schematic(design, library_name, list_COM, num_COM, 0.0, (xpos, ypos))
             xpos += 1
 
+            if list_COM[num_COM].name.endswith("_1s"):
+                num_COM += 1
+                xpos = advance_x(design, xpos, ypos, 1.0)
+                instantiate_COM_in_schematic(design, library_name, list_COM, num_COM, 0.0, (xpos, ypos))
+                xpos += 1
+
+            elif list_COM[num_COM].name.endswith("_1p"):
+                xpos -= 1
+                num_COM += 1
+                ypos = advance_y(design, xpos, ypos, -2.0)
+                instantiate_COM_in_schematic(design, library_name, list_COM, num_COM, 0.0, (xpos, ypos))
+                xpos += 1
+                ypos = advance_y(design, xpos, ypos, 2.0) - 2.0
+
             # Pongo el terminal ground según index
             instantiate_ground(design, f"G{idx}", (xpos, ypos))
 
             # Recolocamos el pointer más adelante
             xpos += 2
+            ypos = -4.0
             num_COM += 1
             idx += 1
 
@@ -1301,6 +1316,10 @@ def instantiate_COM_in_schematic(design: object, library_name: str, list_COM: li
 def advance_x(design, xpos: float, ypos: float, dx: float) -> float:
     design.add_wire([PointF(xpos, ypos), PointF(xpos + dx, ypos)])
     return xpos + dx
+
+def advance_y(design, xpos: float, ypos: float, dy: float) -> float:
+    design.add_wire([PointF(xpos, ypos), PointF(xpos, ypos + dy)])
+    return ypos + dy
 
 def instantiate_ground(design, name: str, origin: tuple[float, float]) -> None:
     design.add_instance("ads_rflib:GROUND", name=name, origin=origin, angle=-90.0, ads_annot=False)

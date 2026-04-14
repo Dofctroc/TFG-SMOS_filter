@@ -170,18 +170,9 @@ def compute_list_COM(list_BVD: list[BVD], parameters: dict) -> list[COM]:
         
         list_COM.append(com)
 
-        # Rescalar apertura amb ratio fora banda (correcció en apertura (aquesta) o en nombre de digits)
-            # Si limita Ap, recalculem Ct i a partir d'aquesta calculem digitsN limitant Ap
-            # digitsN ha de quedar enter (rodonejar a l'alça o a la baixa) -> recalculo l'apertura 
-        # Recalcul alpha (a partir de l'alpha normalitzada i el canvi de l'apertura o a partir d'alpha fent el coeficient d'arrels d'apertura)
-    
-    # list_COM = reajuste_pitch(list_BVD, list_COM, parameters)
-    # list_COM = reajuste_alpha(list_BVD, list_COM, parameters)
-    # list_COM = reajuste_digitsNR(list_BVD, list_COM, parameters)
-
     return list_COM
 
-def compute_pitch_COM(bvd: BVD, com: COM) -> float:
+def compute_pitch_COM(bvd: BVD, com: COM) -> COM:
     k_fs = (2*np.pi*bvd.fs)/VP
     com.d =  np.pi / (k_fs+K11_REAL+K12)
     return com
@@ -349,46 +340,25 @@ def reajuste_postDebugging(list_BVD: list[BVD], list_COM: list[COM]) -> list[COM
             # Si cae dentro del rango [AP_MIN, AP_MAX]
             com.Ap = Ap_temp
 
-    list_COM = reajuste_alpha(list_BVD, list_COM, coeficiente_FueraBanda)
+    list_COM = recompute_alpha(list_BVD, list_COM)
 
     return list_COM
 
-def reajuste_alpha(list_BVD: list[BVD], list_COM: list[COM], coeficiente: float) -> list[COM]:
+def recompute_alpha(list_BVD: list[BVD], list_COM: list[COM]) -> list[COM]:
     for bvd, com in zip(list_BVD, list_COM):
         com = compute_alpha_COM(bvd, com)
     return list_COM
 
-def duplicate_resonators(list_BVD: list[BVD], list_COM: list[COM], parameters: dict) -> list[COM]:
+def duplicate_resonators(list_COM: list[COM], parameters: dict) -> list[COM]:
     # Dejaremos la apertura tal cual la teniamos
     # Doblaremos en serie si    Nidt > max
     # Doblaremos en paralelo si Nidt < min
-    list_BVD_duplicados: list[BVD] = []
     list_COM_duplicados: list[COM] = []
 
     idx = 0
     for com in list_COM:
-        bvd_base = list_BVD[idx]
         if com.digitsN < DIGITS_NIDT_MIN:
             # Duplicamos en serie
-            # Duplicamos o dividimos los parametros del BVD
-            bvd_1 = copy.copy(bvd_base)
-            bvd_1.cp = bvd_base.cp*2
-            bvd_1.ca = bvd_base.ca*2
-            bvd_1.la = bvd_base.la/2
-            bvd_1.rs = bvd_base.rs/2
-            bvd_1.rp = bvd_base.rp/2
-            bvd_1.c0 = bvd_1.cp + bvd_1.ca
-            bvd_1.fs = 1/(2 * np.pi * np.sqrt(bvd_1.la * bvd_1.ca))
-            bvd_1.fp = 1/(2 * np.pi)*np.sqrt((bvd_1.cp+bvd_1.ca)/(bvd_1.cp*bvd_1.ca*bvd_1.la))
-            bvd_2 = copy.copy(bvd_1)
-
-            bvd_1.name = bvd_base.name + "_1s"
-            bvd_2.name = bvd_base.name + "_2s"
-
-            bvd_1 = compute_admitance_BVD(bvd_1, parameters)
-            bvd_2 = compute_admitance_BVD(bvd_2, parameters)
-            list_BVD_duplicados.extend([bvd_1, bvd_2])
-
             # Duplicamos el valor de DigitsActiveIDT del COM
             com_base = list_COM[idx]
             com_1 = copy.copy(com_base)
@@ -404,24 +374,6 @@ def duplicate_resonators(list_BVD: list[BVD], list_COM: list[COM], parameters: d
 
         elif com.digitsN > DIGITS_NIDT_MAX:
             # Duplicamos en paralelo
-            bvd_1 = copy.copy(list_BVD[idx])
-            bvd_1.cp = bvd_base.cp/2
-            bvd_1.ca = bvd_base.ca/2
-            bvd_1.la = bvd_base.la*2
-            bvd_1.rs = bvd_base.rs*2
-            bvd_1.rp = bvd_base.rp*2
-            bvd_1.c0 = bvd_1.cp + bvd_1.ca
-            bvd_1.fs = 1/(2 * np.pi * np.sqrt(bvd_1.la * bvd_1.ca))
-            bvd_1.fp = 1/(2 * np.pi)*np.sqrt((bvd_1.cp+bvd_1.ca)/(bvd_1.cp*bvd_1.ca*bvd_1.la))
-            bvd_2 = copy.copy(bvd_1)
-
-            bvd_1.name = bvd_base.name + "_1p"
-            bvd_2.name = bvd_base.name + "_2p"
-
-            bvd_1 = compute_admitance_BVD(bvd_1, parameters)
-            bvd_2 = compute_admitance_BVD(bvd_2, parameters)
-            list_BVD_duplicados.extend([bvd_1, bvd_2])
-
             # Dividimosc el valor de DigitsActiveIDT del COM
             com_base = list_COM[idx]
             com_1 = copy.copy(com_base)
@@ -436,12 +388,11 @@ def duplicate_resonators(list_BVD: list[BVD], list_COM: list[COM], parameters: d
             list_COM_duplicados.extend([com_1, com_2])
         
         else:
-            list_BVD_duplicados.append(bvd_base)
             list_COM_duplicados.append(com)
 
         idx += 1
 
-    return list_BVD_duplicados, list_COM_duplicados
+    return list_COM_duplicados
         
 def Zc(f: list[complex], C: float, Q=None):
     if C == 0:
