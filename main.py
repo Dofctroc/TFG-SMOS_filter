@@ -875,15 +875,11 @@ class MainWindow(QMainWindow):
     def btn_createFullWorkspace_clicked(self):
         # Verificar que se haya ejecutado btn_readDirectoy_clicked primero
         if self.list_BVD is None:
-            QMessageBox.critical(self, "Error", 
-                                 "Error: No BVD data. \n"
-                                 "Select a network file first")
+            QMessageBox.critical(self, "Error", "Error: No BVD data. \n Select a network file first")
             return
         
         if self.list_COM is None:
-            QMessageBox.critical(self, "Error", 
-                                 "Error: No COM data. \n"
-                                 "Convert BVD -> COM parameters first")
+            QMessageBox.critical(self, "Error", "Error: No COM data. \n Convert BVD -> COM parameters first")
             return
         
         if self.workspace_path is None:
@@ -968,6 +964,7 @@ class MainWindow(QMainWindow):
             self.list_BVD, self.list_COM = ads.extract_data_debugging(full_workspace_path, len(self.list_BVD), self.list_BVD, self.list_COM)
             self.plot_admitancia()
 
+            # ============================== 3.2) Duplicate resonators if needed and recreate the debugging scheme ==============================
             # Dependiendo del checkbox "duplicar resonadores"
             if self.chb_duplicar.isChecked():
                 list_COM_duplicated = mat_bvd_com.duplicate_resonators(self.list_BVD, self.list_COM)
