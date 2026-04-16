@@ -73,8 +73,10 @@ N_POINTS_GRAPH = int(1e4)
 R_TERMG = 50
 
 # COEFICIENTES "EMPÍRICOS" PUEDEN DAR PROBLEMAS
-AP_COEF_FACTOR = 1.15
-ALPHA_FACTOR = 1.018
+AP_COEF_FACTOR = 1 # 1.15
+ALPHA_FACTOR = 1 # 1.018
+
+# ============================== BASIC LISTS CREATION BVD & COM ==============================
 
 def create_list_BVD(parametersBVD: dict) -> list[BVD]:
     list_BVD: list[BVD] = []
@@ -117,6 +119,31 @@ def create_list_BVD(parametersBVD: dict) -> list[BVD]:
 
     return list_BVD
 
+def compute_list_COM(list_BVD: list[BVD], parameters: dict) -> list[COM]:
+    list_COM: list[COM] = []
+
+    for bvd in list_BVD:
+        com = COM()
+        # 1) ============= CÁLCULO DEL PITCH =============
+        com = compute_pitch_COM(bvd, com)
+
+        # 2) ============= CÁLCULO DE APERTURE Y N_IDT =============
+        com.Ct = bvd.cp
+        com = compute_Nidt_Aperture_COM(com)
+
+        # 3) ============= CÁLCULO DE ALPHA =============
+        com.digitsNR = DIGITS_NR
+        com = compute_alpha_COM(bvd, com) # Primera aproximació
+
+        com.name = bvd.name.replace("BVD", "COM")
+        com = compute_admitance_COM(com, parameters)
+        
+        list_COM.append(com)
+
+    return list_COM
+
+# ============================== COMPUTE ADMITANCES BVD & COM ==============================
+
 def compute_admitance_BVD(bvd: BVD, parameters: dict) -> BVD:
 
     fstart = float(parameters["fstart1"])
@@ -149,28 +176,53 @@ def compute_admitance_BVD(bvd: BVD, parameters: dict) -> BVD:
 
     return bvd
 
-def compute_list_COM(list_BVD: list[BVD], parameters: dict) -> list[COM]:
-    list_COM: list[COM] = []
+def compute_admitance_COM(com: COM, parameters: dict) -> COM:
+    # Sweep parameters
+    fstart = float(parameters["fstart1"])
+    fstop = float(parameters["fstop1"])
+    npoints = max(int(parameters["npoints1"]), N_POINTS_GRAPH)
 
-    for bvd in list_BVD:
-        com = COM()
-        # 1) ============= CÁLCULO DEL PITCH =============
-        com = compute_pitch_COM(bvd, com)
+    f = np.linspace(fstart, fstop, npoints)
 
-        # 2) ============= CÁLCULO DE APERTURE Y N_IDT =============
-        com.Ct = bvd.cp
-        com = compute_Nidt_Aperture_COM(com)
+    # Calculamos la admitancia para cado bloque COM
+    k = (2*np.pi*f)/VP
+    lambda0 = 2*com.d
+    k0 = np.pi/com.d
+    Nidt = com.digitsN/2
+    Nrefl = com.digitsNR/2
 
-        # 3) ============= CÁLCULO DE ALPHA =============
-        com.digitsNR = DIGITS_NR
-        com = compute_alpha_COM(bvd, com) # Primera aproximació
+    delta = k - k0
+    beta = np.sqrt((delta+K11)**2 - K12**2)
+    pe = (beta-delta-K11)/K12
 
-        com.name = bvd.name.replace("BVD", "COM")
-        com = compute_admitance_COM(com, parameters)
-        
-        list_COM.append(com)
+    theta = beta*Nidt*lambda0/2
+    theta_R = beta*Nrefl*lambda0/2
 
-    return list_COM
+    z_0 = (1-pe)/(1+pe)*Z0_PRIMA
+    z_0R = (1+pe)/(1-pe)*Z0_PRIMA
+    z_inR = 1 / ( 1 / (1j*z_0R*np.tan(theta_R)+Z0_PRIMA) + 1j*np.sin(2*theta_R)/z_0R) + 1j*z_0R*np.tan(theta_R)
+
+    # Variables para la resolución de la ecuación cuadrática
+    A = 1j*2*np.pi*f*com.Ct
+    B = 1 / (1j*2*theta*z_0)
+    C = (1j*z_0R*np.tan(theta) + z_inR) / 2 + z_0R / (1j*np.sin(2*theta))
+    D = (Z0_PRIMA / (2*theta*z_0))**2
+    phi = 2*com.alpha*Nidt*lambda0*np.sqrt(Z0_PRIMA)
+
+    Z_com = (R_SERIE + 1 / (1/R_SHUNT + A + B*phi**2 + D/C * phi**2))
+    Y_com = 1 / Z_com
+
+    # Asignar variables
+    com.Y = Y_com
+    com.f = f
+
+    Y_com_dB = 20 * np.log10(np.abs(Y_com) + 1e-20)
+    com.fs = f[np.argmax(Y_com_dB)]
+    com.fp = f[np.argmin(Y_com_dB)]
+
+    return com
+
+# ============================== COM PARAMETERS COMPUTE FUNCTIONS ==============================
 
 def compute_pitch_COM(bvd: BVD, com: COM) -> COM:
     k_fs = (2*np.pi*bvd.fs)/VP
@@ -184,7 +236,6 @@ def compute_Nidt_Aperture_COM(com: COM) -> COM:
     Nidt = 150
 
     const = EPS_R * EPS_0 *np.exp(0.71866*np.tan(DUTY-0.5))
-
     Ap = Ct / (Nidt * const) / lambda0
     
     # Comprobación de los límites para Ap y ajuste de Nidt
@@ -204,6 +255,7 @@ def compute_Nidt_Aperture_COM(com: COM) -> COM:
         # Recalculamos la Apertura debido al redondeo de Nidt
         Ap = Ct / (Nidt * const) / lambda0
 
+    com.Ct = Ap * (Nidt * const) * lambda0
     com.Ap = Ap
     com.digitsN = Nidt*2
     com.digitsNR = DIGITS_NR
@@ -253,51 +305,7 @@ def compute_alpha_COM(bvd: BVD, com: COM) -> COM:
 
     return com
 
-def compute_admitance_COM(com: COM, parameters: dict) -> COM:
-    # Sweep parameters
-    fstart = float(parameters["fstart1"])
-    fstop = float(parameters["fstop1"])
-    npoints = max(int(parameters["npoints1"]), N_POINTS_GRAPH)
-
-    f = np.linspace(fstart, fstop, npoints)
-
-    # Calculamos la admitancia para cado bloque COM
-    k = (2*np.pi*f)/VP
-    lambda0 = 2*com.d
-    k0 = np.pi/com.d
-    Nidt = com.digitsN/2
-    Nrefl = com.digitsNR/2
-
-    delta = k - k0
-    beta = np.sqrt((delta+K11)**2 - K12**2)
-    pe = (beta-delta-K11)/K12
-
-    theta = beta*Nidt*lambda0/2
-    theta_R = beta*Nrefl*lambda0/2
-
-    z_0 = (1-pe)/(1+pe)*Z0_PRIMA
-    z_0R = (1+pe)/(1-pe)*Z0_PRIMA
-    z_inR = 1 / ( 1 / (1j*z_0R*np.tan(theta_R)+Z0_PRIMA) + 1j*np.sin(2*theta_R)/z_0R) + 1j*z_0R*np.tan(theta_R)
-
-    # Variables para la resolución de la ecuación cuadrática
-    A = 1j*2*np.pi*f*com.Ct
-    B = 1 / (1j*2*theta*z_0)
-    C = (1j*z_0R*np.tan(theta) + z_inR) / 2 + z_0R / (1j*np.sin(2*theta))
-    D = (Z0_PRIMA / (2*theta*z_0))**2
-    phi = 2*com.alpha*Nidt*lambda0*np.sqrt(Z0_PRIMA)
-
-    Z_com = (R_SERIE + 1 / (1/R_SHUNT + A + B*phi**2 + D/C * phi**2))
-    Y_com = 1 / Z_com
-
-    # Asignar variables
-    com.Y = Y_com
-    com.f = f
-
-    Y_com_dB = 20 * np.log10(np.abs(Y_com) + 1e-20)
-    com.fs = f[np.argmax(Y_com_dB)]
-    com.fp = f[np.argmin(Y_com_dB)]
-
-    return com
+# ============================== READJUSTING FUNCTION FOR COM PARAMS ==============================
 
 def reajuste_pitch(list_BVD: list[BVD], list_COM: list[COM]) -> list[COM]:
     for bvd, com in zip(list_BVD, list_COM):
@@ -346,6 +354,8 @@ def reajuste_postDebugging(list_BVD: list[BVD], list_COM: list[COM]) -> list[COM
 
     return list_COM
 
+# ============================== DUPLICATE FUNCTION FOR COM PARAMS ==============================
+
 def duplicate_resonators(list_BVD: list[BVD], list_COM: list[COM]) -> list[COM]:
     # Dejaremos la apertura tal cual la teniamos
     # Doblaremos en serie si    Nidt > max
@@ -391,7 +401,9 @@ def duplicate_resonators(list_BVD: list[BVD], list_COM: list[COM]) -> list[COM]:
         idx += 1
 
     return list_COM_duplicados
-        
+
+# ============================== SUPPORT FUNCTIONS FOR ADMITANCE COMPUTATIONS ==============================
+
 def Zc(f: list[complex], C: float, Q=None):
     if C == 0:
         return np.full_like(f, np.inf, dtype=complex)
@@ -407,16 +419,6 @@ def Zl(f: list[complex], L: float, Q=None):
     if Q is None:
         return jw*L
     return jw*L + 2*np.pi*f*L/Q
-
-
-
-
-
-
-
-
-
-
 
 
 
