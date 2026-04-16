@@ -67,6 +67,8 @@ def create_a_library_and_add_it_to_the_workspace(workspace: de.Workspace, librar
     library = workspace.open_library(library_name,library_path,de.LibraryMode.SHARED)
     return library
 
+# ===================================== CREATION OF SCHEMATICS FUNCTIONS =====================================
+
 def create_SchematicAndSymbol_lossyBVD(library: de.Library, library_name: str) -> None:    
     # ========= 1) Schematic interno lossyBVD =========
     assert de.version() >= 630
@@ -1134,6 +1136,8 @@ def create_Schematic_debugging(workspace_path: str, library_name: str, parameter
 
     return
 
+# ===================================== CREATION OF DDS FILES FUNCTIONS =====================================
+
 def create_DDS_ladderFilter_COM(workspace_path: str) -> None:
     # ========= 1) Crear el documento DDS =========
     dataset_name = CELL_FILTER_COM
@@ -1273,6 +1277,8 @@ def print_data_txt(output_data: any, output_dir: any, dataset_name: any) -> None
             f.write("\n" + "=" * 50 + "\n\n")
             
     return
+
+# ===================================== SCHEMATIC ORIENTED FUNCTIONS =====================================
 
 def instantiate_rflib_element(design: object, element_type: str, name: str, origin: tuple[float, float], 
                               value: str, angle: float = 0.0, param_name: str = None) -> None:

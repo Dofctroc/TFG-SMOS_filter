@@ -953,7 +953,7 @@ class MainWindow(QMainWindow):
 
             # ========================================== 2) Debugging and tunning schematic and DDS ==========================================
             # Primeramente recalculamos pitch
-            self.list_COM = mat_bvd_com.reajuste_pitch(self.list_BVD, self.list_COM, self.network_parameters)
+            self.list_COM = mat_bvd_com.reajuste_pitch(self.list_BVD, self.list_COM)
             ads.create_Schematic_debugging(full_workspace_path, library_name, self.network_parameters, self.list_BVD, self.list_COM)
             self.list_BVD, self.list_COM = ads.extract_data_debugging(full_workspace_path, len(self.list_BVD), self.list_BVD, self.list_COM)
 

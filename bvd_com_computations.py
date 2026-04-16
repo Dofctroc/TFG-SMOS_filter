@@ -66,7 +66,7 @@ EPS_0 = 8.854e-12
 DUTY = 0.55
 
 Z0_PRIMA = 1
-R_SHUNT = 4e5
+R_SHUNT = 4e10
 R_SERIE = 0.1
 
 N_POINTS_GRAPH = int(1e4)
@@ -212,13 +212,14 @@ def compute_Nidt_Aperture_COM(com: COM) -> COM:
 
 def compute_alpha_COM(bvd: BVD, com: COM) -> COM:
     # Cálculo constantes de entrada
-    Ct = com.Ct
     k0 = np.pi/com.d
     lambda0 = 2*com.d
+    k_fp = (2*np.pi*bvd.fp)/VP
+
+    Ct = com.Ct
+    Ap = com.Ap
     Nidt = com.digitsN/2
     Nrefl = com.digitsNR/2
-    Ap = com.Ap
-    k_fp = (2*np.pi*bvd.fp)/VP
 
     delta = k_fp - k0
     beta = np.sqrt((delta+K11)**2 - K12**2)
@@ -231,6 +232,7 @@ def compute_alpha_COM(bvd: BVD, com: COM) -> COM:
     z_0R = (1+pe)/(1-pe)*Z0_PRIMA
     z_inR = 1 / ( 1 / (1j*z_0R*np.tan(theta_R)+Z0_PRIMA) + 1j*np.sin(2*theta_R)/z_0R) + 1j*z_0R*np.tan(theta_R)
 
+    # Ecuación a resolver:  Yin = A + B * phy^2 + D/C * phy^2 = -1/R_SHUNT
     # Variables para la resolución de la ecuación cuadrática
     A = 1j*2*np.pi*bvd.fp*Ct
     B = 1 / (1j*2*theta*z_0)
@@ -297,7 +299,7 @@ def compute_admitance_COM(com: COM, parameters: dict) -> COM:
 
     return com
 
-def reajuste_pitch(list_BVD: list[BVD], list_COM: list[COM], parameters: dict) -> list[COM]:
+def reajuste_pitch(list_BVD: list[BVD], list_COM: list[COM]) -> list[COM]:
     for bvd, com in zip(list_BVD, list_COM):
         f_correction = bvd.fs / com.fs 
         com.d = com.d / f_correction
@@ -340,13 +342,8 @@ def reajuste_postDebugging(list_BVD: list[BVD], list_COM: list[COM]) -> list[COM
             # Si cae dentro del rango [AP_MIN, AP_MAX]
             com.Ap = Ap_temp
 
-    list_COM = recompute_alpha(list_BVD, list_COM)
-
-    return list_COM
-
-def recompute_alpha(list_BVD: list[BVD], list_COM: list[COM]) -> list[COM]:
-    for bvd, com in zip(list_BVD, list_COM):
         com = compute_alpha_COM(bvd, com)
+
     return list_COM
 
 def duplicate_resonators(list_BVD: list[BVD], list_COM: list[COM]) -> list[COM]:
@@ -424,43 +421,42 @@ def Zl(f: list[complex], L: float, Q=None):
 
 
 # ======================================== DEPRECATED ========================================
-def reajuste_digitsNR(list_BVD: list[BVD], list_COM: list[COM], parameters: dict) -> list[COM]:
-    for bvd, com in zip(list_BVD, list_COM):
-        # 1. Definimos la máscara para frecuencias <= fs
-        mask = bvd.f <= bvd.fs
-        f_target = bvd.f[mask]
-        Y_target = bvd.Y[mask]
+def reajuste_digitsNR(bvd: BVD, com: COM, parameters: dict) -> COM:
+    # 1. Definimos la máscara para frecuencias <= fs
+    mask = bvd.f <= bvd.fs
+    f_target = bvd.f[mask]
+    Y_target = bvd.Y[mask]
 
-        # 2. Definimos la función de error que usará least_squares
-        def objetivo(nr_val):
-            # Actualizamos el valor de NR en el objeto COM (nr_val viene como array de 1 elemento)
-            com.digitsNR = nr_val[0]
-            
-            # Recalculamos la admitancia con el nuevo NR
-            # Asumimos que esta función actualiza com.Y internamente
-            com_actualizado = compute_admitance_COM(com, parameters)
-            
-            # El error es la diferencia entre la curva real y la calculada
-            # Solo comparamos en el rango de frecuencias definido por la máscara
-            error = Y_target - com_actualizado.Y[mask]
-            
-            # Si Y es compleja (admitancia), devolvemos el valor absoluto o separamos real/imag
-            # least_squares requiere valores reales, así que devolvemos la magnitud del error
-            return np.abs(error)
+    # 2. Definimos la función de error que usará least_squares
+    def objetivo(nr_val):
+        # Actualizamos el valor de NR en el objeto COM (nr_val viene como array de 1 elemento)
+        com.digitsNR = nr_val[0]
+        
+        # Recalculamos la admitancia con el nuevo NR
+        # Asumimos que esta función actualiza com.Y internamente
+        com_actualizado = compute_admitance_COM(com, parameters)
+        
+        # El error es la diferencia entre la curva real y la calculada
+        # Solo comparamos en el rango de frecuencias definido por la máscara
+        error = Y_target - com_actualizado.Y[mask]
+        
+        # Si Y es compleja (admitancia), devolvemos el valor absoluto o separamos real/imag
+        # least_squares requiere valores reales, así que devolvemos la magnitud del error
+        return np.abs(error)
 
-        # 3. Ejecutamos la optimización
-        # x0 es el valor inicial de NR que ya tiene el objeto
-        res = least_squares(
-            objetivo, 
-            x0=[com.digitsNR], 
-            bounds=(10, 100)  # Opcional: evita que NR sea negativo si no tiene sentido físico
-        )
+    # 3. Ejecutamos la optimización
+    # x0 es el valor inicial de NR que ya tiene el objeto
+    res = least_squares(
+        objetivo, 
+        x0=[com.digitsNR], 
+        bounds=(10, 100)  # Opcional: evita que NR sea negativo si no tiene sentido físico
+    )
 
-        # 4. Aplicamos el resultado final optimizado al objeto
-        com.digitsNR = round(res.x[0])
-        com = compute_admitance_COM(com, parameters) # Cálculo final definitivo
+    # 4. Aplicamos el resultado final optimizado al objeto
+    com.digitsNR = round(res.x[0])
+    com = compute_admitance_COM(com, parameters) # Cálculo final definitivo
 
-    return list_COM
+    return com
 
 def compute_filter_admitance(list: list, parameters: dict) -> FilterResponse:
     # General Parameter
