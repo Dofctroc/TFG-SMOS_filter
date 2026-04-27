@@ -966,7 +966,7 @@ class MainWindow(QMainWindow):
             # ============================== 3.2) Duplicate resonators if needed and recreate the debugging scheme ==============================
             # Dependiendo del checkbox "duplicar resonadores"
             if self.chb_duplicar.isChecked():
-                list_COM_duplicated = mat_bvd_com.duplicate_resonators(self.list_BVD, self.list_COM)
+                list_COM_duplicated = mat_bvd_com.duplicar_resonadores(self.list_BVD, self.list_COM, self.network_parameters)
                 ads.create_Schematic_debugging(full_workspace_path, library_name, self.network_parameters, self.list_BVD, list_COM_duplicated)
                 ads.create_DDS_debugging(full_workspace_path, len(self.list_BVD), self.network_parameters["typeseriesshunt_ini"])
             else:

@@ -9,3 +9,4 @@ search_history.log
 netlist.log
 debugging/alpha.py
 debugging/admitance.py
+dds.cfg

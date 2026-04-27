@@ -65,6 +65,8 @@ EPS_R = 39.56
 EPS_0 = 8.854e-12
 DUTY = 0.55
 
+CONST = EPS_R * EPS_0 * np.exp(0.71866 * np.tan(1.966*(DUTY - 0.5)))
+
 Z0_PRIMA = 1
 R_SHUNT = 4e6
 R_SERIE = 0.1
@@ -133,23 +135,18 @@ def compute_list_COM(list_BVD: list[BVD], parameters: dict) -> list[COM]:
 
         # 3) ============= CÁLCULO DE ALPHA =============
         com.digitsNR = DIGITS_NR
-        com = compute_alpha_COM(bvd, com) # Primera aproximació
+        com = calcular_alpha_COM(bvd, com) # Primera aproximació
 
         com.name = bvd.name.replace("BVD", "COM")
         com = compute_admitance_COM(com, parameters)
-        
-        list_COM.append(com)
 
-    # Recalculamos Pitch
-    list_COM = reajuste_pitch(list_BVD, list_COM)
+        # Hacemos los reajustes de parámetros necesarios
+        com = reajuste_pitch(bvd, com)
+        com = reajuste_Ap_Nidt(bvd, com)
 
-    # Reajustamos Ap y Nidt
-    # Se recalcula alpha (dentro de la función de reajuste Ap y Nidt)
-    list_COM = reajuste_Ap_Nidt(list_BVD, list_COM)
-
-    # Recalculamos la función admitancia
-    for com in list_COM:
         com = compute_admitance_COM(com, parameters)
+        
+        list_COM.append(com)        
     
     return list_COM
 
@@ -246,34 +243,33 @@ def compute_Nidt_Aperture_COM(com: COM) -> COM:
     lambda0 = 2*com.d
     Nidt = 150
 
-    const = EPS_R * EPS_0 * np.exp(0.71866 * np.tan(1.966*(DUTY - 0.5)))
-    Ap = Ct / (Nidt * const) / lambda0
+    Ap = Ct / (Nidt * CONST) / lambda0
     
     # Comprobación de los límites para Ap y ajuste de Nidt
     if Ap > AP_MAX:
         Ap = AP_MAX
-        Nidt = Ct / (Ap * const) / lambda0
+        Nidt = Ct / (Ap * CONST) / lambda0
         Nidt = round(Nidt)
         
         # Recalculamos la Apertura debido al redondeo de Nidt
-        Ap = Ct / (Nidt * const) / lambda0
+        Ap = Ct / (Nidt * CONST) / lambda0
 
     elif Ap < AP_MIN:
         Ap = AP_MIN
-        Nidt = Ct / (Ap * const) / lambda0
+        Nidt = Ct / (Ap * CONST) / lambda0
         Nidt = round(Nidt)
         
         # Recalculamos la Apertura debido al redondeo de Nidt
-        Ap = Ct / (Nidt * const) / lambda0
+        Ap = Ct / (Nidt * CONST) / lambda0
 
-    com.Ct = Ap * (Nidt * const) * lambda0
+    com.Ct = Ap * (Nidt * CONST) * lambda0
     com.Ap = Ap
     com.digitsN = Nidt*2
     com.digitsNR = DIGITS_NR
 
     return com
 
-def compute_alpha_COM(bvd: BVD, com: COM) -> COM:
+def calcular_alpha_COM(bvd: BVD, com: COM) -> COM:
     # Cálculo constantes de entrada
     k0 = np.pi/com.d
     lambda0 = 2*com.d
@@ -318,56 +314,38 @@ def compute_alpha_COM(bvd: BVD, com: COM) -> COM:
 
 # ============================== READJUSTING FUNCTION FOR COM PARAMS ==============================
 
-def reajuste_pitch(list_BVD: list[BVD], list_COM: list[COM]) -> list[COM]:
-    for bvd, com in zip(list_BVD, list_COM):
-        f_correction = bvd.fs / com.fs 
-        com.d = com.d / f_correction
+def reajuste_pitch(bvd: BVD, com: COM) -> COM:
+    f_correction = bvd.fs / com.fs 
+    com.d = com.d / f_correction
 
-    return list_COM
+    return com
 
-def reajuste_Ap_Nidt(list_BVD: list[BVD], list_COM: list[COM]) -> list[COM]:
-    for bvd, com in zip(list_BVD, list_COM):
-        # Tomamos el primer valor de la admitancia (fuera banda)
-        nivel_bvd = abs(bvd.Y[0])
-        nivel_com = abs(com.Y[0])
-        coeficiente_FueraBanda = nivel_bvd / nivel_com
+def reajuste_Ap_Nidt(bvd: BVD, com: COM) -> COM:
+    # Tomamos los primeros valores de la admitancia (fuera banda)
+    nivel_bvd = np.mean(np.abs(bvd.Y[:max(1, int(len(bvd.Y) * 0.01))]))
+    nivel_com = np.mean(np.abs(com.Y[:max(1, int(len(com.Y) * 0.01))]))
 
-        # Reajustamos la Apertura
-        Ap_temp = com.Ap / (coeficiente_FueraBanda * AP_COEF_FACTOR)
+    # Calculamos el coeficiente
+    coeficiente_FueraBanda = nivel_com / nivel_bvd
 
-        # 1. Cálculos comunes iniciales
-        # Se ejecutan siempre, independientemente de si Ap_temp está en rango
-        lambda0 = 2 * com.d
-        Nidt = com.digitsN / 2
-        const = EPS_R * EPS_0 * np.exp(0.71866 * np.tan(1.966*(DUTY - 0.5)))
-        
-        Ct = Ap_temp * lambda0 * Nidt * const
-        com.Ct = Ct
+    # Reajustamos la Apertura
+    Ap_temp = com.Ap / (coeficiente_FueraBanda * AP_COEF_FACTOR)
 
-        # 2. Comprobación de límites y reajuste de Nidt y Ap
-        if Ap_temp < AP_MIN:
-            Ap_temp = AP_MIN
-            Nidt = math.floor(Ct / (Ap_temp * lambda0 * const))
-            com.digitsN = Nidt * 2
-            com.Ap = Ct / (Nidt * lambda0 * const)
-            
-        elif Ap_temp > AP_MAX:
-            Ap_temp = AP_MAX
-            Nidt = math.ceil(Ct / (Ap_temp * lambda0 * const))
-            com.digitsN = Nidt * 2
-            com.Ap = Ct / (Nidt * lambda0 * const)
-            
-        else:
-            # Si cae dentro del rango [AP_MIN, AP_MAX]
-            com.Ap = Ap_temp
+    lambda0 = 2 * com.d
+    Nidt = com.digitsN / 2
+    
+    Ct = Ap_temp * lambda0 * Nidt * CONST
+    com.Ct = Ct
 
-        com = compute_alpha_COM(bvd, com)
+    com = ajustar_Ap_Nidt_dentro_rango(com)
 
-    return list_COM
+    com = calcular_alpha_COM(bvd, com)
+
+    return com
 
 # ============================== DUPLICATE FUNCTION FOR COM PARAMS ==============================
 
-def duplicate_resonators(list_BVD: list[BVD], list_COM: list[COM]) -> list[COM]:
+def duplicar_resonadores(list_BVD: list[BVD], list_COM: list[COM], parameters: dict) -> list[COM]:
     # Dejaremos la apertura tal cual la teniamos
     # Doblaremos en serie si    Nidt > max
     # Doblaremos en paralelo si Nidt < min
@@ -381,9 +359,25 @@ def duplicate_resonators(list_BVD: list[BVD], list_COM: list[COM]) -> list[COM]:
             # Duplicamos el valor de DigitsActiveIDT del COM
             com_base = list_COM[idx]
             com_1 = copy.copy(com_base)
-            com_1.digitsN = round(com_base.digitsN*2)
+
+            # Duplicamos los parámetros clave
             com_1.Ct = com_base.Ct*2
-            com_1 = compute_alpha_COM(bvd_base, com_1)
+            com_1.digitsN = round(com_base.digitsN*2)
+
+            com_1 = ajustar_Ap_Nidt_dentro_rango(com_1)
+
+            # Primer calculo del vector admitancia para posteriores correcciones
+            com_1 = compute_admitance_COM(com_1, parameters)
+
+            # Reajustamos todos los parámetros
+            com_1 = reajuste_pitch(bvd_base, com_1)
+            # com_1 = reajuste_Ap_Nidt(bvd_base, com_1)
+
+            # Recalculamos alpha
+            com_1 = calcular_alpha_COM(bvd_base, com_1)
+
+            # Calculamos el vector admitancia final
+            com_1 = compute_admitance_COM(com_1, parameters)
             com_2 = copy.copy(com_1)
 
             com_1.name = com_base.name + "_1s"
@@ -396,9 +390,25 @@ def duplicate_resonators(list_BVD: list[BVD], list_COM: list[COM]) -> list[COM]:
             # Dividimosc el valor de DigitsActiveIDT del COM
             com_base = list_COM[idx]
             com_1 = copy.copy(com_base)
-            com_1.digitsN = round(com_base.digitsN/2)
+
+            # Duplicamos los parámetros clave
             com_1.Ct = com_base.Ct/2
-            com_1 = compute_alpha_COM(bvd_base, com_1)
+            com_1.digitsN = round(com_base.digitsN/2)
+
+            com_1 = ajustar_Ap_Nidt_dentro_rango(com_1)
+
+            # Primer calculo del vector admitancia para posteriores correcciones
+            com_1 = compute_admitance_COM(com_1, parameters)
+            
+            # Reajustamos todos los parámetros
+            com_1 = reajuste_pitch(bvd_base, com_1)
+            # com_1 = reajuste_Ap_Nidt(bvd_base, com_1)
+
+            # Recalculamos alpha
+            com_1 = calcular_alpha_COM(bvd_base, com_1)
+
+            # Calculamos el vector admitancia final
+            com_1 = compute_admitance_COM(com_1, parameters)
             com_2 = copy.copy(com_1)
 
             com_1.name = com_base.name + "_1p"
@@ -431,7 +441,30 @@ def Zl(f: list[complex], L: float, Q=None):
         return jw*L
     return jw*L + 2*np.pi*f*L/Q
 
+def ajustar_Ap_Nidt_dentro_rango(com: COM) -> COM:
+    # Calculamos la nueva Ap y Nidt 
+    # Hace falta valores de Nidt y de Ct predefinidos !!
+    Nidt = com.digitsN / 2
+    Ct = com.Ct
+    lambda0 = 2 * com.d
+    Ap_temp = Ct / (Nidt * lambda0 * CONST)
 
+    if Ap_temp < AP_MIN:
+        Ap_temp = AP_MIN
+        Nidt = math.floor(Ct / (Ap_temp * lambda0 * CONST))
+        com.digitsN = Nidt * 2
+        com.Ap = Ct / (Nidt * lambda0 * CONST)
+
+    elif Ap_temp > AP_MAX:
+        Ap_temp = AP_MAX
+        Nidt = math.ceil(Ct / (Ap_temp * lambda0 * CONST))
+        com.digitsN = Nidt * 2
+        com.Ap = Ct / (Nidt * lambda0 * CONST)
+        
+    else:
+        com.Ap = Ap_temp
+
+    return com
 
 # ======================================== DEPRECATED ========================================
 def reajuste_digitsNR(bvd: BVD, com: COM, parameters: dict) -> COM:
