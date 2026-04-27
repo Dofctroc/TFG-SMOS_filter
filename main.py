@@ -168,7 +168,7 @@ class MainWindow(QMainWindow):
 
         self.label_workspace_name = QLabel("Workspace Name:")
         self.input_workspace_name = QLineEdit()
-        self.input_workspace_name.setPlaceholderText("---")
+        self.input_workspace_name.setPlaceholderText("try_wrk")
         self.input_workspace_name.setFixedWidth(200)
         self.input_workspace_name.setMaxLength(20)
 
@@ -507,6 +507,7 @@ class MainWindow(QMainWindow):
         # Creamos los campos (QLineEdit)
         self.input_pitch = QLineEdit()
         self.input_aperture = QLineEdit()
+        self.input_Ct_COM = QLineEdit()
         self.input_digitsIDT = QLineEdit()
         self.input_digitsREFL = QLineEdit()
         
@@ -517,7 +518,7 @@ class MainWindow(QMainWindow):
         self.input_fp_COM = QLineEdit()
         
         # Configuramos como "Solo lectura" y ponemos placeholders
-        self.campos_form_com = [self.input_pitch, self.input_aperture, self.input_digitsIDT, 
+        self.campos_form_com = [self.input_pitch, self.input_aperture, self.input_Ct_COM, self.input_digitsIDT, 
                     self.input_digitsREFL, self.input_alpha, self.input_alpha_n, self.input_fs_COM, self.input_fp_COM]
         for inp in self.campos_form_com:
             inp.setReadOnly(True)
@@ -531,6 +532,7 @@ class MainWindow(QMainWindow):
         self.form_layout_COM_izq = QFormLayout()
         self.form_layout_COM_izq.addRow("p (m):", self.input_pitch)
         self.form_layout_COM_izq.addRow("Ap (λ0):", self.input_aperture)
+        self.form_layout_COM_izq.addRow("Ct (H):", self.input_Ct_COM)
         self.form_layout_COM_izq.addRow("Digits IDT (-):", self.input_digitsIDT)
         self.form_layout_COM_izq.addRow("Digits REFL (-):", self.input_digitsREFL)
 
@@ -558,7 +560,9 @@ class MainWindow(QMainWindow):
         self.combo_bvd.setCurrentIndex(index)
         self.combo_elemento_graf.setCurrentIndex(index)
 
-    def actualizar_formulario_com(self, index):
+    def actualizar_formulario_com(self):
+        index = self.combo_com.currentIndex()
+
         """Esta función se llama cada vez que eliges un BVD en el combo"""
         # Si no hay datos (solo el mensaje por defecto) o la lista está vacía
         if not self.list_COM or self.combo_com.currentText() == "Pending Conversion":
@@ -570,11 +574,12 @@ class MainWindow(QMainWindow):
         # Rellenamos los campos
         self.input_pitch.setText(formato_ingenieria(com_seleccionado.d))
         self.input_aperture.setText(formato_ingenieria(com_seleccionado.Ap))
+        self.input_Ct_COM.setText(str(com_seleccionado.Ct))
         self.input_digitsIDT.setText(str(com_seleccionado.digitsN))
         self.input_digitsREFL.setText(str(com_seleccionado.digitsNR))
+
         self.input_alpha.setText(str(com_seleccionado.alpha))
         self.input_alpha_n.setText(str(com_seleccionado.alpha_n))
-
         self.input_fs_COM.setText(formato_ingenieria(com_seleccionado.fs))
         self.input_fp_COM.setText(formato_ingenieria(com_seleccionado.fp))
 
@@ -771,8 +776,8 @@ class MainWindow(QMainWindow):
                 self.radio_bvd.setEnabled(True)
                 self.radio_com.setEnabled(False)
                 self.radio_both.setEnabled(False)
-
                 self.btn_convertir.setEnabled(True)
+
                 self.plot_admitancia()
 
         except Exception as e:
@@ -849,12 +854,16 @@ class MainWindow(QMainWindow):
             return
         else:
             try:
+                # Creamos la lista de elementos COM con los parámetros iniciales
                 self.list_COM = mat_bvd_com.compute_list_COM(self.list_BVD, self.network_parameters)
 
                 # Rellenar los campos de Matching Network y Lossy BVD con los parámetros leídos
                 self.combo_com.clear() # Borra el "Archivo no leído"
                 for com in self.list_COM:
                     self.combo_com.addItem(com.name)
+                
+                self.actualizar_formulario_com()
+                self.plot_admitancia()
                     
                 # Habilitamos el radio button de COM
                 self.radio_com.setEnabled(True)
@@ -877,11 +886,9 @@ class MainWindow(QMainWindow):
         if self.list_BVD is None:
             QMessageBox.critical(self, "Error", "Error: No BVD data. \n Select a network file first")
             return
-        
         if self.list_COM is None:
             QMessageBox.critical(self, "Error", "Error: No COM data. \n Convert BVD -> COM parameters first")
             return
-        
         if self.workspace_path is None:
             QMessageBox.critical(self, "Error", "Error: Select a workspace directory first")
             return
@@ -891,8 +898,7 @@ class MainWindow(QMainWindow):
         if not workspace_name:
             # QMessageBox.critical(self, "Error", "Error: Input a workspace name first")
             # return
-            workspace_name = "Try_wkpc"
-
+            workspace_name = "try_wrk"
         # Crear la ruta completa del workspace
         full_workspace_path = self.workspace_path + "/" + workspace_name
         library_name = workspace_name + "_lib"
@@ -927,7 +933,7 @@ class MainWindow(QMainWindow):
             
         # Crear los esquemáticos y los símbolos correspondientes
         try:
-            # Buscamos si existe archivo .s2p con mismo nombre que el archivo network
+            # ================== Buscamos si existe archivo .s2p con mismo nombre que el archivo network ==================
             network_file_clean_path = pathlib.Path(self.network_file_path.strip('"'))
             datasets_folder = network_file_clean_path.parent.parent / "Datasets"
             sufijos = ["_2", "_1"]
@@ -941,7 +947,7 @@ class MainWindow(QMainWindow):
                     # Convertimos a string y envolvemos en comillas dobles literales
                     self.dataset_s2p_file_path = f'"{path_obj}"'
                     encontrado = True
-                    break # Detenemos la búsqueda al hallar el primero
+                    break
 
             if not encontrado:
                 QMessageBox.information(self, "Info", f"File .s2p corresponding to the selected network not found:\n{self.network_file_path}")
@@ -952,17 +958,10 @@ class MainWindow(QMainWindow):
             ads.create_SchematicAndSymbol_lossyCOM(lib, library_name)
 
             # ========================================== 2) Debugging and tunning schematic and DDS ==========================================
-            # Primeramente recalculamos pitch
-            self.list_COM = mat_bvd_com.reajuste_pitch(self.list_BVD, self.list_COM)
-            ads.create_Schematic_debugging(full_workspace_path, library_name, self.network_parameters, self.list_BVD, self.list_COM)
-            self.list_BVD, self.list_COM = ads.extract_data_debugging(full_workspace_path, len(self.list_BVD), self.list_BVD, self.list_COM)
-
-            # ============================== 3) Adjust the BVD -> COM mapping with extracted data from debbuging ==============================
-            self.list_COM = mat_bvd_com.reajuste_postDebugging(self.list_BVD, self.list_COM)
             ads.create_Schematic_debugging(full_workspace_path, library_name, self.network_parameters, self.list_BVD, self.list_COM)
             ads.create_DDS_debugging(full_workspace_path, len(self.list_BVD), self.network_parameters["typeseriesshunt_ini"])
-            self.list_BVD, self.list_COM = ads.extract_data_debugging(full_workspace_path, len(self.list_BVD), self.list_BVD, self.list_COM)
-            self.plot_admitancia()
+            # self.list_BVD, self.list_COM = ads.extract_data_debugging(full_workspace_path, len(self.list_BVD), self.list_BVD, self.list_COM)
+            # self.plot_admitancia()
 
             # ============================== 3.2) Duplicate resonators if needed and recreate the debugging scheme ==============================
             # Dependiendo del checkbox "duplicar resonadores"
@@ -992,7 +991,7 @@ class MainWindow(QMainWindow):
         QMessageBox.information(self, "Success", f"Workspace '{workspace_name}' created successfully in:\n{full_workspace_path}")
 
 
-def formato_ingenieria(valor, precision=6):
+def formato_ingenieria(valor, precision=8):
     if valor == 0:
         return "0"
     

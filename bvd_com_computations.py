@@ -66,7 +66,7 @@ EPS_0 = 8.854e-12
 DUTY = 0.55
 
 Z0_PRIMA = 1
-R_SHUNT = 4e10
+R_SHUNT = 4e6
 R_SERIE = 0.1
 
 N_POINTS_GRAPH = int(1e4)
@@ -140,6 +140,17 @@ def compute_list_COM(list_BVD: list[BVD], parameters: dict) -> list[COM]:
         
         list_COM.append(com)
 
+    # Recalculamos Pitch
+    list_COM = reajuste_pitch(list_BVD, list_COM)
+
+    # Reajustamos Ap y Nidt
+    # Se recalcula alpha (dentro de la función de reajuste Ap y Nidt)
+    list_COM = reajuste_Ap_Nidt(list_BVD, list_COM)
+
+    # Recalculamos la función admitancia
+    for com in list_COM:
+        com = compute_admitance_COM(com, parameters)
+    
     return list_COM
 
 # ============================== COMPUTE ADMITANCES BVD & COM ==============================
@@ -200,12 +211,12 @@ def compute_admitance_COM(com: COM, parameters: dict) -> COM:
 
     z_0 = (1-pe)/(1+pe)*Z0_PRIMA
     z_0R = (1+pe)/(1-pe)*Z0_PRIMA
-    z_inR = 1 / ( 1 / (1j*z_0R*np.tan(theta_R)+Z0_PRIMA) + 1j*np.sin(2*theta_R)/z_0R) + 1j*z_0R*np.tan(theta_R)
+    z_inR = 1 / ( 1 / (z_0R*np.tanh(1j*theta_R)+Z0_PRIMA) + np.sinh(1j*2*theta_R)/z_0R) + z_0R*np.tanh(1j*theta_R)
 
     # Variables para la resolución de la ecuación cuadrática
     A = 1j*2*np.pi*f*com.Ct
     B = 1 / (1j*2*theta*z_0)
-    C = (1j*z_0R*np.tan(theta) + z_inR) / 2 + z_0R / (1j*np.sin(2*theta))
+    C = (1j*z_0R*np.tan(theta) + z_inR) / 2 + z_0R / (np.sinh(1j*2*theta))
     D = (Z0_PRIMA / (2*theta*z_0))**2
     phi = 2*com.alpha*Nidt*lambda0*np.sqrt(Z0_PRIMA)
 
@@ -235,7 +246,7 @@ def compute_Nidt_Aperture_COM(com: COM) -> COM:
     lambda0 = 2*com.d
     Nidt = 150
 
-    const = EPS_R * EPS_0 *np.exp(0.71866*np.tan(DUTY-0.5))
+    const = EPS_R * EPS_0 * np.exp(0.71866 * np.tan(1.966*(DUTY - 0.5)))
     Ap = Ct / (Nidt * const) / lambda0
     
     # Comprobación de los límites para Ap y ajuste de Nidt
@@ -282,13 +293,13 @@ def compute_alpha_COM(bvd: BVD, com: COM) -> COM:
 
     z_0 = (1-pe)/(1+pe)*Z0_PRIMA
     z_0R = (1+pe)/(1-pe)*Z0_PRIMA
-    z_inR = 1 / ( 1 / (1j*z_0R*np.tan(theta_R)+Z0_PRIMA) + 1j*np.sin(2*theta_R)/z_0R) + 1j*z_0R*np.tan(theta_R)
+    z_inR = 1 / ( 1 / (z_0R*np.tanh(1j*theta_R)+Z0_PRIMA) + np.sinh(1j*2*theta_R)/z_0R) + z_0R*np.tanh(1j*theta_R)
 
     # Ecuación a resolver:  Yin = A + B * phy^2 + D/C * phy^2 = -1/R_SHUNT
     # Variables para la resolución de la ecuación cuadrática
     A = 1j*2*np.pi*bvd.fp*Ct
     B = 1 / (1j*2*theta*z_0)
-    C = (1j*z_0R*np.tan(theta) + z_inR) / 2 + z_0R / (1j*np.sin(2*theta))
+    C = (z_0R*np.tanh(1j*theta) + z_inR) / 2 + z_0R / (np.sinh(1j*2*theta))
     D = (Z0_PRIMA / (2*theta*z_0))**2
 
     # Resolución de la ecuación cuadrática
@@ -314,7 +325,7 @@ def reajuste_pitch(list_BVD: list[BVD], list_COM: list[COM]) -> list[COM]:
 
     return list_COM
 
-def reajuste_postDebugging(list_BVD: list[BVD], list_COM: list[COM]) -> list[COM]:
+def reajuste_Ap_Nidt(list_BVD: list[BVD], list_COM: list[COM]) -> list[COM]:
     for bvd, com in zip(list_BVD, list_COM):
         # Tomamos el primer valor de la admitancia (fuera banda)
         nivel_bvd = abs(bvd.Y[0])
@@ -328,7 +339,7 @@ def reajuste_postDebugging(list_BVD: list[BVD], list_COM: list[COM]) -> list[COM
         # Se ejecutan siempre, independientemente de si Ap_temp está en rango
         lambda0 = 2 * com.d
         Nidt = com.digitsN / 2
-        const = EPS_R * EPS_0 * np.exp(0.71866 * np.tan(DUTY - 0.5))
+        const = EPS_R * EPS_0 * np.exp(0.71866 * np.tan(1.966*(DUTY - 0.5)))
         
         Ct = Ap_temp * lambda0 * Nidt * const
         com.Ct = Ct

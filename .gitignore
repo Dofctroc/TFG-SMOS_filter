@@ -8,3 +8,5 @@ navigator.opt
 search_history.log
 netlist.log
 debugging/alpha.py
+debugging/admitance.py
+network_parameters_dict.txt
