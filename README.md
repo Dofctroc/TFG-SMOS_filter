@@ -1,13 +1,7 @@
 # TFG-SMOS_filter
-Código del programa en python usado para automatizar la creación de esquemáticos en ADS sobre filtros ladder que implementan resonadores BVD y su equivalente COM.
+Python program code designed to automate the creation of schematics in ADS for ladder-type filters implementing BVD resonators. The program additionally allows the conversion of the BVD model to the corresponding COM model and the creation of ADS schematics of the filter based on that equivalent circuit.
 
-Command line (inputed in ADS - Python Console):
+Command lines (inputed in ADS – Python Console):
 
-import os <br />
-import sys <br />
-ruta = r"...\main.py" <br />
-directorio_script = os.path.dirname(ruta) <br />
-os.chdir(directorio_script) <br />
-if directorio_script not in sys.path: <br />
-      sys.path.insert(0, directorio_script) <br />
-exec(open(ruta, encoding="utf-8").read()) <br />
+RUTAFUENTE = r"C:\...\boot.py" <br />
+exec(open(RUTAFUENTE, encoding="utf-8").read())
