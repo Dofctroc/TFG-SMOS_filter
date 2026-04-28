@@ -7,3 +7,6 @@ __pycache__/fs_utils.cpython-313.pyc
 navigator.opt
 search_history.log
 netlist.log
+debugging/alpha.py
+debugging/admitance.py
+dds.cfg

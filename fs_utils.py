@@ -1,7 +1,5 @@
 import os
-import subprocess
 import re
-import numpy as np
 
 from PySide6.QtWidgets import (QApplication, QFileDialog)
 
