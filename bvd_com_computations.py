@@ -1,7 +1,7 @@
-import numpy as np
-import math
-from scipy.optimize import least_squares
 import copy
+import math
+import numpy as np
+from scipy.optimize import least_squares
 
 class BVD():
     def __init__(self, name: str, c0: float, cp: float, ca: float, la: float, fs: float, fp: float, 

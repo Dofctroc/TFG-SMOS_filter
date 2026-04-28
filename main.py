@@ -1,19 +1,7 @@
-import os
-import sys
 import importlib
 import pathlib
 import traceback
 import math
-
-# Intentamos obtener la ruta del archivo, si falla (consola), usamos el directorio actual
-try:
-    directorio_actual = os.path.dirname(os.path.abspath(__file__))
-except NameError:
-    directorio_actual = os.getcwd()
-
-if directorio_actual not in sys.path:
-    sys.path.insert(0, directorio_actual)
-
 import ads_utils as ads
 import fs_utils as fs
 import bvd_com_computations as mat_bvd_com
@@ -22,9 +10,7 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QPushButton, QWidget, 
                                QLabel, QLineEdit, QMessageBox, QGroupBox, QSizePolicy, QRadioButton, QButtonGroup,
                                QComboBox, QFormLayout, QCheckBox)
 from PySide6.QtCore import Qt, QSize
-from PySide6.QtGui import QCursor
 
-import matplotlib.pyplot as plt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 from matplotlib.figure import Figure
@@ -41,6 +27,8 @@ class MplCanvas(FigureCanvas):
         self.fig = Figure(figsize=(width, height), dpi=dpi, layout='constrained')
         self.axes = self.fig.add_subplot(111)
         super().__init__(self.fig)
+
+CREATE_DEBUGGING_SCHEMATIC_DDS = True
 
 # ========================== CLASE PRINCIPAL DE LA APLICACIÓN ===========================
 
@@ -107,10 +95,10 @@ class MainWindow(QMainWindow):
         self.setup_footer()
         layout_principal.addLayout(self.barra_inferior)
 
-        self.aplicar_cursor_interactivo()
+        self.aplicar_cursor_pointer()
     
 
-    def aplicar_cursor_interactivo(self):
+    def aplicar_cursor_pointer(self):
         # 1. Buscamos todos los botones
         botones = self.findChildren(QPushButton)
         for boton in botones:
@@ -958,23 +946,19 @@ class MainWindow(QMainWindow):
             ads.create_SchematicAndSymbol_lossyCOM(lib, library_name)
 
             # ========================================== 2) Debugging and tunning schematic and DDS ==========================================
-            ads.create_Schematic_debugging(full_workspace_path, library_name, self.network_parameters, self.list_BVD, self.list_COM)
-            ads.create_DDS_debugging(full_workspace_path, len(self.list_BVD), self.network_parameters["typeseriesshunt_ini"])
-            # self.list_BVD, self.list_COM = ads.extract_data_debugging(full_workspace_path, len(self.list_BVD), self.list_BVD, self.list_COM)
-            # self.plot_admitancia()
-
-            # ============================== 3.2) Duplicate resonators if needed and recreate the debugging scheme ==============================
             # Dependiendo del checkbox "duplicar resonadores"
             if self.chb_duplicar.isChecked():
-                list_COM_duplicated = mat_bvd_com.duplicar_resonadores(self.list_BVD, self.list_COM, self.network_parameters)
-                ads.create_Schematic_debugging(full_workspace_path, library_name, self.network_parameters, self.list_BVD, list_COM_duplicated)
-                ads.create_DDS_debugging(full_workspace_path, len(self.list_BVD), self.network_parameters["typeseriesshunt_ini"])
+                list_COM_ADS = mat_bvd_com.duplicar_resonadores(self.list_BVD, self.list_COM, self.network_parameters)
             else:
-                list_COM_duplicated = self.list_COM
+                list_COM_ADS = self.list_COM
+
+            if CREATE_DEBUGGING_SCHEMATIC_DDS:
+                ads.create_Schematic_debugging(full_workspace_path, library_name, self.network_parameters, self.list_BVD, list_COM_ADS)
+                ads.create_DDS_debugging(full_workspace_path, len(self.list_BVD), self.network_parameters["typeseriesshunt_ini"])
 
             # ============================================ 4) Generate BVD and COM LADDER FILTERS ============================================
             ads.create_Schematic_ladderFilter_BVDlossy(full_workspace_path, library_name, self.dataset_s2p_file_path, self.network_parameters, self.list_BVD)
-            ads.create_Schematic_ladderFilter_COM(full_workspace_path, library_name, self.dataset_s2p_file_path, self.network_parameters, list_COM_duplicated)
+            ads.create_Schematic_ladderFilter_COM(full_workspace_path, library_name, self.dataset_s2p_file_path, self.network_parameters, list_COM_ADS)
 
             # ========================================== 5) Generate BVD and COM filters' DDS pages ==========================================
             ads.create_DDS_ladderFilter_COM(full_workspace_path)
