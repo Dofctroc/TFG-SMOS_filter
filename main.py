@@ -29,6 +29,7 @@ class MplCanvas(FigureCanvas):
         super().__init__(self.fig)
 
 CREATE_DEBUGGING_SCHEMATIC_DDS = True
+USE_DEFAULT_WORKSPACE_NAME = True
 
 # ========================== CLASE PRINCIPAL DE LA APLICACIÓN ===========================
 
@@ -96,25 +97,6 @@ class MainWindow(QMainWindow):
         layout_principal.addLayout(self.barra_inferior)
 
         self.aplicar_cursor_pointer()
-    
-
-    def aplicar_cursor_pointer(self):
-        # 1. Buscamos todos los botones
-        botones = self.findChildren(QPushButton)
-        for boton in botones:
-            boton.setCursor(Qt.PointingHandCursor)
-        
-        # 2. Buscamos todos los combobox
-        combos = self.findChildren(QComboBox)
-        for combo in combos:
-            combo.setCursor(Qt.PointingHandCursor)
-            # Opcional: Esto asegura que la lista desplegable también tenga el cursor
-            combo.view().viewport().setCursor(Qt.PointingHandCursor)
-        
-        # 2. Buscamos todos los combobox
-        radio_btns = self.findChildren(QRadioButton)
-        for radio_btn in radio_btns:
-            radio_btn.setCursor(Qt.PointingHandCursor)
             
     def setup_header(self):
         self.barra_superior = QHBoxLayout()
@@ -264,11 +246,6 @@ class MainWindow(QMainWindow):
         self.layout_bvd.addWidget(bvd_general_label)
         self.layout_bvd.addLayout(self.form_layout_BVD_general)
         self.layout_bvd.addStretch()
-
-    def unificar_grafico_bvd(self, index):
-        # Actualizamos los formularios BVD y GRPHICS para que haya uniformidad en la GUI
-        self.combo_com.setCurrentIndex(index)
-        self.combo_elemento_graf.setCurrentIndex(index)
 
     def actualizar_formulario_bvd(self, index):
         """Esta función se llama cada vez que eliges un BVD en el combo"""
@@ -543,11 +520,6 @@ class MainWindow(QMainWindow):
         self.layout_com.addLayout(self.layout_horizontal_formularios)
         self.layout_com.addStretch()
 
-    def unificar_grafico_com(self, index):
-        # Actualizamos los formularios BVD y GRPHICS para que haya uniformidad en la GUI
-        self.combo_bvd.setCurrentIndex(index)
-        self.combo_elemento_graf.setCurrentIndex(index)
-
     def actualizar_formulario_com(self):
         index = self.combo_com.currentIndex()
 
@@ -632,18 +604,13 @@ class MainWindow(QMainWindow):
         self.radio_com.toggled.connect(self.plot_admitancia)
         self.radio_both.toggled.connect(self.plot_admitancia)
 
-    def unificar_grafico_admitancia(self, index):
-        # Actualizamos los formularios BVD y GRPHICS para que haya uniformidad en la GUI
-        self.combo_bvd.setCurrentIndex(index)
-        self.combo_com.setCurrentIndex(index)
-
     def plot_admitancia(self):
         idx = self.combo_elemento_graf.currentIndex()
         
         color_data1 = "red"
         color_data2 = "blue"
-        label_data1 = f"BVD - Elemento {idx+1}"
-        label_data2 = f"COM - Elemento {idx+1}"
+        label_data1 = f"BVD - Element {idx+1}"
+        label_data2 = f"COM - Element {idx+1}"
 
         # Decidir qué fuente usar
         data1 = self.list_BVD[idx] if (self.radio_bvd.isChecked() or self.radio_both.isChecked()) else None
@@ -726,6 +693,48 @@ class MainWindow(QMainWindow):
         self.canvas.axes.legend()
         
         self.canvas.draw()
+
+    # ============================================================== FUNCIONES AUXILIARES ==============================================================
+
+    def unificar_grafico_admitancia(self, index):
+        # Actualizamos los formularios BVD y GRPHICS para que haya uniformidad en la GUI
+        self.combo_bvd.setCurrentIndex(index)
+        self.combo_com.setCurrentIndex(index)
+
+    def unificar_grafico_com(self, index):
+        # Actualizamos los formularios BVD y GRPHICS para que haya uniformidad en la GUI
+        self.combo_bvd.setCurrentIndex(index)
+        self.combo_elemento_graf.setCurrentIndex(index)
+
+    def unificar_grafico_bvd(self, index):
+        # Actualizamos los formularios BVD y GRPHICS para que haya uniformidad en la GUI
+        self.combo_com.setCurrentIndex(index)
+        self.combo_elemento_graf.setCurrentIndex(index)
+        
+    def aplicar_cursor_pointer(self):
+        # 1. Buscamos todos los botones
+        botones = self.findChildren(QPushButton)
+        for boton in botones:
+            boton.setCursor(Qt.PointingHandCursor)
+        
+        # 2. Buscamos todos los combobox
+        combos = self.findChildren(QComboBox)
+        for combo in combos:
+            combo.setCursor(Qt.PointingHandCursor)
+            # Opcional: Esto asegura que la lista desplegable también tenga el cursor
+            combo.view().viewport().setCursor(Qt.PointingHandCursor)
+        
+        # 2. Buscamos todos los combobox
+        radio_btns = self.findChildren(QRadioButton)
+        for radio_btn in radio_btns:
+            radio_btn.setCursor(Qt.PointingHandCursor)
+        
+        # 2. Buscamos todos los combobox
+        check_boxs = self.findChildren(QCheckBox)
+        for check_box in check_boxs:
+            check_box.setCursor(Qt.PointingHandCursor)
+
+    # ============================================================== FUNCIONES DE LOS BOTONES ==============================================================
 
     def btn_readNetworkFile_clicked(self):
         try:
@@ -824,6 +833,7 @@ class MainWindow(QMainWindow):
                 self.workspace_path = selected_path
                 self.label_workspace_path.setText(f"Selected: {self.workspace_path}")
                 self.label_workspace_path.setStyleSheet("color: green; font-size: 14px;")
+
         except Exception as e:
             error_detallado = traceback.format_exc()
             QMessageBox.critical(self, "Error", 
@@ -870,7 +880,7 @@ class MainWindow(QMainWindow):
                 return
 
     def btn_createFullWorkspace_clicked(self):
-        # Verificar que se haya ejecutado btn_readDirectoy_clicked primero
+        # ============================================= Verificaciones iniciales del flujo de trabajo =============================================
         if self.list_BVD is None:
             QMessageBox.critical(self, "Error", "Error: No BVD data. \n Select a network file first")
             return
@@ -880,18 +890,38 @@ class MainWindow(QMainWindow):
         if self.workspace_path is None:
             QMessageBox.critical(self, "Error", "Error: Select a workspace directory first")
             return
+        
+        # ====================================================== Buscamos si existe archivo .s2p ======================================================
+        network_file_clean_path = pathlib.Path(self.network_file_path.strip('"'))
+        datasets_folder = network_file_clean_path.parent.parent / "Datasets"
+        sufijos = ["_2", "_1"]
+        encontrado = False
 
-        # Obtener el nombre del workspace del input
-        workspace_name = self.input_workspace_name.text().strip()
-        if not workspace_name:
-            # QMessageBox.critical(self, "Error", "Error: Input a workspace name first")
-            # return
-            workspace_name = "try_wrk"
-        # Crear la ruta completa del workspace
-        full_workspace_path = self.workspace_path + "/" + workspace_name
-        library_name = workspace_name + "_lib"
+        for sufijo in sufijos:
+            dataset_s2p_file = f"{network_file_clean_path.stem}{sufijo}.s2p"
+            path_obj = datasets_folder / dataset_s2p_file
+            
+            if path_obj.exists():
+                # Convertimos a string y envolvemos en comillas dobles literales
+                self.dataset_s2p_file_path = f'"{path_obj}"'
+                encontrado = True
+                break
 
-        # Check the keysight import is working properly
+        if not encontrado:
+            boton_pulsado = QMessageBox.question(
+                self, 
+                "Missing Network File", 
+                f"File .s2p not found for the selected network:\n\n{self.network_file_path}\n\nDo you want to proceed with the creation of the workspace?", 
+                QMessageBox.Yes | QMessageBox.No, 
+                QMessageBox.Yes
+            )
+
+            if boton_pulsado == QMessageBox.Yes:
+                self.dataset_s2p_file_path = None
+            else:
+                return
+
+        # ====================================================== Comprobamos importación de ADS ======================================================
         try:
             ads.test_import_keysight_ads_de_example()
         except Exception as e:
@@ -903,7 +933,19 @@ class MainWindow(QMainWindow):
                 error_detallado)
             return
 
-        # Crear el workspace y la librería
+        # ====================================================== Obtener el nombre del workspace ======================================================
+        workspace_name = self.input_workspace_name.text().strip()
+        if not workspace_name:
+            if not USE_DEFAULT_WORKSPACE_NAME:
+                QMessageBox.critical(self, "Error", "Error: Input a workspace name first")
+                return
+            workspace_name = "try_wrk"
+
+        # Crear la ruta completa del workspace
+        full_workspace_path = self.workspace_path + "/" + workspace_name
+        library_name = workspace_name + "_lib"
+
+        # ====================================================== Crear el workspace y la librería ======================================================
         try:
             workspace = ads.create_and_open_an_empty_workspace(full_workspace_path)
             if workspace is None: 
@@ -920,27 +962,7 @@ class MainWindow(QMainWindow):
             return
             
         # Crear los esquemáticos y los símbolos correspondientes
-        try:
-            # ================== Buscamos si existe archivo .s2p con mismo nombre que el archivo network ==================
-            network_file_clean_path = pathlib.Path(self.network_file_path.strip('"'))
-            datasets_folder = network_file_clean_path.parent.parent / "Datasets"
-            sufijos = ["_2", "_1"]
-            encontrado = False
-
-            for sufijo in sufijos:
-                dataset_s2p_file = f"{network_file_clean_path.stem}{sufijo}.s2p"
-                path_obj = datasets_folder / dataset_s2p_file
-                
-                if path_obj.exists():
-                    # Convertimos a string y envolvemos en comillas dobles literales
-                    self.dataset_s2p_file_path = f'"{path_obj}"'
-                    encontrado = True
-                    break
-
-            if not encontrado:
-                QMessageBox.information(self, "Info", f"File .s2p corresponding to the selected network not found:\n{self.network_file_path}")
-                self.dataset_s2p_file_path = None
-
+        try:                
             # =============================================== 1) Generate BVD and COM symbols ===============================================
             ads.create_SchematicAndSymbol_lossyBVD(lib, library_name)
             ads.create_SchematicAndSymbol_lossyCOM(lib, library_name)
@@ -956,11 +978,11 @@ class MainWindow(QMainWindow):
                 ads.create_Schematic_debugging(full_workspace_path, library_name, self.network_parameters, self.list_BVD, list_COM_ADS)
                 ads.create_DDS_debugging(full_workspace_path, len(self.list_BVD), self.network_parameters["typeseriesshunt_ini"])
 
-            # ============================================ 4) Generate BVD and COM LADDER FILTERS ============================================
+            # ============================================ 3) Generate BVD and COM LADDER FILTERS ============================================
             ads.create_Schematic_ladderFilter_BVDlossy(full_workspace_path, library_name, self.dataset_s2p_file_path, self.network_parameters, self.list_BVD)
             ads.create_Schematic_ladderFilter_COM(full_workspace_path, library_name, self.dataset_s2p_file_path, self.network_parameters, list_COM_ADS)
 
-            # ========================================== 5) Generate BVD and COM filters' DDS pages ==========================================
+            # ========================================== 4) Generate BVD and COM filters' DDS pages ==========================================
             ads.create_DDS_ladderFilter_COM(full_workspace_path)
 
         except Exception as e:
