@@ -9,8 +9,9 @@ import bvd_com_computations as mat_bvd_com
 
 from PySide6.QtWidgets import (QApplication, QMainWindow, QPushButton, QWidget, QVBoxLayout, QHBoxLayout, 
                                QLabel, QLineEdit, QMessageBox, QGroupBox, QSizePolicy, QRadioButton, QButtonGroup,
-                               QComboBox, QFormLayout, QCheckBox)
+                               QComboBox, QFormLayout, QCheckBox, QMenu)
 from PySide6.QtCore import Qt, QSize
+from PySide6.QtGui import QAction
 
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
@@ -45,6 +46,8 @@ class MainWindow(QMainWindow):
 
         self.setWindowTitle("TFG-SMOSfilter")
         self.setGeometry(100, 100, 1000, 700)
+
+        self.setup_menu_bar()
 
         # 1. CREAR EL WIDGET CENTRAL (El "lienzo" donde va todo)
         central_widget = QWidget()
@@ -99,6 +102,61 @@ class MainWindow(QMainWindow):
 
         self.aplicar_cursor_pointer()
             
+    def setup_menu_bar(self):
+        # Crear la barra de menú
+        bar = self.menuBar()
+
+        # ==========================================
+        # 1) MENÚ FILE (Botones normales)
+        # ==========================================
+        file_menu = bar.addMenu("&File")
+
+        self.action_open = QAction("Select new Network File", self)
+        self.action_open.triggered.connect(self.btn_readNetworkFile_clicked)
+        file_menu.addAction(self.action_open)
+
+        self.action_workspace = QAction("Select Workspace Directory", self)
+        self.action_workspace.triggered.connect(self.btn_readDirectoy_clicked)
+        file_menu.addAction(self.action_workspace)
+
+        file_menu.addSeparator() # Línea divisoria
+
+        self.action_save = QAction("Save BVD and COM data", self)
+        self.action_save.triggered.connect(self.on_save_data)
+        file_menu.addAction(self.action_save)
+
+        # ==========================================
+        # 2) MENÚ VIEW (Checkboxes)
+        # ==========================================
+        view_menu = bar.addMenu("&View")
+
+        self.check_matching = QAction("Show Matching Network Parameters", self)
+        self.check_matching.setCheckable(True)
+        self.check_matching.setChecked(True) 
+        self.check_matching.toggled.connect(self.update_view)
+        view_menu.addAction(self.check_matching)
+
+        self.check_constants = QAction("Show COM Design Constants", self)
+        self.check_constants.setCheckable(True)
+        self.check_constants.setChecked(True) 
+        self.check_constants.toggled.connect(self.update_view)
+        view_menu.addAction(self.check_constants)
+
+        # ==========================================
+        # 3) MENÚ OPTIONS (Checkboxes)
+        # ==========================================
+        options_menu = bar.addMenu("&Options")
+
+        self.check_duplicate = QAction("Duplicate Resonators when necessary", self)
+        self.check_duplicate.setCheckable(True)
+        self.check_duplicate.setChecked(True) 
+        options_menu.addAction(self.check_duplicate)
+
+        self.check_debug = QAction("Create debugging Schematic and DDS", self)
+        self.check_debug.setCheckable(True)
+        self.check_debug.setChecked(True)
+        options_menu.addAction(self.check_debug)
+
     def setup_header(self):
         self.barra_superior = QHBoxLayout()
 
@@ -107,20 +165,10 @@ class MainWindow(QMainWindow):
 
         self.btn_directorio = QPushButton("Select Workspace Directory")
         self.btn_directorio.clicked.connect(self.btn_readDirectoy_clicked)
-
-        self.btn_convertir = QPushButton("Convert BVD -> COM")
-        self.btn_convertir.setEnabled(False)
-        self.btn_convertir.clicked.connect(self.btn_convertBVD2COM_clicked)
-        self.btn_convertir.setStyleSheet("background-color: #e0efff; color: black; font-weight: bold;")
-
-        self.chb_duplicar = QCheckBox("Duplicate Resonators")
-        self.chb_duplicar.setChecked(False)
         
         self.barra_superior.addWidget(self.btn_archivo)
         self.barra_superior.addWidget(self.btn_directorio)
-        self.barra_superior.addStretch() # Empuja el botón convertir a la derecha
-        self.barra_superior.addWidget(self.btn_convertir)
-        self.barra_superior.addWidget(self.chb_duplicar)
+        self.barra_superior.addStretch()
 
     def setup_sub_header(self):
         self.sub_barra_superior = QVBoxLayout()
@@ -314,8 +362,15 @@ class MainWindow(QMainWindow):
         self.setup_constsCOM_panel()
 
         # Añadimos los sub-bloques al panel central
-        self.layout_central_total.addWidget(self.bloque_matchnetw, stretch=0)
-        self.layout_central_total.addWidget(self.bloque_constsCOM, stretch=1)
+        self.layout_central_total.addWidget(self.bloque_matchnetw)
+        self.layout_central_total.addWidget(self.bloque_constsCOM)
+        
+        # Añadimos un espaciador al final para que si ocultas uno, 
+        # el otro no ocupe toda la pantalla a la fuerza.
+        self.layout_central_total.addStretch(1)
+
+        # Llamamos a la función una vez al final para aplicar el estado inicial
+        self.update_view()
 
     def setup_matchnetw_panel(self):
         # 2. El Formulario de parámetros
@@ -418,6 +473,7 @@ class MainWindow(QMainWindow):
 
         # Sub-bloque COM (Superior)
         self.bloque_com = QGroupBox("COM Parameters")
+        self.bloque_com.setMaximumWidth(500)
         self.bloque_com.setStyleSheet("""
             QGroupBox {
                 border: 1px solid black;
@@ -535,7 +591,7 @@ class MainWindow(QMainWindow):
         # Rellenamos los campos
         self.input_pitch.setText(formato_ingenieria(com_seleccionado.d))
         self.input_aperture.setText(formato_ingenieria(com_seleccionado.Ap))
-        self.input_Ct_COM.setText(str(com_seleccionado.Ct))
+        self.input_Ct_COM.setText(formato_ingenieria(com_seleccionado.Ct))
         self.input_digitsIDT.setText(str(com_seleccionado.digitsN))
         self.input_digitsREFL.setText(str(com_seleccionado.digitsNR))
 
@@ -734,9 +790,24 @@ class MainWindow(QMainWindow):
         check_boxs = self.findChildren(QCheckBox)
         for check_box in check_boxs:
             check_box.setCursor(Qt.PointingHandCursor)
-
+    
     # ============================================================== FUNCIONES DE LOS BOTONES ==============================================================
+    def on_save_data(self):
+        print("Guardando datos...")
 
+    def update_view(self):
+        # 1. Visibilidad de los bloques internos
+        show_mn = self.check_matching.isChecked()
+        show_com = self.check_constants.isChecked()
+        
+        self.bloque_matchnetw.setVisible(show_mn)
+        self.bloque_constsCOM.setVisible(show_com)
+
+        # 2. Visibilidad del CONTENEDOR central
+        # Si alguno de los dos es True, el contenedor debe verse. 
+        # Si ambos son False, el contenedor se oculta por completo.
+        self.panel_central_contenedor.setVisible(show_mn or show_com)
+        
     def btn_readNetworkFile_clicked(self):
         try:
             file_path = fs.select_file_to_read("Network files (*.ntw)|*.ntw|Text Files (*.txt)|*.txt|All Files (*.*)|*.*")
@@ -757,24 +828,17 @@ class MainWindow(QMainWindow):
                 self.assign_input_GeneralBVDParams()
                 self.assign_input_MatchingNetworkParams()
 
-                # Limpiamos el combo com por si ya había valores de antes
-                self.combo_com.clear()
-                self.combo_com.addItem("Pending Conversion")
+                # Ejecutamos la conversión a los parámetros COM
+                self.convertBVD2COM()
 
                 # Rellenar el combo del gráfico con los elementos disponibles
                 self.combo_elemento_graf.clear() # Borra el "Archivo no leído"
                 for bvd in self.list_BVD:
                     self.combo_elemento_graf.addItem(bvd.name.replace("BVD", "Element"))
 
-                # Borramos formulario com, Habilitamos el radio button de COM y ploteamos la primera curva por defecto
-                self.list_COM = None
-                for inp in self.campos_form_com:
-                    inp.clear()
-
                 self.radio_bvd.setEnabled(True)
-                self.radio_com.setEnabled(False)
-                self.radio_both.setEnabled(False)
-                self.btn_convertir.setEnabled(True)
+                self.radio_com.setEnabled(True)
+                self.radio_both.setEnabled(True)
 
                 self.plot_admitancia()
 
@@ -787,6 +851,29 @@ class MainWindow(QMainWindow):
                 error_detallado)
             return
         
+    def convertBVD2COM(self):
+        # Crear lista de BVD y convertir a lista COM
+        try:
+            # Creamos la lista de elementos COM con los parámetros iniciales
+            self.list_COM = mat_bvd_com.compute_list_COM(self.list_BVD, self.network_parameters)
+
+            # Rellenar los campos de Matching Network y Lossy BVD con los parámetros leídos
+            self.combo_com.clear() # Borra el "Archivo no leído"
+            for com in self.list_COM:
+                self.combo_com.addItem(com.name)
+            
+            self.actualizar_formulario_com()
+            self.plot_admitancia()
+
+        except Exception as e:
+            error_detallado = traceback.format_exc()
+            QMessageBox.critical(self, "Error", 
+                f"Error creating BVD list or computing COM parameters.\n\n"
+                f"Type: {type(e).__name__}\n"
+                f"Message: {str(e)}\n\n"+
+                error_detallado)
+            return
+
     def assign_input_GeneralBVDParams(self):
         # Assign General BVD parameters
         self.input_rs.setText(str(self.list_BVD[0].rs))
@@ -843,42 +930,6 @@ class MainWindow(QMainWindow):
                 f"Message: {str(e)}\n\n"+
                 error_detallado)
             return
-        
-    def btn_convertBVD2COM_clicked(self):
-        # Crear lista de BVD y convertir a lista COM
-        if self.list_BVD is None:
-            QMessageBox.critical(self, "Error", 
-                                 "Error: No BVD data to convert. \n"
-                                 "Select a network file first")
-            return
-        else:
-            try:
-                # Creamos la lista de elementos COM con los parámetros iniciales
-                self.list_COM = mat_bvd_com.compute_list_COM(self.list_BVD, self.network_parameters)
-
-                # Rellenar los campos de Matching Network y Lossy BVD con los parámetros leídos
-                self.combo_com.clear() # Borra el "Archivo no leído"
-                for com in self.list_COM:
-                    self.combo_com.addItem(com.name)
-                
-                self.actualizar_formulario_com()
-                self.plot_admitancia()
-                    
-                # Habilitamos el radio button de COM
-                self.radio_com.setEnabled(True)
-                self.radio_both.setEnabled(True)
-
-                # Habilitamos el botón de convertir
-                self.btn_convertir.setEnabled(False)
-
-            except Exception as e:
-                error_detallado = traceback.format_exc()
-                QMessageBox.critical(self, "Error", 
-                    f"Error creating BVD list or computing COM parameters.\n\n"
-                    f"Type: {type(e).__name__}\n"
-                    f"Message: {str(e)}\n\n"+
-                    error_detallado)
-                return
 
     def btn_createFullWorkspace_clicked(self):
         # ============================================= Verificaciones iniciales del flujo de trabajo =============================================
@@ -972,13 +1023,13 @@ class MainWindow(QMainWindow):
 
             # ========================================== 2) Debugging and tunning schematic and DDS ==========================================
             # Dependiendo del checkbox "duplicar resonadores"
-            if self.chb_duplicar.isChecked():
+            if self.check_duplicate.isChecked():
                 list_COM_ADS = mat_bvd_com.duplicar_resonadores(self.list_BVD, self.list_COM, self.network_parameters)
                 log_tiempo(f"Paso 1.5 completado en: {time.time() - inicio:.2f} segundos")
             else:
                 list_COM_ADS = self.list_COM
 
-            if CREATE_DEBUGGING_SCHEMATIC_DDS:
+            if self.check_debug.isChecked():
                 ads.create_Schematic_debugging(full_workspace_path, library_name, self.network_parameters, self.list_BVD, list_COM_ADS)
                 log_tiempo(f"Paso 2 completado en: {time.time() - inicio:.2f} segundos")
                 ads.create_DDS_debugging(full_workspace_path, len(self.list_BVD), self.network_parameters["typeseriesshunt_ini"])
