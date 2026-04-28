@@ -2,6 +2,7 @@ import importlib
 import pathlib
 import traceback
 import math
+import time
 import ads_utils as ads
 import fs_utils as fs
 import bvd_com_computations as mat_bvd_com
@@ -28,8 +29,8 @@ class MplCanvas(FigureCanvas):
         self.axes = self.fig.add_subplot(111)
         super().__init__(self.fig)
 
-CREATE_DEBUGGING_SCHEMATIC_DDS = True
 USE_DEFAULT_WORKSPACE_NAME = True
+CREATE_DEBUGGING_SCHEMATIC_DDS = False
 
 # ========================== CLASE PRINCIPAL DE LA APLICACIÓN ===========================
 
@@ -962,28 +963,35 @@ class MainWindow(QMainWindow):
             return
             
         # Crear los esquemáticos y los símbolos correspondientes
-        try:                
+        try:
+            inicio = time.time()       
             # =============================================== 1) Generate BVD and COM symbols ===============================================
             ads.create_SchematicAndSymbol_lossyBVD(lib, library_name)
             ads.create_SchematicAndSymbol_lossyCOM(lib, library_name)
+            log_tiempo(f"Paso 1 completado en: {time.time() - inicio:.2f} segundos")
 
             # ========================================== 2) Debugging and tunning schematic and DDS ==========================================
             # Dependiendo del checkbox "duplicar resonadores"
             if self.chb_duplicar.isChecked():
                 list_COM_ADS = mat_bvd_com.duplicar_resonadores(self.list_BVD, self.list_COM, self.network_parameters)
+                log_tiempo(f"Paso 1.5 completado en: {time.time() - inicio:.2f} segundos")
             else:
                 list_COM_ADS = self.list_COM
 
             if CREATE_DEBUGGING_SCHEMATIC_DDS:
                 ads.create_Schematic_debugging(full_workspace_path, library_name, self.network_parameters, self.list_BVD, list_COM_ADS)
+                log_tiempo(f"Paso 2 completado en: {time.time() - inicio:.2f} segundos")
                 ads.create_DDS_debugging(full_workspace_path, len(self.list_BVD), self.network_parameters["typeseriesshunt_ini"])
+                log_tiempo(f"Paso 3 completado en: {time.time() - inicio:.2f} segundos")
 
             # ============================================ 3) Generate BVD and COM LADDER FILTERS ============================================
             ads.create_Schematic_ladderFilter_BVDlossy(full_workspace_path, library_name, self.dataset_s2p_file_path, self.network_parameters, self.list_BVD)
             ads.create_Schematic_ladderFilter_COM(full_workspace_path, library_name, self.dataset_s2p_file_path, self.network_parameters, list_COM_ADS)
+            log_tiempo(f"Paso 4 completado en: {time.time() - inicio:.2f} segundos")
 
             # ========================================== 4) Generate BVD and COM filters' DDS pages ==========================================
             ads.create_DDS_ladderFilter_COM(full_workspace_path)
+            log_tiempo(f"Paso 5 completado en: {time.time() - inicio:.2f} segundos")
 
         except Exception as e:
             error_detallado = traceback.format_exc()
@@ -993,7 +1001,7 @@ class MainWindow(QMainWindow):
                 f"Message: {str(e)}\n\n"+
                 error_detallado)
             return
-                
+        
         QMessageBox.information(self, "Success", f"Workspace '{workspace_name}' created successfully in:\n{full_workspace_path}")
 
 
@@ -1012,6 +1020,11 @@ def formato_ingenieria(valor, precision=8):
         return f"{coef:.{precision}f}"
     
     return f"{coef:.{precision}f}e{eng_exp}"
+
+def log_tiempo(mensaje):
+    with open("tiempos_ejecucion.log", "a") as f:
+        from datetime import datetime
+        f.write(f"[{datetime.now().strftime('%H:%M:%S')}] {mensaje}\n")
 
 # Run the test if this file is executed directly
 if __name__ == "__main__":
