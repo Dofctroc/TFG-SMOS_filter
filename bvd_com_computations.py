@@ -343,6 +343,43 @@ def reajuste_Ap_Nidt(bvd: BVD, com: COM) -> COM:
 
     return com
 
+def reajuste_digitsNR(bvd: BVD, com: COM, parameters: dict) -> COM:
+    # 1. Definimos la máscara para frecuencias <= fs
+    mask = bvd.f <= bvd.fs
+    f_target = bvd.f[mask]
+    Y_target = bvd.Y[mask]
+
+    # 2. Definimos la función de error que usará least_squares
+    def objetivo(nr_val):
+        # Actualizamos el valor de NR en el objeto COM (nr_val viene como array de 1 elemento)
+        com.digitsNR = nr_val[0]
+        
+        # Recalculamos la admitancia con el nuevo NR
+        # Asumimos que esta función actualiza com.Y internamente
+        com_actualizado = compute_admitance_COM(com, parameters)
+        
+        # El error es la diferencia entre la curva real y la calculada
+        # Solo comparamos en el rango de frecuencias definido por la máscara
+        error = Y_target - com_actualizado.Y[mask]
+        
+        # Si Y es compleja (admitancia), devolvemos el valor absoluto o separamos real/imag
+        # least_squares requiere valores reales, así que devolvemos la magnitud del error
+        return np.abs(error)
+
+    # 3. Ejecutamos la optimización
+    # x0 es el valor inicial de NR que ya tiene el objeto
+    res = least_squares(
+        objetivo, 
+        x0=[com.digitsNR], 
+        bounds=(10, 100)  # Opcional: evita que NR sea negativo si no tiene sentido físico
+    )
+
+    # 4. Aplicamos el resultado final optimizado al objeto
+    com.digitsNR = round(res.x[0])
+    com = compute_admitance_COM(com, parameters) # Cálculo final definitivo
+
+    return com
+
 # ============================== DUPLICATE FUNCTION FOR COM PARAMS ==============================
 
 def duplicar_resonadores(list_BVD: list[BVD], list_COM: list[COM], parameters: dict) -> list[COM]:
@@ -467,43 +504,6 @@ def ajustar_Ap_Nidt_dentro_rango(com: COM) -> COM:
     return com
 
 # ======================================== DEPRECATED ========================================
-def reajuste_digitsNR(bvd: BVD, com: COM, parameters: dict) -> COM:
-    # 1. Definimos la máscara para frecuencias <= fs
-    mask = bvd.f <= bvd.fs
-    f_target = bvd.f[mask]
-    Y_target = bvd.Y[mask]
-
-    # 2. Definimos la función de error que usará least_squares
-    def objetivo(nr_val):
-        # Actualizamos el valor de NR en el objeto COM (nr_val viene como array de 1 elemento)
-        com.digitsNR = nr_val[0]
-        
-        # Recalculamos la admitancia con el nuevo NR
-        # Asumimos que esta función actualiza com.Y internamente
-        com_actualizado = compute_admitance_COM(com, parameters)
-        
-        # El error es la diferencia entre la curva real y la calculada
-        # Solo comparamos en el rango de frecuencias definido por la máscara
-        error = Y_target - com_actualizado.Y[mask]
-        
-        # Si Y es compleja (admitancia), devolvemos el valor absoluto o separamos real/imag
-        # least_squares requiere valores reales, así que devolvemos la magnitud del error
-        return np.abs(error)
-
-    # 3. Ejecutamos la optimización
-    # x0 es el valor inicial de NR que ya tiene el objeto
-    res = least_squares(
-        objetivo, 
-        x0=[com.digitsNR], 
-        bounds=(10, 100)  # Opcional: evita que NR sea negativo si no tiene sentido físico
-    )
-
-    # 4. Aplicamos el resultado final optimizado al objeto
-    com.digitsNR = round(res.x[0])
-    com = compute_admitance_COM(com, parameters) # Cálculo final definitivo
-
-    return com
-
 def compute_filter_admitance(list: list, parameters: dict) -> FilterResponse:
     # General Parameter
     start_type = parameters["typeseriesshunt_ini"]
