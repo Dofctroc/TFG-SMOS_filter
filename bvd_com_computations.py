@@ -28,11 +28,12 @@ class BVD():
         self.f = f
 
 class COM():
-    def __init__(self, name: str = None, d: float = None, Ap: float = None, 
+    def __init__(self, name: str = None, d: float = None, dR: float = None, Ap: float = None, 
         digitsN: int = None, digitsNR: int = None, fs: float = None, fp: float = None, 
         alpha: float = None, alpha_n: float = None, Ct: float = None, Y = None, f = None):
         self.name = name
         self.d = d
+        self.dR = dR
         self.Ap = Ap
         self.digitsN = digitsN
         self.digitsNR = digitsNR
@@ -57,8 +58,8 @@ DIGITS_NR = 40
 NR = DIGITS_NR/2
 DIGITS_NIDT_MIN = 100
 DIGITS_NIDT_MAX = 400
-NR_MIN = 10
-NR_MAX = 50
+DIGITS_NR_MIN = 10
+DIGITS_NR_MAX = 80
 AP_MIN = 10
 AP_MAX = 30
 
@@ -148,6 +149,8 @@ def compute_list_COM(list_BVD: list[BVD], parameters: dict) -> list[COM]:
         com = compute_admitance_COM(com, parameters)
         com = optimizar_digitsNR(bvd, com, parameters)
         com = compute_admitance_COM(com, parameters)
+        # com = optimizar_pitchR(bvd, com, parameters)
+        # com = compute_admitance_COM(com, parameters)
 
         # Volvemos a hacer los reajustes de parámetros necesarios
         # puesto que la optimización de NR rompe la curva de admitancia
@@ -248,6 +251,7 @@ def compute_admitance_COM(com: COM, parameters: dict) -> COM:
 def compute_pitch_COM(bvd: BVD, com: COM) -> COM:
     k_fs = (2*np.pi*bvd.fs)/VP
     com.d =  np.pi / (k_fs+K11_REAL+K12)
+    com.dR = com.d
     return com
 
 def compute_Nidt_Aperture_COM(com: COM) -> COM:
@@ -291,18 +295,13 @@ def calcular_alpha_COM(bvd: BVD, com: COM) -> COM:
     Ct = com.Ct
     Ap = com.Ap
     Nidt = com.digitsN/2
-    Nrefl = com.digitsNR/2
 
     delta = k_fp - k0
     beta = np.sqrt((delta+K11)**2 - K12**2)
-    pe = (beta-delta-K11)/K12
-
     theta = beta*Nidt*lambda0/2
-    theta_R = beta*Nrefl*lambda0/2
 
-    z_0 = (1-pe)/(1+pe)*Z0_PRIMA
-    z_0R = (1+pe)/(1-pe)*Z0_PRIMA
-    z_inR = 1 / ( 1 / (z_0R*np.tanh(1j*theta_R)+Z0_PRIMA) + np.sinh(1j*2*theta_R)/z_0R) + z_0R*np.tanh(1j*theta_R)
+    z_0, z_0R = calcular_Z0_Z0R_activeIDT(com, bvd)
+    z_inR = calcular_ZinR_reflector(com, bvd)
 
     # Ecuación a resolver:  Yin = A + B * phy^2 + D/C * phy^2 = -1/R_SHUNT
     # Variables para la resolución de la ecuación cuadrática
@@ -330,6 +329,7 @@ def calcular_alpha_COM(bvd: BVD, com: COM) -> COM:
 def reajuste_pitch(bvd: BVD, com: COM) -> COM:
     f_correction = bvd.fs / com.fs 
     com.d = com.d / f_correction
+    com.dR = com.d
 
     return com
 
@@ -382,11 +382,46 @@ def optimizar_digitsNR(bvd: BVD, com: COM, parameters: dict) -> COM:
     res = least_squares(
         objetivo, 
         x0=[com.digitsNR], 
-        bounds=(NR_MIN, NR_MAX)  # Opcional: evita que NR sea negativo si no tiene sentido físico
+        bounds=(DIGITS_NR_MIN, DIGITS_NR_MAX)  # Opcional: evita que NR sea negativo si no tiene sentido físico
     )
 
     # 4. Aplicamos el resultado final optimizado al objeto
     com.digitsNR = round(res.x[0])
+
+    return com
+
+def optimizar_pitchR(bvd: BVD, com: COM, parameters: dict) -> COM:
+    # 1. Definimos la máscara para frecuencias <= fs
+    mask = bvd.fs * 0.95 <= bvd.fs * 0.995
+    f_target = bvd.f[mask]
+    Y_target = bvd.Y[mask]
+
+    # 2. Definimos la función de error que usará least_squares
+    def objetivo(dr_val):
+        # Actualizamos el valor de NR en el objeto COM (nr_val viene como array de 1 elemento)
+        com.dR = dr_val[0]
+        
+        # Recalculamos la admitancia con el nuevo NR
+        # Asumimos que esta función actualiza com.Y internamente
+        com_actualizado = compute_admitance_COM(com, parameters)
+        
+        # El error es la diferencia entre la curva real y la calculada
+        # Solo comparamos en el rango de frecuencias definido por la máscara
+        error = Y_target - com_actualizado.Y[mask]
+        
+        # Si Y es compleja (admitancia), devolvemos el valor absoluto o separamos real/imag
+        # least_squares requiere valores reales, así que devolvemos la magnitud del error
+        return np.abs(error)
+
+    # 3. Ejecutamos la optimización
+    res = least_squares(
+        objetivo, 
+        x0=[com.dR], 
+        bounds=(com.d*0.99, com.d*1.01)  # Opcional: 1% de variación máxima respecto d_IDT
+    )
+
+    # 4. Aplicamos el resultado final optimizado al objeto
+    com.dR = res.x[0]
 
     return com
 
@@ -487,6 +522,37 @@ def Zl(f: list[complex], L: float, Q=None):
     if Q is None:
         return jw*L
     return jw*L + 2*np.pi*f*L/Q
+
+def calcular_Z0_Z0R_activeIDT(com: COM, bvd: BVD) -> tuple[float, float]:
+    k0 = np.pi / com.d
+    k_fp = (2 * np.pi * bvd.fp) / VP
+
+    delta = k_fp - k0
+    beta = np.sqrt((delta + K11)**2 - K12**2)
+    pe = (beta - delta - K11) / K12
+
+    z_0 = ((1 - pe) / (1 + pe)) * Z0_PRIMA
+    z_0R = ((1 + pe) / (1 - pe)) * Z0_PRIMA
+
+    return (z_0, z_0R)
+
+def calcular_ZinR_reflector(com: COM, bvd: BVD) -> float:
+    k0_refl = np.pi/com.dR
+    lambda0_refl = 2*com.dR
+    k_fp = (2*np.pi*bvd.fp)/VP
+
+    Nrefl = com.digitsNR/2
+
+    delta_refl = k_fp - k0_refl
+    beta_refl = np.sqrt((delta_refl+K11)**2 - K12**2)
+    pe_refl = (beta_refl-delta_refl-K11)/K12
+
+    theta_refl = beta_refl*Nrefl*lambda0_refl/2
+
+    z_0R_refl = ((1 + pe_refl) / (1 - pe_refl)) * Z0_PRIMA
+    z_in_refl = 1 / ( 1 / (z_0R_refl*np.tanh(1j*theta_refl)+Z0_PRIMA) + np.sinh(1j*2*theta_refl)/z_0R_refl) + z_0R_refl*np.tanh(1j*theta_refl)
+
+    return z_in_refl
 
 def ajustar_Ap_Nidt_dentro_rango(com: COM) -> COM:
     # Calculamos la nueva Ap y Nidt 

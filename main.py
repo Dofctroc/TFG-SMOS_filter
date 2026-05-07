@@ -528,19 +528,20 @@ class MainWindow(QMainWindow):
         
         # Creamos los campos (QLineEdit)
         self.input_pitch = QLineEdit()
-        self.input_aperture = QLineEdit()
+        self.input_pitch_refl = QLineEdit()
         self.input_Ct_COM = QLineEdit()
         self.input_digitsIDT = QLineEdit()
         self.input_digitsREFL = QLineEdit()
         
         # Nuevos campos para la segunda columna
+        self.input_aperture = QLineEdit()
         self.input_alpha = QLineEdit()
         self.input_alpha_n = QLineEdit()
         self.input_fs_COM = QLineEdit()
         self.input_fp_COM = QLineEdit()
         
         # Configuramos como "Solo lectura" y ponemos placeholders
-        self.campos_form_com = [self.input_pitch, self.input_aperture, self.input_Ct_COM, self.input_digitsIDT, 
+        self.campos_form_com = [self.input_pitch, self.input_pitch_refl, self.input_aperture, self.input_Ct_COM, self.input_digitsIDT, 
                     self.input_digitsREFL, self.input_alpha, self.input_alpha_n, self.input_fs_COM, self.input_fp_COM]
         for inp in self.campos_form_com:
             inp.setReadOnly(True)
@@ -552,14 +553,15 @@ class MainWindow(QMainWindow):
 
         # Añadimos al layout del formulario
         self.form_layout_COM_izq = QFormLayout()
-        self.form_layout_COM_izq.addRow("p (m):", self.input_pitch)
-        self.form_layout_COM_izq.addRow("Ap (λ0):", self.input_aperture)
+        self.form_layout_COM_izq.addRow("p IFT (m):", self.input_pitch)
+        self.form_layout_COM_izq.addRow("p REFL (m):", self.input_pitch_refl)
         self.form_layout_COM_izq.addRow("Ct (H):", self.input_Ct_COM)
         self.form_layout_COM_izq.addRow("Digits IDT (-):", self.input_digitsIDT)
         self.form_layout_COM_izq.addRow("Digits REFL (-):", self.input_digitsREFL)
 
         # Formulario Derecho: Resultados de Frecuencia
         self.form_layout_COM_der = QFormLayout()
+        self.form_layout_COM_der.addRow("Ap (λ0):", self.input_aperture)
         self.form_layout_COM_der.addRow("α (-):", self.input_alpha)
         self.form_layout_COM_der.addRow("α_n (-):", self.input_alpha_n)
         self.form_layout_COM_der.addRow("fs (Hz):", self.input_fs_COM)
@@ -590,11 +592,12 @@ class MainWindow(QMainWindow):
         
         # Rellenamos los campos
         self.input_pitch.setText(formato_ingenieria(com_seleccionado.d))
-        self.input_aperture.setText(formato_ingenieria(com_seleccionado.Ap))
+        self.input_pitch_refl.setText(formato_ingenieria(com_seleccionado.dR))
         self.input_Ct_COM.setText(formato_ingenieria(com_seleccionado.Ct))
         self.input_digitsIDT.setText(str(com_seleccionado.digitsN))
         self.input_digitsREFL.setText(str(com_seleccionado.digitsNR))
 
+        self.input_aperture.setText(formato_ingenieria(com_seleccionado.Ap))
         self.input_alpha.setText(str(com_seleccionado.alpha))
         self.input_alpha_n.setText(str(com_seleccionado.alpha_n))
         self.input_fs_COM.setText(formato_ingenieria(com_seleccionado.fs))
@@ -1018,7 +1021,7 @@ class MainWindow(QMainWindow):
             inicio = time.time()       
             # =============================================== 1) Generate BVD and COM symbols ===============================================
             ads.create_SchematicAndSymbol_lossyBVD(lib, library_name)
-            ads.create_SchematicAndSymbol_lossyCOM(lib, library_name)
+            ads.create_SchematicAndSymbol_lossyCOM_differentPitchRefl(lib, library_name)
             log_tiempo(f"Paso 1 completado en: {time.time() - inicio:.2f} segundos")
 
             # ========================================== 2) Debugging and tunning schematic and DDS ==========================================
