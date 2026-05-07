@@ -290,7 +290,7 @@ def create_SchematicAndSymbol_lossyBVD(library: de.Library, library_name: str) -
     design.save_design()
     design = None
 
-def create_Schematic_ladderFilter_BVDlossy(workspace_path: str, library_name: str, dataset_s2p_path: str, parameters: dict, list_BVD: list[BVD]) -> None:
+def create_Schematic_ladderFilter_BVD(workspace_path: str, library_name: str, dataset_s2p_path: str, parameters: dict, list_BVD: list[BVD]) -> None:
     assert de.version() >= 630
 
     design = db.create_schematic(f"{library_name}:{CELL_FILTER_BVD}:schematic")
@@ -570,28 +570,29 @@ def create_SchematicAndSymbol_lossyCOM(library: de.Library, library_name: str) -
 
         # Instances
         inst = design.add_var_instance(name="VAR1", origin=(-5.375, 3.75))
-        inst.vars.update({'L': '2*d', 'N': 'DigitsActiveIDT/2', 'NR': 'DigitsReflector/2', 'CT': 'Ap*N*L*epsR*eps0*exp(0.71866*tan(1.966*(duty-0.5)))', 'k0': 'pi/d'})
+        inst.vars.update({'L': '2*d', 'k0': 'pi/d', 'N': 'DigitsActiveIDT/2', 'NR': 'DigitsReflector/2', 'CT': 'Ap*N*L*epsR*eps0*exp(0.71866*tan(1.966*(duty-0.5)))'})
         # Since inst.vars does not contain 'X', we need to remove the first repeat.
         param = inst.parameters[0]
         assert isinstance(param, db.ParamRepeated)
         del(param.repeats[0])
 
         inst = design.add_var_instance(name="VAR2", origin=(-5.375, 2.125))
-        inst.vars.update({'Z0': '(1-p)/(1+p)*Z0_prima', 'Z0R': '(1+p)/(1-p)*Z0_prima', 'phi': '2*alpha*L*N*sqrt(Z0_prima)', 'k': '2*pi*freq/vf', 'beta': 'sqrt((delta+k11)^2-k12^2)', 'delta': 'k-k0', 'p': '(beta-delta-k11)/k12', 'theta': '(beta*N*L)/2'})
+        inst.vars.update({'k': '2*pi*freq/vf', 'delta': 'k-k0', 'beta': 'sqrt((delta+k11)^2-k12^2)', 'p': '(beta-delta-k11)/k12', 
+                          'theta': '(beta*N*L)/2', 'phi': '2*alpha*L*N*sqrt(Z0_prima)', 'Z0': '(1-p)/(1+p)*Z0_prima', 'Z0R': '(1+p)/(1-p)*Z0_prima'})
         # Since inst.vars does not contain 'X', we need to remove the first repeat.
         param = inst.parameters[0]
         assert isinstance(param, db.ParamRepeated)
         del(param.repeats[0])
 
         inst = design.add_var_instance(name="VAR3", origin=(-5.375, -0.125))
-        inst.vars.update({'duty': '0.55', 'k11': '-82053.9-j*alphaC', 'k12': '59340', 'eps0': '8.8541878176e-12', 'vf': '3741.8', 'Z0_prima': '1', 'epsR': '39.56'})
+        inst.vars.update({'duty': '0.55', 'k11': '-82053.9-j*alphaC', 'k12': '59340', 'vf': '3741.8', 'epsR': '39.56', 'eps0': '8.8541878176e-12', 'Z0_prima': '1'})
         # Since inst.vars does not contain 'X', we need to remove the first repeat.
         param = inst.parameters[0]
         assert isinstance(param, db.ParamRepeated)
         del(param.repeats[0])
 
         inst = design.add_var_instance(name="VAR4", origin=(-5.375, -2.25))
-        inst.vars.update({'Rshunt': '400000', 'Rseries': '0.1', 'alphaC': '450'})
+        inst.vars.update({'Rseries': '0.1', 'Rshunt': '400000', 'alphaC': '450'})
         # Since inst.vars does not contain 'X', we need to remove the first repeat.
         param = inst.parameters[0]
         assert isinstance(param, db.ParamRepeated)

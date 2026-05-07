@@ -57,6 +57,8 @@ DIGITS_NR = 40
 NR = DIGITS_NR/2
 DIGITS_NIDT_MIN = 100
 DIGITS_NIDT_MAX = 400
+DIGITS_NR_MIN = 10
+DIGITS_NR_MAX = 50
 AP_MIN = 10
 AP_MAX = 30
 
@@ -73,10 +75,6 @@ R_SERIE = 0.1
 
 N_POINTS_GRAPH = int(1e4)
 R_TERMG = 50
-
-# COEFICIENTES "EMPÍRICOS" PUEDEN DAR PROBLEMAS
-AP_COEF_FACTOR = 1 # 1.15
-ALPHA_FACTOR = 1 # 1.018
 
 # ============================== BASIC LISTS CREATION BVD & COM ==============================
 
@@ -147,7 +145,14 @@ def compute_list_COM(list_BVD: list[BVD], parameters: dict) -> list[COM]:
 
         # Calculamos las admitancias para optimizar digitsNR
         com = compute_admitance_COM(com, parameters)
-        com = optimizar_digitsNR(bvd, com)
+        com = optimizar_digitsNR(bvd, com, parameters)
+        com = compute_admitance_COM(com, parameters)
+
+        # Volvemos a hacer los reajustes de parámetros necesarios
+        # puesto que la optimización de NR rompe la curva de admitancia
+        com = reajuste_pitch(bvd, com)
+        com = reajuste_Ap_Nidt(bvd, com)
+        com = calcular_alpha_COM(bvd, com)
 
         # Calculo final de las admitancia
         com = compute_admitance_COM(com, parameters)
@@ -309,7 +314,7 @@ def calcular_alpha_COM(bvd: BVD, com: COM) -> COM:
     phi = abs(np.sqrt((-1/R_SHUNT - A) / (B + D/C)))
 
     # Cálculo final de alpha
-    alpha = phi / (2*Nidt*lambda0*np.sqrt(Z0_PRIMA)) * ALPHA_FACTOR
+    alpha = phi / (2*Nidt*lambda0*np.sqrt(Z0_PRIMA))
     alpha_n = alpha / np.sqrt(Ap)
 
     # Assign values
@@ -335,7 +340,7 @@ def reajuste_Ap_Nidt(bvd: BVD, com: COM) -> COM:
     coeficiente_FueraBanda = nivel_com / nivel_bvd
 
     # Reajustamos la Apertura
-    Ap_temp = com.Ap / (coeficiente_FueraBanda * AP_COEF_FACTOR)
+    Ap_temp = com.Ap / (coeficiente_FueraBanda)
 
     lambda0 = 2 * com.d
     Nidt = com.digitsN / 2
@@ -349,7 +354,7 @@ def reajuste_Ap_Nidt(bvd: BVD, com: COM) -> COM:
 
 def optimizar_digitsNR(bvd: BVD, com: COM, parameters: dict) -> COM:
     # 1. Definimos la máscara para frecuencias <= fs
-    mask = bvd.f <= bvd.fs
+    mask = bvd.f <= bvd.fs * 0.995
     f_target = bvd.f[mask]
     Y_target = bvd.Y[mask]
 
@@ -375,7 +380,7 @@ def optimizar_digitsNR(bvd: BVD, com: COM, parameters: dict) -> COM:
     res = least_squares(
         objetivo, 
         x0=[com.digitsNR], 
-        bounds=(10, 100)  # Opcional: evita que NR sea negativo si no tiene sentido físico
+        bounds=(DIGITS_NR_MIN, DIGITS_NR_MAX)  # Opcional: evita que NR sea negativo si no tiene sentido físico
     )
 
     # 4. Aplicamos el resultado final optimizado al objeto

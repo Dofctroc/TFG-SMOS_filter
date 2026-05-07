@@ -294,7 +294,7 @@ class MainWindow(QMainWindow):
         bvd_general_label.setStyleSheet("font-weight: bold; color: darkgray;")
         self.layout_bvd.addWidget(bvd_general_label)
         self.layout_bvd.addLayout(self.form_layout_BVD_general)
-        self.layout_bvd.addStretch()
+        self.layout_bvd.addStretch(1)
 
     def actualizar_formulario_bvd(self, index):
         """Esta función se llama cada vez que eliges un BVD en el combo"""
@@ -1036,7 +1036,7 @@ class MainWindow(QMainWindow):
                 log_tiempo(f"Paso 3 completado en: {time.time() - inicio:.2f} segundos")
 
             # ============================================ 3) Generate BVD and COM LADDER FILTERS ============================================
-            ads.create_Schematic_ladderFilter_BVDlossy(full_workspace_path, library_name, self.dataset_s2p_file_path, self.network_parameters, self.list_BVD)
+            ads.create_Schematic_ladderFilter_BVD(full_workspace_path, library_name, self.dataset_s2p_file_path, self.network_parameters, self.list_BVD)
             ads.create_Schematic_ladderFilter_COM(full_workspace_path, library_name, self.dataset_s2p_file_path, self.network_parameters, list_COM_ADS)
             log_tiempo(f"Paso 4 completado en: {time.time() - inicio:.2f} segundos")
 
