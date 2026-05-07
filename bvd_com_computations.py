@@ -143,7 +143,13 @@ def compute_list_COM(list_BVD: list[BVD], parameters: dict) -> list[COM]:
         # Hacemos los reajustes de parámetros necesarios
         com = reajuste_pitch(bvd, com)
         com = reajuste_Ap_Nidt(bvd, com)
+        com = calcular_alpha_COM(bvd, com)
 
+        # Calculamos las admitancias para optimizar digitsNR
+        com = compute_admitance_COM(com, parameters)
+        com = optimizar_digitsNR(bvd, com)
+
+        # Calculo final de las admitancia
         com = compute_admitance_COM(com, parameters)
         
         list_COM.append(com)        
@@ -339,11 +345,9 @@ def reajuste_Ap_Nidt(bvd: BVD, com: COM) -> COM:
 
     com = ajustar_Ap_Nidt_dentro_rango(com)
 
-    com = calcular_alpha_COM(bvd, com)
-
     return com
 
-def reajuste_digitsNR(bvd: BVD, com: COM, parameters: dict) -> COM:
+def optimizar_digitsNR(bvd: BVD, com: COM, parameters: dict) -> COM:
     # 1. Definimos la máscara para frecuencias <= fs
     mask = bvd.f <= bvd.fs
     f_target = bvd.f[mask]
@@ -376,7 +380,6 @@ def reajuste_digitsNR(bvd: BVD, com: COM, parameters: dict) -> COM:
 
     # 4. Aplicamos el resultado final optimizado al objeto
     com.digitsNR = round(res.x[0])
-    com = compute_admitance_COM(com, parameters) # Cálculo final definitivo
 
     return com
 
