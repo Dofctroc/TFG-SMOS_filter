@@ -57,8 +57,8 @@ DIGITS_NR = 40
 NR = DIGITS_NR/2
 DIGITS_NIDT_MIN = 100
 DIGITS_NIDT_MAX = 400
-DIGITS_NR_MIN = 10
-DIGITS_NR_MAX = 50
+NR_MIN = 10
+NR_MAX = 50
 AP_MIN = 10
 AP_MAX = 30
 
@@ -140,6 +140,7 @@ def compute_list_COM(list_BVD: list[BVD], parameters: dict) -> list[COM]:
 
         # Hacemos los reajustes de parámetros necesarios
         com = reajuste_pitch(bvd, com)
+        com = compute_admitance_COM(com, parameters)
         com = reajuste_Ap_Nidt(bvd, com)
         com = calcular_alpha_COM(bvd, com)
 
@@ -151,6 +152,7 @@ def compute_list_COM(list_BVD: list[BVD], parameters: dict) -> list[COM]:
         # Volvemos a hacer los reajustes de parámetros necesarios
         # puesto que la optimización de NR rompe la curva de admitancia
         com = reajuste_pitch(bvd, com)
+        com = compute_admitance_COM(com, parameters)
         com = reajuste_Ap_Nidt(bvd, com)
         com = calcular_alpha_COM(bvd, com)
 
@@ -380,7 +382,7 @@ def optimizar_digitsNR(bvd: BVD, com: COM, parameters: dict) -> COM:
     res = least_squares(
         objetivo, 
         x0=[com.digitsNR], 
-        bounds=(DIGITS_NR_MIN, DIGITS_NR_MAX)  # Opcional: evita que NR sea negativo si no tiene sentido físico
+        bounds=(NR_MIN, NR_MAX)  # Opcional: evita que NR sea negativo si no tiene sentido físico
     )
 
     # 4. Aplicamos el resultado final optimizado al objeto

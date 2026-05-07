@@ -1148,24 +1148,33 @@ def create_DDS_ladderFilter_COM(workspace_path: str) -> None:
     page = doc.pages[0]
     page.name = "S_Parameters"
 
+    # Definimos constantes de diseño para consistencia
+    plot_width = 4000
+    plot_height = 3000
+    margin_x = 500  # Espacio entre los dos gráficos
+
     # ========= 3) Crear Plot 1 (S11 y S33) =========
     traces_plot1 = [
         f"dB({dataset_name}..S(1,1))", 
         f"dB({dataset_name}..S(3,3))"
     ]
-    plot1 = page.add_plot((4000, 3000), traces_plot1, "Return Loss")
+    plot1 = page.add_plot((plot_width, plot_height), traces_plot1, "Return Loss")
+    # Lo movemos explícitamente al origen (opcional, suele ser el default)
+    plot1.move(dds.Point(0, 0))
 
     # ========= 4) Crear Plot 2 (S21 y S43) =========
     traces_plot2 = [
         f"dB({dataset_name}..S(2,1))", 
         f"dB({dataset_name}..S(4,3))"
     ]
-    plot2 = page.add_plot((4000, 3000), traces_plot2, "Insertion Loss")
+    plot2 = page.add_plot((plot_width, plot_height), traces_plot2, "Insertion Loss")
 
-    # ========= 5) Posicionar Plot 2 para evitar solapamiento =========
-    plot2.move(dds.Point(plot1.children_bbox.right, 0))
+    # ========= 5) Posicionar Plot 2 con lógica de la segunda función =========
+    # Calculamos la posición: ancho del primero + margen
+    x_pos_plot2 = plot_width + margin_x
+    plot2.move(dds.Point(x_pos_plot2, 0))
 
-    # ========= 6) Guardar (y DEJAR ABIERTO) =========
+    # ========= 6) Guardar =========
     dds_file_path = os.path.join(workspace_path, f"{CELL_FILTER_COM}.dds")
     doc.save(dds_file_path)
     dds.close_dds_file(doc)
