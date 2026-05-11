@@ -41,6 +41,7 @@ class MainWindow(QMainWindow):
 
         self.list_BVD = None
         self.list_COM = None
+        self.mask = None
         self.network_file_path = None
         self.workspace_path = None
 
@@ -160,13 +161,17 @@ class MainWindow(QMainWindow):
     def setup_header(self):
         self.barra_superior = QHBoxLayout()
 
-        self.btn_archivo = QPushButton("Select Network File")
-        self.btn_archivo.clicked.connect(self.btn_readNetworkFile_clicked)
+        self.btn_readNetwork = QPushButton("Select Network File")
+        self.btn_readNetwork.clicked.connect(self.btn_readNetworkFile_clicked)
+
+        self.btn_readMask = QPushButton("Select Mask File")
+        self.btn_readMask.clicked.connect(self.btn_readMask_clicked)
 
         self.btn_directorio = QPushButton("Select Workspace Directory")
         self.btn_directorio.clicked.connect(self.btn_readDirectoy_clicked)
         
-        self.barra_superior.addWidget(self.btn_archivo)
+        self.barra_superior.addWidget(self.btn_readNetwork)
+        self.barra_superior.addWidget(self.btn_readMask)
         self.barra_superior.addWidget(self.btn_directorio)
         self.barra_superior.addStretch()
 
@@ -176,10 +181,14 @@ class MainWindow(QMainWindow):
         self.label_network_file = QLabel("No file selected")
         self.label_network_file.setStyleSheet("color: red; font-size: 14px;")
 
+        self.label_mask_file = QLabel("No file selected")
+        self.label_mask_file.setStyleSheet("color: red; font-size: 14px;")
+
         self.label_workspace_path = QLabel("No directory selected")
         self.label_workspace_path.setStyleSheet("color: red; font-size: 14px;")
 
         self.sub_barra_superior.addWidget(self.label_network_file)
+        self.sub_barra_superior.addWidget(self.label_mask_file)
         self.sub_barra_superior.addWidget(self.label_workspace_path)
 
     def setup_footer(self):
@@ -813,12 +822,12 @@ class MainWindow(QMainWindow):
         
     def btn_readNetworkFile_clicked(self):
         try:
-            file_path = fs.select_file_to_read("Network files (*.ntw)|*.ntw|Text Files (*.txt)|*.txt|All Files (*.*)|*.*")
-            if file_path:
-                self.network_file_path = file_path
-                self.label_network_file.setText(f"Selected: {file_path}")
+            file_path_network = fs.select_file_to_read("Network files (*.ntw)|*.ntw|Text Files (*.txt)|*.txt|All Files (*.*)|*.*")
+            if file_path_network:
+                self.network_file_path = file_path_network
+                self.label_network_file.setText(f"Selected: {file_path_network}")
                 self.label_network_file.setStyleSheet("color: green; font-size: 14px;")
-                self.network_parameters = fs.read_and_parse_file(file_path)
+                self.network_parameters = fs.read_and_parse_file(file_path_network)
 
                 # Crear la lista de BVDs a partir de los parámetros leídos
                 self.list_BVD = mat_bvd_com.create_list_BVD(self.network_parameters)
@@ -854,6 +863,24 @@ class MainWindow(QMainWindow):
                 error_detallado)
             return
         
+    def btn_readMask_clicked(self):
+        try:
+            file_path_mask = fs.select_file_to_read("Mask files (*.msk)|*.msk|Text Files (*.txt)|*.txt|All Files (*.*)|*.*")
+            if file_path_mask:
+                self.label_mask_file.setText(f"Selected: {file_path_mask}")
+                self.label_mask_file.setStyleSheet("color: green; font-size: 14px;")
+                self.mask = fs.create_mask(file_path_mask)
+
+        except Exception as e:
+            error_detallado = traceback.format_exc()
+            QMessageBox.critical(self, "Error", 
+                f"Error reading network file.\n\n"
+                f"Type: {type(e).__name__}\n"
+                f"Message: {str(e)}\n\n"+
+                error_detallado)
+            return
+        return
+
     def convertBVD2COM(self):
         # Crear lista de BVD y convertir a lista COM
         try:
