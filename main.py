@@ -591,8 +591,8 @@ class MainWindow(QMainWindow):
         com_seleccionado = self.list_COM[index]
         
         # Rellenamos los campos
-        self.input_pitch.setText(formato_ingenieria(com_seleccionado.d))
-        self.input_pitch_refl.setText(formato_ingenieria(com_seleccionado.dR))
+        self.input_pitch.setText(formato_ingenieria(com_seleccionado.d, 12))
+        self.input_pitch_refl.setText(formato_ingenieria(com_seleccionado.dR, 12))
         self.input_Ct_COM.setText(formato_ingenieria(com_seleccionado.Ct))
         self.input_digitsIDT.setText(str(com_seleccionado.digitsN))
         self.input_digitsREFL.setText(str(com_seleccionado.digitsNR))

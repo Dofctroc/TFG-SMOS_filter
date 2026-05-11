@@ -1,5 +1,6 @@
 import copy
 import math
+import os
 import numpy as np
 from scipy.optimize import least_squares
 
@@ -77,6 +78,12 @@ R_SERIE = 0.1
 N_POINTS_GRAPH = int(1e4)
 R_TERMG = 50
 
+OPTIMIZE_NR = True
+OPTIMIZE_DR = True
+
+if os.path.exists("optimizacion.log"):
+    os.remove("optimizacion.log")
+
 # ============================== BASIC LISTS CREATION BVD & COM ==============================
 
 def create_list_BVD(parametersBVD: dict) -> list[BVD]:
@@ -127,6 +134,7 @@ def compute_list_COM(list_BVD: list[BVD], parameters: dict) -> list[COM]:
         com = COM()
         # 1) ============= CÁLCULO DEL PITCH =============
         com = compute_pitch_COM(bvd, com)
+        com.dR = com.d
 
         # 2) ============= CÁLCULO DE APERTURE Y N_IDT =============
         com.Ct = bvd.cp
@@ -141,23 +149,27 @@ def compute_list_COM(list_BVD: list[BVD], parameters: dict) -> list[COM]:
 
         # Hacemos los reajustes de parámetros necesarios
         com = reajuste_pitch(bvd, com)
+        com.dR = com.d
         com = compute_admitance_COM(com, parameters)
         com = reajuste_Ap_Nidt(bvd, com)
         com = calcular_alpha_COM(bvd, com)
 
         # Calculamos las admitancias para optimizar digitsNR
-        com = compute_admitance_COM(com, parameters)
-        com = optimizar_digitsNR(bvd, com, parameters)
-        com = compute_admitance_COM(com, parameters)
-        # com = optimizar_pitchR(bvd, com, parameters)
-        # com = compute_admitance_COM(com, parameters)
+        if OPTIMIZE_DR:
+            com = compute_admitance_COM(com, parameters)
+            com = optimizar_pitchR(bvd, com, parameters)
+        if OPTIMIZE_NR:
+            com = compute_admitance_COM(com, parameters)
+            com = optimizar_digitsNR(bvd, com, parameters)
 
         # Volvemos a hacer los reajustes de parámetros necesarios
         # puesto que la optimización de NR rompe la curva de admitancia
-        com = reajuste_pitch(bvd, com)
-        com = compute_admitance_COM(com, parameters)
-        com = reajuste_Ap_Nidt(bvd, com)
-        com = calcular_alpha_COM(bvd, com)
+        if OPTIMIZE_NR or OPTIMIZE_DR:
+            com = compute_admitance_COM(com, parameters)
+            com = reajuste_pitch(bvd, com)
+            com = compute_admitance_COM(com, parameters)
+            com = reajuste_Ap_Nidt(bvd, com)
+            com = calcular_alpha_COM(bvd, com)
 
         # Calculo final de las admitancia
         com = compute_admitance_COM(com, parameters)
@@ -213,18 +225,13 @@ def compute_admitance_COM(com: COM, parameters: dict) -> COM:
     lambda0 = 2*com.d
     k0 = np.pi/com.d
     Nidt = com.digitsN/2
-    Nrefl = com.digitsNR/2
 
     delta = k - k0
     beta = np.sqrt((delta+K11)**2 - K12**2)
-    pe = (beta-delta-K11)/K12
-
     theta = beta*Nidt*lambda0/2
-    theta_R = beta*Nrefl*lambda0/2
 
-    z_0 = (1-pe)/(1+pe)*Z0_PRIMA
-    z_0R = (1+pe)/(1-pe)*Z0_PRIMA
-    z_inR = 1 / ( 1 / (z_0R*np.tanh(1j*theta_R)+Z0_PRIMA) + np.sinh(1j*2*theta_R)/z_0R) + z_0R*np.tanh(1j*theta_R)
+    z_0, z_0R = calcular_Z0_Z0R_activeIDT(com, f)
+    z_inR = calcular_ZinR_reflector(com, f)
 
     # Variables para la resolución de la ecuación cuadrática
     A = 1j*2*np.pi*f*com.Ct
@@ -251,7 +258,6 @@ def compute_admitance_COM(com: COM, parameters: dict) -> COM:
 def compute_pitch_COM(bvd: BVD, com: COM) -> COM:
     k_fs = (2*np.pi*bvd.fs)/VP
     com.d =  np.pi / (k_fs+K11_REAL+K12)
-    com.dR = com.d
     return com
 
 def compute_Nidt_Aperture_COM(com: COM) -> COM:
@@ -300,8 +306,9 @@ def calcular_alpha_COM(bvd: BVD, com: COM) -> COM:
     beta = np.sqrt((delta+K11)**2 - K12**2)
     theta = beta*Nidt*lambda0/2
 
-    z_0, z_0R = calcular_Z0_Z0R_activeIDT(com, bvd)
-    z_inR = calcular_ZinR_reflector(com, bvd)
+    # Pasamos la fp del BVD puesto que estamos analizando dicha frecuencia
+    z_0, z_0R = calcular_Z0_Z0R_activeIDT(com, bvd.fp)
+    z_inR = calcular_ZinR_reflector(com, bvd.fp)
 
     # Ecuación a resolver:  Yin = A + B * phy^2 + D/C * phy^2 = -1/R_SHUNT
     # Variables para la resolución de la ecuación cuadrática
@@ -329,7 +336,6 @@ def calcular_alpha_COM(bvd: BVD, com: COM) -> COM:
 def reajuste_pitch(bvd: BVD, com: COM) -> COM:
     f_correction = bvd.fs / com.fs 
     com.d = com.d / f_correction
-    com.dR = com.d
 
     return com
 
@@ -375,6 +381,7 @@ def optimizar_digitsNR(bvd: BVD, com: COM, parameters: dict) -> COM:
         
         # Si Y es compleja (admitancia), devolvemos el valor absoluto o separamos real/imag
         # least_squares requiere valores reales, así que devolvemos la magnitud del error
+
         return np.abs(error)
 
     # 3. Ejecutamos la optimización
@@ -392,7 +399,8 @@ def optimizar_digitsNR(bvd: BVD, com: COM, parameters: dict) -> COM:
 
 def optimizar_pitchR(bvd: BVD, com: COM, parameters: dict) -> COM:
     # 1. Definimos la máscara para frecuencias <= fs
-    mask = bvd.fs * 0.95 <= bvd.fs * 0.995
+    # mask = bvd.f <= bvd.fs * 0.995
+    mask = (bvd.f >= bvd.fs * 0.95) & (bvd.f <= bvd.fs * 0.995)
     f_target = bvd.f[mask]
     Y_target = bvd.Y[mask]
 
@@ -411,6 +419,7 @@ def optimizar_pitchR(bvd: BVD, com: COM, parameters: dict) -> COM:
         
         # Si Y es compleja (admitancia), devolvemos el valor absoluto o separamos real/imag
         # least_squares requiere valores reales, así que devolvemos la magnitud del error
+        log_optimización(f"{error}")
         return np.abs(error)
 
     # 3. Ejecutamos la optimización
@@ -422,6 +431,10 @@ def optimizar_pitchR(bvd: BVD, com: COM, parameters: dict) -> COM:
 
     # 4. Aplicamos el resultado final optimizado al objeto
     com.dR = res.x[0]
+    log_optimización("============================ VALOR FINAL DE D & DR: ============================")
+    log_optimización(f"{com.d}")
+    log_optimización(f"{com.dR}")
+    log_optimización("\n")
 
     return com
 
@@ -523,11 +536,11 @@ def Zl(f: list[complex], L: float, Q=None):
         return jw*L
     return jw*L + 2*np.pi*f*L/Q
 
-def calcular_Z0_Z0R_activeIDT(com: COM, bvd: BVD) -> tuple[float, float]:
+def calcular_Z0_Z0R_activeIDT(com: COM, f: list[float]) -> tuple[list[float], list[float]]:
     k0 = np.pi / com.d
-    k_fp = (2 * np.pi * bvd.fp) / VP
+    k = (2 * np.pi * f) / VP
 
-    delta = k_fp - k0
+    delta = k - k0
     beta = np.sqrt((delta + K11)**2 - K12**2)
     pe = (beta - delta - K11) / K12
 
@@ -536,14 +549,14 @@ def calcular_Z0_Z0R_activeIDT(com: COM, bvd: BVD) -> tuple[float, float]:
 
     return (z_0, z_0R)
 
-def calcular_ZinR_reflector(com: COM, bvd: BVD) -> float:
+def calcular_ZinR_reflector(com: COM, f: list[float]) -> list[float]:
     k0_refl = np.pi/com.dR
     lambda0_refl = 2*com.dR
-    k_fp = (2*np.pi*bvd.fp)/VP
+    k = (2*np.pi*f)/VP
 
     Nrefl = com.digitsNR/2
 
-    delta_refl = k_fp - k0_refl
+    delta_refl = k - k0_refl
     beta_refl = np.sqrt((delta_refl+K11)**2 - K12**2)
     pe_refl = (beta_refl-delta_refl-K11)/K12
 
@@ -578,6 +591,11 @@ def ajustar_Ap_Nidt_dentro_rango(com: COM) -> COM:
         com.Ap = Ap_temp
 
     return com
+
+def log_optimización(mensaje):
+    with open("optimizacion.log", "a") as f:
+        f.write(f"{mensaje}\n")
+
 
 # ======================================== DEPRECATED ========================================
 def compute_filter_admitance(list: list, parameters: dict) -> FilterResponse:
