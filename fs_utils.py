@@ -170,7 +170,7 @@ def compute_extra_parameters_AND_convert_tofloat(parameters: dict) -> dict:
 def create_mask(ruta_archivo) -> MASK:
     mask = MASK(os.path.basename(ruta_archivo), None)
     mask.limits = read_mask_limits(ruta_archivo)
-    
+
     return mask
 
 def read_mask_limits(ruta_archivo):
@@ -187,8 +187,8 @@ def read_mask_limits(ruta_archivo):
             valores = linea.split()
 
             limite = MASK_LIMIT(
-                fstart = float(valores[0]),
-                fstop = float(valores[1]),
+                fstart = float(valores[0]) * 1e9,
+                fstop = float(valores[1]) * 1e9,
                 value_dB = float(valores[2]),
                 upper_lower = "upper" if float(valores[3]) == 0 else "lower",
                 loss_type = "S21" if float(valores[4]) == 0 else "S11"

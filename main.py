@@ -44,6 +44,7 @@ class MainWindow(QMainWindow):
         self.mask = None
         self.network_file_path = None
         self.workspace_path = None
+        self.filterResponse = None
 
         self.setWindowTitle("TFG-SMOSfilter")
         self.setGeometry(100, 100, 1000, 700)
@@ -636,6 +637,10 @@ class MainWindow(QMainWindow):
         self.radio_com = QRadioButton("COM")
         self.radio_both = QRadioButton("Both")
         self.radio_bvd.setChecked(True) # BVD por defecto
+
+        # 3. Checkbox de Mask
+        self.checkb_mask = QCheckBox("Plot Mask")
+        self.checkb_mask.setChecked(False)
         
         # Agrupamos los radios para que sean mutuamente excluyentes
         self.grupo_tipo = QButtonGroup(self)
@@ -652,7 +657,8 @@ class MainWindow(QMainWindow):
         barra_filtros.addWidget(self.radio_bvd)
         barra_filtros.addWidget(self.radio_com)
         barra_filtros.addWidget(self.radio_both)
-        barra_filtros.addStretch() # Empuja todo a la izquierda
+        barra_filtros.addStretch()
+        barra_filtros.addWidget(self.checkb_mask)
 
         # 3. Canvas y Toolbar
         self.canvas = MplCanvas(self, width=5, height=4, dpi=100)
@@ -672,12 +678,13 @@ class MainWindow(QMainWindow):
         self.radio_bvd.toggled.connect(self.plot_admitancia)
         self.radio_com.toggled.connect(self.plot_admitancia)
         self.radio_both.toggled.connect(self.plot_admitancia)
+        self.checkb_mask.toggled.connect(self.plot_admitancia)
 
     def plot_admitancia(self):
         idx = self.combo_elemento_graf.currentIndex()
         
-        color_data1 = "red"
-        color_data2 = "blue"
+        color_data1 = "green"
+        color_data2 = "goldenrod"
         label_data1 = f"BVD - Element {idx+1}"
         label_data2 = f"COM - Element {idx+1}"
 
@@ -751,6 +758,60 @@ class MainWindow(QMainWindow):
                             fontsize=9,
                             clip_on=True
                         )
+
+        if self.mask is not None and self.checkb_mask.isChecked():
+            try:
+                # Obtener rango de frecuencias visible según BVD/COM
+                f_min = None
+                f_max = None
+
+                if data1 is not None:
+                    f_min = data1.f.min()
+                    f_max = data1.f.max()
+
+                if data2 is not None:
+                    if f_min is None:
+                        f_min = data2.f.min()
+                        f_max = data2.f.max()
+                    else:
+                        f_min = min(f_min, data2.f.min())
+                        f_max = max(f_max, data2.f.max())
+
+                # Solo continuar si hay datos de frecuencia válidos
+                if f_min is not None and f_max is not None:
+
+                    for limit in self.mask.limits:
+
+                        # Recortar límite al rango visible
+                        x_start = max(limit.fstart, f_min)
+                        x_stop = min(limit.fstop, f_max)
+
+                        # Si el límite queda fuera del rango visible, ignorarlo
+                        if x_start >= x_stop:
+                            continue
+
+                        # Color según tipo
+                        if limit.upper_lower.lower() == "upper":
+                            color = "darkblue"
+                        else:
+                            color = "darkred"
+
+                        # Dibujar línea horizontal del límite
+                        self.canvas.axes.plot(
+                            [x_start, x_stop],
+                            [limit.value_dB, limit.value_dB],
+                            color=color,
+                            linewidth=1.2,   # ligeramente menor que plots principales
+                            linestyle='--'
+                        )
+
+            except Exception as e:
+                QMessageBox.critical(
+                    self,
+                    "Error",
+                    "Error drawing mask.\n""The read mask format might be incorrect or broken."
+                )
+                pass
 
         self.canvas.axes.set_xlabel("Frequency (Hz)")
         self.canvas.axes.set_ylabel("Admitance (dB)")
@@ -870,6 +931,7 @@ class MainWindow(QMainWindow):
                 self.label_mask_file.setText(f"Selected: {file_path_mask}")
                 self.label_mask_file.setStyleSheet("color: green; font-size: 14px;")
                 self.mask = fs.create_mask(file_path_mask)
+                log_mask(self.mask)
 
         except Exception as e:
             error_detallado = traceback.format_exc()
@@ -1073,6 +1135,8 @@ class MainWindow(QMainWindow):
             # ========================================== 4) Generate BVD and COM filters' DDS pages ==========================================
             ads.create_DDS_ladderFilter_COM(full_workspace_path)
             log_tiempo(f"Paso 5 completado en: {time.time() - inicio:.2f} segundos")
+            self.filterResponse = ads.extract_data_filterCOM(full_workspace_path)
+            self.combo_elemento_graf.addItem("Full COM filter")
 
         except Exception as e:
             error_detallado = traceback.format_exc()
@@ -1106,6 +1170,22 @@ def log_tiempo(mensaje):
     with open("tiempos_ejecucion.log", "a") as f:
         from datetime import datetime
         f.write(f"[{datetime.now().strftime('%H:%M:%S')}] {mensaje}\n")
+
+def log_mask(mask):
+    with open("mask.log", "a") as f:
+        f.write(f"MASK: {mask.name}\n")
+
+        for i, limit in enumerate(mask.limits):
+            f.write(
+                f"  LIMIT {i}: "
+                f"fstart={limit.fstart}, "
+                f"fstop={limit.fstop}, "
+                f"value_dB={limit.value_dB}, "
+                f"upper_lower={limit.upper_lower}, "
+                f"loss_type={limit.loss_type}\n"
+            )
+
+        f.write("\n")
 
 # Run the test if this file is executed directly
 if __name__ == "__main__":

@@ -13,6 +13,7 @@ import keysight.ads.dataset as dataset
 
 from bvd_com_computations import BVD
 from bvd_com_computations import COM
+from bvd_com_computations import FilterResponse
 
 FORCE_RECREATE = True
 
@@ -1552,6 +1553,23 @@ def extract_data_debugging(workspace_path: str, order: int,list_BVD: list[BVD], 
         idx += 1
 
     return list_BVD, list_COM
+
+def extract_data_filterCOM(workspace_path: str) -> FilterResponse:
+    dataset_name = CELL_FILTER_COM
+
+    # Extract data
+    output_dir = os.path.join(workspace_path, "data")
+    output_data = dataset.open(Path(os.path.join(output_dir, f"{dataset_name}.ds")))
+    dataf = output_data["SP1.SP"].to_dataframe().reset_index()
+
+    print_data_txt(output_data, output_dir, dataset_name)
+    
+    f = dataf["freq"]
+    y = dataf["Y[1,1]"]
+
+    filter_response = FilterResponse(y, f)
+
+    return filter_response
 
 def print_data_txt(output_data: any, output_dir: any, dataset_name: any) -> None:
     # ==========================================
