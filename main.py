@@ -763,29 +763,29 @@ class MainWindow(QMainWindow):
                         f_max = self.list_BVD[0].f.max()
 
                         for limit in self.mask.limits:
+                            if limit.loss_type != "S11":
+                                # Recortar límite al rango visible
+                                x_start = max(limit.fstart, f_min)
+                                x_stop = min(limit.fstop, f_max)
 
-                            # Recortar límite al rango visible
-                            x_start = max(limit.fstart, f_min)
-                            x_stop = min(limit.fstop, f_max)
+                                # Si el límite queda fuera del rango visible, ignorarlo
+                                if x_start >= x_stop:
+                                    continue
 
-                            # Si el límite queda fuera del rango visible, ignorarlo
-                            if x_start >= x_stop:
-                                continue
+                                # Color según tipo
+                                if limit.upper_lower.lower() == "upper":
+                                    color = "darkblue"
+                                else:
+                                    color = "darkred"
 
-                            # Color según tipo
-                            if limit.upper_lower.lower() == "upper":
-                                color = "darkblue"
-                            else:
-                                color = "darkred"
-
-                            # Dibujar línea horizontal del límite
-                            self.canvas.axes.plot(
-                                [x_start, x_stop],
-                                [limit.value_dB, limit.value_dB],
-                                color=color,
-                                linewidth=1.2,   # ligeramente menor que plots principales
-                                linestyle='--'
-                            )
+                                # Dibujar línea horizontal del límite
+                                self.canvas.axes.plot(
+                                    [x_start, x_stop],
+                                    [limit.value_dB, limit.value_dB],
+                                    color=color,
+                                    linewidth=1.2,   # ligeramente menor que plots principales
+                                    linestyle='--'
+                                )
 
                 except Exception:
                     QMessageBox.critical(self, "Error", "Error drawing mask.\n""The read mask format might be incorrect or broken.")
