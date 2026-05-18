@@ -1114,7 +1114,7 @@ class MainWindow(QMainWindow):
             inicio = time.time()       
             # =============================================== 1) Generate BVD and COM symbols ===============================================
             ads.create_SchematicAndSymbol_lossyBVD(lib, library_name)
-            ads.create_SchematicAndSymbol_lossyCOM_differentPitchRefl(lib, library_name)
+            ads.create_SchematicAndSymbol_lossyCOM(lib, library_name)
             log_tiempo(f"Paso 1 completado en: {time.time() - inicio:.2f} segundos")
 
             # ========================================== 2) Debugging and tunning schematic and DDS ==========================================
