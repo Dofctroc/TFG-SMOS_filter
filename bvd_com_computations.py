@@ -1,6 +1,7 @@
 import copy
 import math
 import os
+import csv
 import numpy as np
 from scipy.optimize import least_squares
 
@@ -28,10 +29,18 @@ class BVD():
         self.Y = Y
         self.f = f
 
+class COMconstants():
+    def __init__(self, k11, k12, vp, eps_r):
+        self.k11 = k11
+        self.k12 = k12
+        self.vp = vp
+        self.eps_r = eps_r
+
 class COM():
     def __init__(self, name: str = None, d: float = None, dR: float = None, Ap: float = None, 
         digitsN: int = None, digitsNR: int = None, fs: float = None, fp: float = None, 
-        alpha: float = None, alpha_n: float = None, Ct: float = None, Y = None, f = None):
+        alpha: float = None, alpha_n: float = None, Ct: float = None, Y = None, f = None,
+        constants: COMconstants = None):
         self.name = name
         self.d = d
         self.dR = dR
@@ -45,6 +54,7 @@ class COM():
         self.fp = fp
         self.Y = Y
         self.f = f
+        self.constants = constants
 
 class FilterResponse():
     def __init__(self, Y=None, f=None):
@@ -132,6 +142,8 @@ def compute_list_COM(list_BVD: list[BVD], parameters: dict) -> list[COM]:
 
     for bvd in list_BVD:
         com = COM()
+        com.constants = assign_COM_constants_from_excel(bvd)
+
         # 1) ============= CÁLCULO DEL PITCH =============
         com = compute_pitch_COM(bvd, com)
         com.dR = com.d
@@ -596,6 +608,71 @@ def log_optimización(mensaje):
     with open("optimizacion.log", "a") as f:
         f.write(f"{mensaje}\n")
 
+def assign_COM_constants_from_excel(bvd: BVD) -> COMconstants:
+    # 1. OBTENER LA RUTA AUTOMÁTICAMENTE
+    # os.path.dirname(__file__) obtiene la carpeta exacta donde está guardado este script de Python
+    carpeta_actual = os.path.dirname(os.path.abspath(__file__))
+    csv_path = os.path.join(carpeta_actual, "COMSET_CRF.csv")
+
+    # Verificación de seguridad por si olvidas poner el archivo en la carpeta
+    if not os.path.exists(csv_path):
+        raise FileNotFoundError(f"No se encontró el archivo obligatorio en: {csv_path}")
+
+    target_fs = bvd.fs
+
+    # 2. AUTODETECTAR EL DELIMITADOR (";" o ",")
+    with open(csv_path, mode="r", encoding="latin-1") as f:
+        primera_linea = f.readline()
+        delimitador = (
+            ";" if primera_linea.count(";") > primera_linea.count(",") else ","
+        )
+
+    # Función interna auxiliar para limpiar y convertir a float
+    def limpiar_float(valor_str):
+        if not valor_str:
+            return 0.0
+        valor_str = valor_str.strip()
+        if delimitador == ";":
+            valor_str = valor_str.replace(",", ".")
+        return float(valor_str)
+
+    # 3. LEER EL ARCHIVO LOCAL
+    fila_mas_cercana = None
+    menor_diferencia = float("inf")
+
+    with open(csv_path, mode="r", encoding="latin-1") as f:
+        lector = csv.DictReader(f, delimiter=delimitador)
+
+        if "fs1" not in lector.fieldnames:
+            raise ValueError("El archivo 'COMSET_CRF.csv' no contiene la columna 'fs1'.")
+
+        for fila in lector:
+            try:
+                valor_fs1 = limpiar_float(fila["fs1"])
+            except ValueError:
+                continue
+
+            diferencia = abs(valor_fs1 - target_fs)
+
+            if diferencia < menor_diferencia:
+                menor_diferencia = diferencia
+                fila_mas_cercana = fila
+
+    if not fila_mas_cercana:
+        raise ValueError(
+            "No se encontraron datos válidos en 'COMSET_CRF.csv'."
+        )
+    
+    # 4. EXTRAER Y LIMPIAR EL RESTO DE VALORES
+    k11 = limpiar_float(fila_mas_cercana["k11"])
+    k12 = limpiar_float(fila_mas_cercana["k12"])
+    vp = limpiar_float(fila_mas_cercana["Vf"])
+    eps_r_eff = limpiar_float(fila_mas_cercana["eps_r,eff"])
+    att_cte = limpiar_float(fila_mas_cercana["Att. Cte"])
+
+    constants = COMconstants(k11=k11 - 1j * att_cte, k12=k12, vp=vp, eps_r=eps_r_eff)
+
+    return constants
 
 # ======================================== DEPRECATED ========================================
 def compute_filter_admitance(list: list, parameters: dict) -> FilterResponse:
