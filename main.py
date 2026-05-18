@@ -134,7 +134,7 @@ class MainWindow(QMainWindow):
 
         self.check_matching = QAction("Show Matching Network Parameters", self)
         self.check_matching.setCheckable(True)
-        self.check_matching.setChecked(True) 
+        self.check_matching.setChecked(False) 
         self.check_matching.toggled.connect(self.update_view)
         view_menu.addAction(self.check_matching)
 

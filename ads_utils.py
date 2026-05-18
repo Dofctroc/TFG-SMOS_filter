@@ -1338,10 +1338,10 @@ def print_data_txt(output_data: any, output_dir: any, dataset_name: any) -> None
 # ===================================== SCHEMATIC ORIENTED FUNCTIONS =====================================
 
 def instantiate_rflib_element(design: object, element_type: str, name: str, origin: tuple[float, float], 
-                              value: str, angle: float = 0.0, param_name: str = None) -> None:
+                              value: str, angle: float = 0.0) -> None:
     component_path = f"ads_rflib:{element_type}"
     inst = design.add_instance(component_path, name=name, origin=origin, angle=angle)
-    inst.parameters[param_name].value = value
+    inst.parameters[element_type].value = value
     inst.update_item_annotation()
 
     return

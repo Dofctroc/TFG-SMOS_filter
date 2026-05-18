@@ -390,7 +390,7 @@ def reajuste_Ap_Nidt(bvd: BVD, com: COM) -> COM:
 
 def optimizar_digitsNR(bvd: BVD, com: COM, parameters: dict) -> COM:
     # 1. Definimos la máscara para frecuencias <= fs
-    mask = bvd.f <= bvd.fs * 0.995
+    mask = bvd.f <= bvd.fs * 0.996
     f_target = bvd.f[mask]
     Y_target = bvd.Y[mask]
 
