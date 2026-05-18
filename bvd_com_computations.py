@@ -61,9 +61,9 @@ class FilterResponse():
         self.Y = Y
         self.f = f
 
-K11_REAL = -82053.9
-K11 = -82053.9 - 1j*450
-K12 = 59340.0
+# K11_REAL = -82053.9
+# K11 = -82053.9 - 1j*450
+# K12 = 59340.0
 
 DIGITS_NR = 40
 NR = DIGITS_NR/2
@@ -74,12 +74,12 @@ DIGITS_NR_MAX = 80
 AP_MIN = 10
 AP_MAX = 30
 
-VP = 3741.8
-EPS_R = 39.56
+# VP = 3741.8
+# EPS_R = 39.56
 EPS_0 = 8.854e-12
 DUTY = 0.55
 
-CONST = EPS_R * EPS_0 * np.exp(0.71866 * np.tan(1.966*(DUTY - 0.5)))
+# CONST = EPS_R * EPS_0 * np.exp(0.71866 * np.tan(1.966*(DUTY - 0.5)))
 
 Z0_PRIMA = 1
 R_SHUNT = 4e6
@@ -225,6 +225,10 @@ def compute_admitance_BVD(bvd: BVD, parameters: dict) -> BVD:
     return bvd
 
 def compute_admitance_COM(com: COM, parameters: dict) -> COM:
+    vp = com.constants.vp
+    k11 = com.constants.k11
+    k12 = com.constants.k12
+
     # Sweep parameters
     fstart = float(parameters["fstart1"])
     fstop = float(parameters["fstop1"])
@@ -233,13 +237,13 @@ def compute_admitance_COM(com: COM, parameters: dict) -> COM:
     f = np.linspace(fstart, fstop, npoints)
 
     # Calculamos la admitancia para cado bloque COM
-    k = (2*np.pi*f)/VP
+    k = (2*np.pi*f)/vp
     lambda0 = 2*com.d
     k0 = np.pi/com.d
     Nidt = com.digitsN/2
 
     delta = k - k0
-    beta = np.sqrt((delta+K11)**2 - K12**2)
+    beta = np.sqrt((delta+k11)**2 - k12**2)
     theta = beta*Nidt*lambda0/2
 
     z_0, z_0R = calcular_Z0_Z0R_activeIDT(com, f)
@@ -268,36 +272,40 @@ def compute_admitance_COM(com: COM, parameters: dict) -> COM:
 # ============================== COM PARAMETERS COMPUTE FUNCTIONS ==============================
 
 def compute_pitch_COM(bvd: BVD, com: COM) -> COM:
-    k_fs = (2*np.pi*bvd.fs)/VP
-    com.d =  np.pi / (k_fs+K11_REAL+K12)
+    k_fs = (2*np.pi*bvd.fs)/com.constants.vp
+    com.d =  np.pi / (k_fs+np.real(com.constants.k11)+com.constants.k12)
     return com
 
 def compute_Nidt_Aperture_COM(com: COM) -> COM:
+    eps_r = com.constants.eps_r
+
     # Primer cálculo de Aperture
     Ct = com.Ct
     lambda0 = 2*com.d
     Nidt = 150
 
-    Ap = Ct / (Nidt * CONST) / lambda0
+    const = eps_r * EPS_0 * np.exp(0.71866 * np.tan(1.966*(DUTY - 0.5)))
+
+    Ap = Ct / (Nidt * const) / lambda0
     
     # Comprobación de los límites para Ap y ajuste de Nidt
     if Ap > AP_MAX:
         Ap = AP_MAX
-        Nidt = Ct / (Ap * CONST) / lambda0
+        Nidt = Ct / (Ap * const) / lambda0
         Nidt = round(Nidt)
         
         # Recalculamos la Apertura debido al redondeo de Nidt
-        Ap = Ct / (Nidt * CONST) / lambda0
+        Ap = Ct / (Nidt * const) / lambda0
 
     elif Ap < AP_MIN:
         Ap = AP_MIN
-        Nidt = Ct / (Ap * CONST) / lambda0
+        Nidt = Ct / (Ap * const) / lambda0
         Nidt = round(Nidt)
         
         # Recalculamos la Apertura debido al redondeo de Nidt
-        Ap = Ct / (Nidt * CONST) / lambda0
+        Ap = Ct / (Nidt * const) / lambda0
 
-    com.Ct = Ap * (Nidt * CONST) * lambda0
+    com.Ct = Ap * (Nidt * const) * lambda0
     com.Ap = Ap
     com.digitsN = Nidt*2
     com.digitsNR = DIGITS_NR
@@ -305,17 +313,21 @@ def compute_Nidt_Aperture_COM(com: COM) -> COM:
     return com
 
 def calcular_alpha_COM(bvd: BVD, com: COM) -> COM:
+    vp = com.constants.vp
+    k11 = com.constants.k11
+    k12 = com.constants.k12
+
     # Cálculo constantes de entrada
     k0 = np.pi/com.d
     lambda0 = 2*com.d
-    k_fp = (2*np.pi*bvd.fp)/VP
+    k_fp = (2*np.pi*bvd.fp)/vp
 
     Ct = com.Ct
     Ap = com.Ap
     Nidt = com.digitsN/2
 
     delta = k_fp - k0
-    beta = np.sqrt((delta+K11)**2 - K12**2)
+    beta = np.sqrt((delta+k11)**2 - k12**2)
     theta = beta*Nidt*lambda0/2
 
     # Pasamos la fp del BVD puesto que estamos analizando dicha frecuencia
@@ -352,6 +364,8 @@ def reajuste_pitch(bvd: BVD, com: COM) -> COM:
     return com
 
 def reajuste_Ap_Nidt(bvd: BVD, com: COM) -> COM:
+    eps_r = com.constants.eps_r
+
     # Tomamos los primeros valores de la admitancia (fuera banda)
     nivel_bvd = np.mean(np.abs(bvd.Y[:max(1, int(len(bvd.Y) * 0.01))]))
     nivel_com = np.mean(np.abs(com.Y[:max(1, int(len(com.Y) * 0.01))]))
@@ -365,7 +379,9 @@ def reajuste_Ap_Nidt(bvd: BVD, com: COM) -> COM:
     lambda0 = 2 * com.d
     Nidt = com.digitsN / 2
     
-    Ct = Ap_temp * lambda0 * Nidt * CONST
+    const = eps_r * EPS_0 * np.exp(0.71866 * np.tan(1.966*(DUTY - 0.5)))
+
+    Ct = Ap_temp * lambda0 * Nidt * const
     com.Ct = Ct
 
     com = ajustar_Ap_Nidt_dentro_rango(com)
@@ -549,12 +565,16 @@ def Zl(f: list[complex], L: float, Q=None):
     return jw*L + 2*np.pi*f*L/Q
 
 def calcular_Z0_Z0R_activeIDT(com: COM, f: list[float]) -> tuple[list[float], list[float]]:
+    vp = com.constants.vp
+    k11 = com.constants.k11
+    k12 = com.constants.k12
+
     k0 = np.pi / com.d
-    k = (2 * np.pi * f) / VP
+    k = (2 * np.pi * f) / vp
 
     delta = k - k0
-    beta = np.sqrt((delta + K11)**2 - K12**2)
-    pe = (beta - delta - K11) / K12
+    beta = np.sqrt((delta + k11)**2 - k12**2)
+    pe = (beta - delta - k11) / k12
 
     z_0 = ((1 - pe) / (1 + pe)) * Z0_PRIMA
     z_0R = ((1 + pe) / (1 - pe)) * Z0_PRIMA
@@ -562,15 +582,19 @@ def calcular_Z0_Z0R_activeIDT(com: COM, f: list[float]) -> tuple[list[float], li
     return (z_0, z_0R)
 
 def calcular_ZinR_reflector(com: COM, f: list[float]) -> list[float]:
+    vp = com.constants.vp
+    k11 = com.constants.k11
+    k12 = com.constants.k12
+
     k0_refl = np.pi/com.dR
     lambda0_refl = 2*com.dR
-    k = (2*np.pi*f)/VP
+    k = (2*np.pi*f)/vp
 
     Nrefl = com.digitsNR/2
 
     delta_refl = k - k0_refl
-    beta_refl = np.sqrt((delta_refl+K11)**2 - K12**2)
-    pe_refl = (beta_refl-delta_refl-K11)/K12
+    beta_refl = np.sqrt((delta_refl+k11)**2 - k12**2)
+    pe_refl = (beta_refl-delta_refl-k11)/k12
 
     theta_refl = beta_refl*Nrefl*lambda0_refl/2
 
@@ -580,24 +604,28 @@ def calcular_ZinR_reflector(com: COM, f: list[float]) -> list[float]:
     return z_in_refl
 
 def ajustar_Ap_Nidt_dentro_rango(com: COM) -> COM:
+    eps_r = com.constants.eps_r
+
+    const = eps_r * EPS_0 * np.exp(0.71866 * np.tan(1.966*(DUTY - 0.5)))
+
     # Calculamos la nueva Ap y Nidt 
     # Hace falta valores de Nidt y de Ct predefinidos !!
     Nidt = com.digitsN / 2
     Ct = com.Ct
     lambda0 = 2 * com.d
-    Ap_temp = Ct / (Nidt * lambda0 * CONST)
+    Ap_temp = Ct / (Nidt * lambda0 * const)
 
     if Ap_temp < AP_MIN:
         Ap_temp = AP_MIN
-        Nidt = math.floor(Ct / (Ap_temp * lambda0 * CONST))
+        Nidt = math.floor(Ct / (Ap_temp * lambda0 * const))
         com.digitsN = Nidt * 2
-        com.Ap = Ct / (Nidt * lambda0 * CONST)
+        com.Ap = Ct / (Nidt * lambda0 * const)
 
     elif Ap_temp > AP_MAX:
         Ap_temp = AP_MAX
-        Nidt = math.ceil(Ct / (Ap_temp * lambda0 * CONST))
+        Nidt = math.ceil(Ct / (Ap_temp * lambda0 * const))
         com.digitsN = Nidt * 2
-        com.Ap = Ct / (Nidt * lambda0 * CONST)
+        com.Ap = Ct / (Nidt * lambda0 * const)
         
     else:
         com.Ap = Ap_temp
