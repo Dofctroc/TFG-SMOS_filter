@@ -1,5 +1,7 @@
 import copy
 import math
+import os
+import csv
 import numpy as np
 from scipy.optimize import least_squares
 
@@ -27,12 +29,21 @@ class BVD():
         self.Y = Y
         self.f = f
 
+class COMconstants():
+    def __init__(self, k11, k12, vp, eps_r):
+        self.k11 = k11
+        self.k12 = k12
+        self.vp = vp
+        self.eps_r = eps_r
+
 class COM():
-    def __init__(self, name: str = None, d: float = None, Ap: float = None, 
+    def __init__(self, name: str = None, d: float = None, dR: float = None, Ap: float = None, 
         digitsN: int = None, digitsNR: int = None, fs: float = None, fp: float = None, 
-        alpha: float = None, alpha_n: float = None, Ct: float = None, Y = None, f = None):
+        alpha: float = None, alpha_n: float = None, Ct: float = None, Y = None, f = None,
+        constants: COMconstants = None):
         self.name = name
         self.d = d
+        self.dR = dR
         self.Ap = Ap
         self.digitsN = digitsN
         self.digitsNR = digitsNR
@@ -43,29 +54,32 @@ class COM():
         self.fp = fp
         self.Y = Y
         self.f = f
+        self.constants = constants
 
 class FilterResponse():
     def __init__(self, Y=None, f=None):
         self.Y = Y
         self.f = f
 
-K11_REAL = -82053.9
-K11 = -82053.9 - 1j*450
-K12 = 59340.0
+# K11_REAL = -82053.9
+# K11 = -82053.9 - 1j*450
+# K12 = 59340.0
 
 DIGITS_NR = 40
 NR = DIGITS_NR/2
 DIGITS_NIDT_MIN = 100
 DIGITS_NIDT_MAX = 400
+DIGITS_NR_MIN = 10
+DIGITS_NR_MAX = 80
 AP_MIN = 10
 AP_MAX = 30
 
-VP = 3741.8
-EPS_R = 39.56
+# VP = 3741.8
+# EPS_R = 39.56
 EPS_0 = 8.854e-12
 DUTY = 0.55
 
-CONST = EPS_R * EPS_0 * np.exp(0.71866 * np.tan(1.966*(DUTY - 0.5)))
+# CONST = EPS_R * EPS_0 * np.exp(0.71866 * np.tan(1.966*(DUTY - 0.5)))
 
 Z0_PRIMA = 1
 R_SHUNT = 4e6
@@ -74,9 +88,11 @@ R_SERIE = 0.1
 N_POINTS_GRAPH = int(1e4)
 R_TERMG = 50
 
-# COEFICIENTES "EMPÍRICOS" PUEDEN DAR PROBLEMAS
-AP_COEF_FACTOR = 1 # 1.15
-ALPHA_FACTOR = 1 # 1.018
+OPTIMIZE_NR = True
+OPTIMIZE_DR = True
+
+if os.path.exists("optimizacion.log"):
+    os.remove("optimizacion.log")
 
 # ============================== BASIC LISTS CREATION BVD & COM ==============================
 
@@ -126,8 +142,11 @@ def compute_list_COM(list_BVD: list[BVD], parameters: dict) -> list[COM]:
 
     for bvd in list_BVD:
         com = COM()
+        com.constants = assign_COM_constants_from_excel(bvd)
+
         # 1) ============= CÁLCULO DEL PITCH =============
         com = compute_pitch_COM(bvd, com)
+        com.dR = com.d
 
         # 2) ============= CÁLCULO DE APERTURE Y N_IDT =============
         com.Ct = bvd.cp
@@ -142,12 +161,27 @@ def compute_list_COM(list_BVD: list[BVD], parameters: dict) -> list[COM]:
 
         # Hacemos los reajustes de parámetros necesarios
         com = reajuste_pitch(bvd, com)
+        com.dR = com.d
+        com = compute_admitance_COM(com, parameters)
         com = reajuste_Ap_Nidt(bvd, com)
         com = calcular_alpha_COM(bvd, com)
 
         # Calculamos las admitancias para optimizar digitsNR
-        com = compute_admitance_COM(com, parameters)
-        com = optimizar_digitsNR(bvd, com)
+        if OPTIMIZE_NR:
+            com = compute_admitance_COM(com, parameters)
+            com = optimizar_digitsNR(bvd, com, parameters)
+        if OPTIMIZE_DR:
+            com = compute_admitance_COM(com, parameters)
+            com = optimizar_pitchR(bvd, com, parameters)
+
+        # Volvemos a hacer los reajustes de parámetros necesarios
+        # puesto que la optimización de NR rompe la curva de admitancia
+        if OPTIMIZE_NR or OPTIMIZE_DR:
+            com = compute_admitance_COM(com, parameters)
+            com = reajuste_pitch(bvd, com)
+            com = compute_admitance_COM(com, parameters)
+            com = reajuste_Ap_Nidt(bvd, com)
+            com = calcular_alpha_COM(bvd, com)
 
         # Calculo final de las admitancia
         com = compute_admitance_COM(com, parameters)
@@ -191,6 +225,10 @@ def compute_admitance_BVD(bvd: BVD, parameters: dict) -> BVD:
     return bvd
 
 def compute_admitance_COM(com: COM, parameters: dict) -> COM:
+    vp = com.constants.vp
+    k11 = com.constants.k11
+    k12 = com.constants.k12
+
     # Sweep parameters
     fstart = float(parameters["fstart1"])
     fstop = float(parameters["fstop1"])
@@ -199,22 +237,17 @@ def compute_admitance_COM(com: COM, parameters: dict) -> COM:
     f = np.linspace(fstart, fstop, npoints)
 
     # Calculamos la admitancia para cado bloque COM
-    k = (2*np.pi*f)/VP
+    k = (2*np.pi*f)/vp
     lambda0 = 2*com.d
     k0 = np.pi/com.d
     Nidt = com.digitsN/2
-    Nrefl = com.digitsNR/2
 
     delta = k - k0
-    beta = np.sqrt((delta+K11)**2 - K12**2)
-    pe = (beta-delta-K11)/K12
-
+    beta = np.sqrt((delta+k11)**2 - k12**2)
     theta = beta*Nidt*lambda0/2
-    theta_R = beta*Nrefl*lambda0/2
 
-    z_0 = (1-pe)/(1+pe)*Z0_PRIMA
-    z_0R = (1+pe)/(1-pe)*Z0_PRIMA
-    z_inR = 1 / ( 1 / (z_0R*np.tanh(1j*theta_R)+Z0_PRIMA) + np.sinh(1j*2*theta_R)/z_0R) + z_0R*np.tanh(1j*theta_R)
+    z_0, z_0R = calcular_Z0_Z0R_activeIDT(com, f)
+    z_inR = calcular_ZinR_reflector(com, f)
 
     # Variables para la resolución de la ecuación cuadrática
     A = 1j*2*np.pi*f*com.Ct
@@ -239,36 +272,40 @@ def compute_admitance_COM(com: COM, parameters: dict) -> COM:
 # ============================== COM PARAMETERS COMPUTE FUNCTIONS ==============================
 
 def compute_pitch_COM(bvd: BVD, com: COM) -> COM:
-    k_fs = (2*np.pi*bvd.fs)/VP
-    com.d =  np.pi / (k_fs+K11_REAL+K12)
+    k_fs = (2*np.pi*bvd.fs)/com.constants.vp
+    com.d =  np.pi / (k_fs+np.real(com.constants.k11)+com.constants.k12)
     return com
 
 def compute_Nidt_Aperture_COM(com: COM) -> COM:
+    eps_r = com.constants.eps_r
+
     # Primer cálculo de Aperture
     Ct = com.Ct
     lambda0 = 2*com.d
     Nidt = 150
 
-    Ap = Ct / (Nidt * CONST) / lambda0
+    const = eps_r * EPS_0 * np.exp(0.71866 * np.tan(1.966*(DUTY - 0.5)))
+
+    Ap = Ct / (Nidt * const) / lambda0
     
     # Comprobación de los límites para Ap y ajuste de Nidt
     if Ap > AP_MAX:
         Ap = AP_MAX
-        Nidt = Ct / (Ap * CONST) / lambda0
+        Nidt = Ct / (Ap * const) / lambda0
         Nidt = round(Nidt)
         
         # Recalculamos la Apertura debido al redondeo de Nidt
-        Ap = Ct / (Nidt * CONST) / lambda0
+        Ap = Ct / (Nidt * const) / lambda0
 
     elif Ap < AP_MIN:
         Ap = AP_MIN
-        Nidt = Ct / (Ap * CONST) / lambda0
+        Nidt = Ct / (Ap * const) / lambda0
         Nidt = round(Nidt)
         
         # Recalculamos la Apertura debido al redondeo de Nidt
-        Ap = Ct / (Nidt * CONST) / lambda0
+        Ap = Ct / (Nidt * const) / lambda0
 
-    com.Ct = Ap * (Nidt * CONST) * lambda0
+    com.Ct = Ap * (Nidt * const) * lambda0
     com.Ap = Ap
     com.digitsN = Nidt*2
     com.digitsNR = DIGITS_NR
@@ -276,26 +313,26 @@ def compute_Nidt_Aperture_COM(com: COM) -> COM:
     return com
 
 def calcular_alpha_COM(bvd: BVD, com: COM) -> COM:
+    vp = com.constants.vp
+    k11 = com.constants.k11
+    k12 = com.constants.k12
+
     # Cálculo constantes de entrada
     k0 = np.pi/com.d
     lambda0 = 2*com.d
-    k_fp = (2*np.pi*bvd.fp)/VP
+    k_fp = (2*np.pi*bvd.fp)/vp
 
     Ct = com.Ct
     Ap = com.Ap
     Nidt = com.digitsN/2
-    Nrefl = com.digitsNR/2
 
     delta = k_fp - k0
-    beta = np.sqrt((delta+K11)**2 - K12**2)
-    pe = (beta-delta-K11)/K12
-
+    beta = np.sqrt((delta+k11)**2 - k12**2)
     theta = beta*Nidt*lambda0/2
-    theta_R = beta*Nrefl*lambda0/2
 
-    z_0 = (1-pe)/(1+pe)*Z0_PRIMA
-    z_0R = (1+pe)/(1-pe)*Z0_PRIMA
-    z_inR = 1 / ( 1 / (z_0R*np.tanh(1j*theta_R)+Z0_PRIMA) + np.sinh(1j*2*theta_R)/z_0R) + z_0R*np.tanh(1j*theta_R)
+    # Pasamos la fp del BVD puesto que estamos analizando dicha frecuencia
+    z_0, z_0R = calcular_Z0_Z0R_activeIDT(com, bvd.fp)
+    z_inR = calcular_ZinR_reflector(com, bvd.fp)
 
     # Ecuación a resolver:  Yin = A + B * phy^2 + D/C * phy^2 = -1/R_SHUNT
     # Variables para la resolución de la ecuación cuadrática
@@ -309,7 +346,7 @@ def calcular_alpha_COM(bvd: BVD, com: COM) -> COM:
     phi = abs(np.sqrt((-1/R_SHUNT - A) / (B + D/C)))
 
     # Cálculo final de alpha
-    alpha = phi / (2*Nidt*lambda0*np.sqrt(Z0_PRIMA)) * ALPHA_FACTOR
+    alpha = phi / (2*Nidt*lambda0*np.sqrt(Z0_PRIMA))
     alpha_n = alpha / np.sqrt(Ap)
 
     # Assign values
@@ -327,6 +364,8 @@ def reajuste_pitch(bvd: BVD, com: COM) -> COM:
     return com
 
 def reajuste_Ap_Nidt(bvd: BVD, com: COM) -> COM:
+    eps_r = com.constants.eps_r
+
     # Tomamos los primeros valores de la admitancia (fuera banda)
     nivel_bvd = np.mean(np.abs(bvd.Y[:max(1, int(len(bvd.Y) * 0.01))]))
     nivel_com = np.mean(np.abs(com.Y[:max(1, int(len(com.Y) * 0.01))]))
@@ -335,12 +374,14 @@ def reajuste_Ap_Nidt(bvd: BVD, com: COM) -> COM:
     coeficiente_FueraBanda = nivel_com / nivel_bvd
 
     # Reajustamos la Apertura
-    Ap_temp = com.Ap / (coeficiente_FueraBanda * AP_COEF_FACTOR)
+    Ap_temp = com.Ap / (coeficiente_FueraBanda)
 
     lambda0 = 2 * com.d
     Nidt = com.digitsN / 2
     
-    Ct = Ap_temp * lambda0 * Nidt * CONST
+    const = eps_r * EPS_0 * np.exp(0.71866 * np.tan(1.966*(DUTY - 0.5)))
+
+    Ct = Ap_temp * lambda0 * Nidt * const
     com.Ct = Ct
 
     com = ajustar_Ap_Nidt_dentro_rango(com)
@@ -349,7 +390,7 @@ def reajuste_Ap_Nidt(bvd: BVD, com: COM) -> COM:
 
 def optimizar_digitsNR(bvd: BVD, com: COM, parameters: dict) -> COM:
     # 1. Definimos la máscara para frecuencias <= fs
-    mask = bvd.f <= bvd.fs
+    mask = bvd.f <= bvd.fs * 0.996
     f_target = bvd.f[mask]
     Y_target = bvd.Y[mask]
 
@@ -368,6 +409,7 @@ def optimizar_digitsNR(bvd: BVD, com: COM, parameters: dict) -> COM:
         
         # Si Y es compleja (admitancia), devolvemos el valor absoluto o separamos real/imag
         # least_squares requiere valores reales, así que devolvemos la magnitud del error
+
         return np.abs(error)
 
     # 3. Ejecutamos la optimización
@@ -375,11 +417,52 @@ def optimizar_digitsNR(bvd: BVD, com: COM, parameters: dict) -> COM:
     res = least_squares(
         objetivo, 
         x0=[com.digitsNR], 
-        bounds=(10, 100)  # Opcional: evita que NR sea negativo si no tiene sentido físico
+        bounds=(DIGITS_NR_MIN, DIGITS_NR_MAX)  # Opcional: evita que NR sea negativo si no tiene sentido físico
     )
 
     # 4. Aplicamos el resultado final optimizado al objeto
     com.digitsNR = round(res.x[0])
+
+    return com
+
+def optimizar_pitchR(bvd: BVD, com: COM, parameters: dict) -> COM:
+    # 1. Definimos la máscara para frecuencias <= fs
+    # mask = bvd.f <= bvd.fs * 0.995
+    mask = (bvd.f >= bvd.fs * 0.95) & (bvd.f <= bvd.fs * 0.995)
+    f_target = bvd.f[mask]
+    Y_target = bvd.Y[mask]
+
+    # 2. Definimos la función de error que usará least_squares
+    def objetivo(dr_val):
+        # Actualizamos el valor de NR en el objeto COM (nr_val viene como array de 1 elemento)
+        com.dR = dr_val[0]
+        
+        # Recalculamos la admitancia con el nuevo NR
+        # Asumimos que esta función actualiza com.Y internamente
+        com_actualizado = compute_admitance_COM(com, parameters)
+        
+        # El error es la diferencia entre la curva real y la calculada
+        # Solo comparamos en el rango de frecuencias definido por la máscara
+        error = Y_target - com_actualizado.Y[mask]
+        
+        # Si Y es compleja (admitancia), devolvemos el valor absoluto o separamos real/imag
+        # least_squares requiere valores reales, así que devolvemos la magnitud del error
+        log_optimización(f"{error}")
+        return np.abs(error)
+
+    # 3. Ejecutamos la optimización
+    res = least_squares(
+        objetivo, 
+        x0=[com.dR], 
+        bounds=(com.d*0.99, com.d*1.01)  # Opcional: 1% de variación máxima respecto d_IDT
+    )
+
+    # 4. Aplicamos el resultado final optimizado al objeto
+    com.dR = res.x[0]
+    log_optimización("============================ VALOR FINAL DE D & DR: ============================")
+    log_optimización(f"{com.d}")
+    log_optimización(f"{com.dR}")
+    log_optimización("\n")
 
     return com
 
@@ -481,30 +564,143 @@ def Zl(f: list[complex], L: float, Q=None):
         return jw*L
     return jw*L + 2*np.pi*f*L/Q
 
+def calcular_Z0_Z0R_activeIDT(com: COM, f: list[float]) -> tuple[list[float], list[float]]:
+    vp = com.constants.vp
+    k11 = com.constants.k11
+    k12 = com.constants.k12
+
+    k0 = np.pi / com.d
+    k = (2 * np.pi * f) / vp
+
+    delta = k - k0
+    beta = np.sqrt((delta + k11)**2 - k12**2)
+    pe = (beta - delta - k11) / k12
+
+    z_0 = ((1 - pe) / (1 + pe)) * Z0_PRIMA
+    z_0R = ((1 + pe) / (1 - pe)) * Z0_PRIMA
+
+    return (z_0, z_0R)
+
+def calcular_ZinR_reflector(com: COM, f: list[float]) -> list[float]:
+    vp = com.constants.vp
+    k11 = com.constants.k11
+    k12 = com.constants.k12
+
+    k0_refl = np.pi/com.dR
+    lambda0_refl = 2*com.dR
+    k = (2*np.pi*f)/vp
+
+    Nrefl = com.digitsNR/2
+
+    delta_refl = k - k0_refl
+    beta_refl = np.sqrt((delta_refl+k11)**2 - k12**2)
+    pe_refl = (beta_refl-delta_refl-k11)/k12
+
+    theta_refl = beta_refl*Nrefl*lambda0_refl/2
+
+    z_0R_refl = ((1 + pe_refl) / (1 - pe_refl)) * Z0_PRIMA
+    z_in_refl = 1 / ( 1 / (z_0R_refl*np.tanh(1j*theta_refl)+Z0_PRIMA) + np.sinh(1j*2*theta_refl)/z_0R_refl) + z_0R_refl*np.tanh(1j*theta_refl)
+
+    return z_in_refl
+
 def ajustar_Ap_Nidt_dentro_rango(com: COM) -> COM:
+    eps_r = com.constants.eps_r
+
+    const = eps_r * EPS_0 * np.exp(0.71866 * np.tan(1.966*(DUTY - 0.5)))
+
     # Calculamos la nueva Ap y Nidt 
     # Hace falta valores de Nidt y de Ct predefinidos !!
     Nidt = com.digitsN / 2
     Ct = com.Ct
     lambda0 = 2 * com.d
-    Ap_temp = Ct / (Nidt * lambda0 * CONST)
+    Ap_temp = Ct / (Nidt * lambda0 * const)
 
     if Ap_temp < AP_MIN:
         Ap_temp = AP_MIN
-        Nidt = math.floor(Ct / (Ap_temp * lambda0 * CONST))
+        Nidt = math.floor(Ct / (Ap_temp * lambda0 * const))
         com.digitsN = Nidt * 2
-        com.Ap = Ct / (Nidt * lambda0 * CONST)
+        com.Ap = Ct / (Nidt * lambda0 * const)
 
     elif Ap_temp > AP_MAX:
         Ap_temp = AP_MAX
-        Nidt = math.ceil(Ct / (Ap_temp * lambda0 * CONST))
+        Nidt = math.ceil(Ct / (Ap_temp * lambda0 * const))
         com.digitsN = Nidt * 2
-        com.Ap = Ct / (Nidt * lambda0 * CONST)
+        com.Ap = Ct / (Nidt * lambda0 * const)
         
     else:
         com.Ap = Ap_temp
 
     return com
+
+def log_optimización(mensaje):
+    with open("optimizacion.log", "a") as f:
+        f.write(f"{mensaje}\n")
+
+def assign_COM_constants_from_excel(bvd: BVD) -> COMconstants:
+    # 1. OBTENER LA RUTA AUTOMÁTICAMENTE
+    # os.path.dirname(__file__) obtiene la carpeta exacta donde está guardado este script de Python
+    carpeta_actual = os.path.dirname(os.path.abspath(__file__))
+    csv_path = os.path.join(carpeta_actual, "COMSET_CRF.csv")
+
+    # Verificación de seguridad por si olvidas poner el archivo en la carpeta
+    if not os.path.exists(csv_path):
+        raise FileNotFoundError(f"No se encontró el archivo obligatorio en: {csv_path}")
+
+    target_fs = bvd.fs
+
+    # 2. AUTODETECTAR EL DELIMITADOR (";" o ",")
+    with open(csv_path, mode="r", encoding="latin-1") as f:
+        primera_linea = f.readline()
+        delimitador = (
+            ";" if primera_linea.count(";") > primera_linea.count(",") else ","
+        )
+
+    # Función interna auxiliar para limpiar y convertir a float
+    def limpiar_float(valor_str):
+        if not valor_str:
+            return 0.0
+        valor_str = valor_str.strip()
+        if delimitador == ";":
+            valor_str = valor_str.replace(",", ".")
+        return float(valor_str)
+
+    # 3. LEER EL ARCHIVO LOCAL
+    fila_mas_cercana = None
+    menor_diferencia = float("inf")
+
+    with open(csv_path, mode="r", encoding="latin-1") as f:
+        lector = csv.DictReader(f, delimiter=delimitador)
+
+        if "fs1" not in lector.fieldnames:
+            raise ValueError("El archivo 'COMSET_CRF.csv' no contiene la columna 'fs1'.")
+
+        for fila in lector:
+            try:
+                valor_fs1 = limpiar_float(fila["fs1"])
+            except ValueError:
+                continue
+
+            diferencia = abs(valor_fs1 - target_fs)
+
+            if diferencia < menor_diferencia:
+                menor_diferencia = diferencia
+                fila_mas_cercana = fila
+
+    if not fila_mas_cercana:
+        raise ValueError(
+            "No se encontraron datos válidos en 'COMSET_CRF.csv'."
+        )
+    
+    # 4. EXTRAER Y LIMPIAR EL RESTO DE VALORES
+    k11 = limpiar_float(fila_mas_cercana["k11"])
+    k12 = limpiar_float(fila_mas_cercana["k12"])
+    vp = limpiar_float(fila_mas_cercana["Vf"])
+    eps_r_eff = limpiar_float(fila_mas_cercana["eps_r,eff"])
+    att_cte = limpiar_float(fila_mas_cercana["Att. Cte"])
+
+    constants = COMconstants(k11=k11 - 1j * att_cte, k12=k12, vp=vp, eps_r=eps_r_eff)
+
+    return constants
 
 # ======================================== DEPRECATED ========================================
 def compute_filter_admitance(list: list, parameters: dict) -> FilterResponse:

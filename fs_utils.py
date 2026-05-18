@@ -3,6 +3,18 @@ import re
 
 from PySide6.QtWidgets import (QApplication, QFileDialog)
 
+class MASK_LIMIT:
+    def __init__(self, fstart: float, fstop: float, value_dB: float, upper_lower: str, loss_type: str):
+        self.fstart = fstart
+        self.fstop = fstop
+        self.value_dB = value_dB
+        self.upper_lower = upper_lower
+        self.loss_type = loss_type
+
+class MASK:
+    def __init__(self, name: str, limits: list[MASK_LIMIT]):
+        self.name = name
+        self.limits = limits
 
 def select_workspace_path() -> str:
     """Selecciona carpeta usando PySide6 (Evita el WinError 6)"""
@@ -154,3 +166,34 @@ def compute_extra_parameters_AND_convert_tofloat(parameters: dict) -> dict:
     parameters["ladd_ground_vals"] = ladd_ground_vals
 
     return parameters
+
+def create_mask(ruta_archivo) -> MASK:
+    mask = MASK(os.path.basename(ruta_archivo), None)
+    mask.limits = read_mask_limits(ruta_archivo)
+
+    return mask
+
+def read_mask_limits(ruta_archivo):
+    limites = []
+
+    with open(ruta_archivo, "r") as f:
+        for linea in f:
+            linea = linea.strip()
+
+            # Saltar líneas vacías
+            if not linea:
+                continue
+
+            valores = linea.split()
+
+            limite = MASK_LIMIT(
+                fstart = float(valores[0]) * 1e9,
+                fstop = float(valores[1]) * 1e9,
+                value_dB = float(valores[2]),
+                upper_lower = "upper" if float(valores[3]) == 0 else "lower",
+                loss_type = "S21" if float(valores[4]) == 0 else "S11"
+            )
+
+            limites.append(limite)
+    
+    return limites

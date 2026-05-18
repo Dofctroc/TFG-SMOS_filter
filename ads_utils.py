@@ -13,6 +13,7 @@ import keysight.ads.dataset as dataset
 
 from bvd_com_computations import BVD
 from bvd_com_computations import COM
+from bvd_com_computations import FilterResponse
 
 FORCE_RECREATE = True
 
@@ -290,7 +291,7 @@ def create_SchematicAndSymbol_lossyBVD(library: de.Library, library_name: str) -
     design.save_design()
     design = None
 
-def create_Schematic_ladderFilter_BVDlossy(workspace_path: str, library_name: str, dataset_s2p_path: str, parameters: dict, list_BVD: list[BVD]) -> None:
+def create_Schematic_ladderFilter_BVD(workspace_path: str, library_name: str, dataset_s2p_path: str, parameters: dict, list_BVD: list[BVD]) -> None:
     assert de.version() >= 630
 
     design = db.create_schematic(f"{library_name}:{CELL_FILTER_BVD}:schematic")
@@ -506,8 +507,8 @@ def create_Schematic_ladderFilter_BVDlossy(workspace_path: str, library_name: st
 
     return
 
-def create_SchematicAndSymbol_lossyCOM(library: de.Library, library_name: str) -> None:    
-    # ========= 1) Schematic interno losstCOM =========
+def create_SchematicAndSymbol_lossyCOM(library: de.Library, library_name: str) -> None:
+    # ============================================= 1) Schematic interno losstCOM =============================================
     assert de.version() >= 630
 
     design = db.create_schematic(f"{library_name}:{CELL_COM_LOSSY}:schematic")
@@ -517,88 +518,98 @@ def create_SchematicAndSymbol_lossyCOM(library: de.Library, library_name: str) -
         # Terms
         net = design.add_net("P1")
         term = design.add_numbered_term(net, "P1", 1)
-        term.parameters["RefPlane"].value = "0 mil"
         shape = design.add_dot(db.LayerId(229), loc=PointF(11.0, -2.0))
-        pin1 = design.add_pin(term, shape, angle=-90.0)
-        pin1.update_pin_annotation(preserve_origin=False)
+        pin = design.add_pin(term, shape, angle=-90.0)
 
         net = design.add_net("P2")
         term = design.add_numbered_term(net, "P2", 2)
-        term.parameters["RefPlane"].value = "0 mil"
         shape = design.add_dot(db.LayerId(229), loc=PointF(11.0, 0.0))
-        pin2 = design.add_pin(term, shape, angle=90.0)
-        pin2.update_pin_annotation(preserve_origin=False)
+        pin = design.add_pin(term, shape, angle=90.0)
 
         # Shapes
-        shape = design.add_wire([PointF(x=10.75, y=-6.0), PointF(x=10.75, y=-6.75)])
+        shape = design.add_wire([PointF(x=11.5, y=-5.0), PointF(x=9.5, y=-5.0)])
+        shape = design.add_wire([PointF(x=6.0, y=0.0), PointF(x=9.0, y=0.0)])
+        shape = design.add_wire([PointF(x=6.0, y=-1.0), PointF(x=9.0, y=-1.0)])
+        shape = design.add_wire([PointF(x=5.0, y=-6.0), PointF(x=6.0, y=-6.0)])
         shape = design.add_wire([PointF(x=5.0, y=5.0), PointF(x=6.0, y=5.0)])
         shape = design.add_wire([PointF(x=5.0, y=4.0), PointF(x=6.0, y=4.0)])
-        shape = design.add_wire([PointF(x=11.0, y=5.0), PointF(x=11.0, y=5.75)])
-        shape = design.add_wire([PointF(x=2.0, y=5.0), PointF(x=4.0, y=5.0)])
-        shape = design.add_wire([PointF(x=0.0, y=5.0), PointF(x=0.0, y=6.0)])
-        shape = design.add_wire([PointF(x=0.0, y=4.0), PointF(x=0.0, y=5.0)])
-        shape = design.add_wire([PointF(x=1.0, y=5.0), PointF(x=0.0, y=5.0)])
-        shape = design.add_wire([PointF(x=0.0, y=7.0), PointF(x=0.0, y=8.0)])
-        shape = design.add_wire([PointF(x=6.0, y=4.0), PointF(x=9.0, y=4.0)])
-        shape = design.add_wire([PointF(x=6.0, y=5.0), PointF(x=9.0, y=5.0)])
-        shape = design.add_wire([PointF(x=9.0, y=4.0), PointF(x=11.0, y=4.0)])
-        shape = design.add_wire([PointF(x=9.0, y=5.0), PointF(x=11.0, y=5.0)])
-        shape = design.add_wire([PointF(x=9.0, y=-1.0), PointF(x=11.0, y=-1.0)])
-        shape = design.add_wire([PointF(x=9.0, y=0.0), PointF(x=11.0, y=0.0)])
-        shape = design.add_wire([PointF(x=9.0, y=0.0), PointF(x=6.0, y=0.0)])
-        shape = design.add_wire([PointF(x=9.0, y=-1.0), PointF(x=6.0, y=-1.0)])
-        shape = design.add_wire([PointF(x=6.0, y=-1.0), PointF(x=5.0, y=-1.0)])
-        shape = design.add_wire([PointF(x=6.0, y=0.0), PointF(x=5.0, y=0.0)])
-        shape = design.add_wire([PointF(x=0.0, y=0.0), PointF(x=0.0, y=1.0)])
-        shape = design.add_wire([PointF(x=0.0, y=3.0), PointF(x=0.0, y=2.0)])
-        shape = design.add_wire([PointF(x=0.0, y=0.0), PointF(x=0.0, y=-1.0)])
-        shape = design.add_wire([PointF(x=4.0, y=0.0), PointF(x=2.0, y=0.0)])
-        shape = design.add_wire([PointF(x=0.0, y=0.0), PointF(x=1.0, y=0.0)])
-        shape = design.add_wire([PointF(x=10.75, y=-4.0), PointF(x=10.75, y=-5.0)])
-        shape = design.add_wire([PointF(x=10.75, y=-6.0), PointF(x=8.75, y=-6.0)])
-        shape = design.add_wire([PointF(x=10.75, y=-5.0), PointF(x=8.75, y=-5.0)])
-        shape = design.add_wire([PointF(x=8.75, y=-6.0), PointF(x=6.0, y=-6.0)])
-        shape = design.add_wire([PointF(x=8.75, y=-5.0), PointF(x=6.0, y=-5.0)])
-        shape = design.add_wire([PointF(x=6.0, y=-6.0), PointF(x=5.0, y=-6.0)])
-        shape = design.add_wire([PointF(x=6.0, y=-5.0), PointF(x=5.0, y=-5.0)])
-        shape = design.add_wire([PointF(x=4.0, y=-5.0), PointF(x=2.0, y=-5.0)])
-        shape = design.add_wire([PointF(x=0.0, y=-5.0), PointF(x=1.0, y=-5.0)])
-        shape = design.add_wire([PointF(x=0.0, y=-5.0), PointF(x=0.0, y=-6.0)])
-        shape = design.add_wire([PointF(x=0.0, y=-5.0), PointF(x=0.0, y=-4.0)])
-        shape = design.add_wire([PointF(x=0.0, y=-7.0), PointF(x=0.0, y=-8.0)])
+        shape = design.add_wire([PointF(x=5.0, y=0.0), PointF(x=6.0, y=0.0)])
+        shape = design.add_wire([PointF(x=5.0, y=-1.0), PointF(x=6.0, y=-1.0)])
+        shape = design.add_wire([PointF(x=9.5, y=-6.0), PointF(x=11.5, y=-6.0)])
+        shape = design.add_wire([PointF(x=11.5, y=-4.0), PointF(x=11.5, y=-5.0)])
+        shape = design.add_wire([PointF(x=9.5, y=5.0), PointF(x=11.5, y=5.0)])
         shape = design.add_wire([PointF(x=0.0, y=-2.0), PointF(x=0.0, y=-3.0)])
+        shape = design.add_wire([PointF(x=0.0, y=-7.0), PointF(x=0.0, y=-8.0)])
+        shape = design.add_wire([PointF(x=0.0, y=-5.0), PointF(x=0.0, y=-4.0)])
+        shape = design.add_wire([PointF(x=0.0, y=-5.0), PointF(x=0.0, y=-6.0)])
+        shape = design.add_wire([PointF(x=0.0, y=-5.0), PointF(x=1.0, y=-5.0)])
+        shape = design.add_wire([PointF(x=4.0, y=-5.0), PointF(x=2.0, y=-5.0)])
+        shape = design.add_wire([PointF(x=6.0, y=-5.0), PointF(x=5.0, y=-5.0)])
+        shape = design.add_wire([PointF(x=0.0, y=0.0), PointF(x=1.0, y=0.0)])
+        shape = design.add_wire([PointF(x=4.0, y=0.0), PointF(x=2.0, y=0.0)])
+        shape = design.add_wire([PointF(x=0.0, y=0.0), PointF(x=0.0, y=-1.0)])
+        shape = design.add_wire([PointF(x=0.0, y=3.0), PointF(x=0.0, y=2.0)])
+        shape = design.add_wire([PointF(x=0.0, y=0.0), PointF(x=0.0, y=1.0)])
+        shape = design.add_wire([PointF(x=9.0, y=0.0), PointF(x=11.0, y=0.0)])
+        shape = design.add_wire([PointF(x=9.0, y=-1.0), PointF(x=11.0, y=-1.0)])
+        shape = design.add_wire([PointF(x=9.5, y=4.0), PointF(x=11.5, y=4.0)])
+        shape = design.add_wire([PointF(x=0.0, y=7.0), PointF(x=0.0, y=8.0)])
+        shape = design.add_wire([PointF(x=1.0, y=5.0), PointF(x=0.0, y=5.0)])
+        shape = design.add_wire([PointF(x=0.0, y=4.0), PointF(x=0.0, y=5.0)])
+        shape = design.add_wire([PointF(x=0.0, y=5.0), PointF(x=0.0, y=6.0)])
+        shape = design.add_wire([PointF(x=2.0, y=5.0), PointF(x=4.0, y=5.0)])
+        shape = design.add_wire([PointF(x=11.5, y=5.0), PointF(x=11.5, y=5.75)])
+        shape = design.add_wire([PointF(x=11.5, y=-6.0), PointF(x=11.5, y=-6.75)])
+        shape = design.add_wire([PointF(x=6.0, y=5.0), PointF(x=9.5, y=5.0)])
+        shape = design.add_wire([PointF(x=6.0, y=4.0), PointF(x=9.5, y=4.0)])
+        shape = design.add_wire([PointF(x=9.5, y=-5.0), PointF(x=6.0, y=-5.0)])
+        shape = design.add_wire([PointF(x=6.0, y=-6.0), PointF(x=9.5, y=-6.0)])
 
         # Instances
-        inst = design.add_var_instance(name="VAR1", origin=(-5.375, 3.75))
-        inst.vars.update({'L': '2*d', 'N': 'DigitsActiveIDT/2', 'NR': 'DigitsReflector/2', 'CT': 'Ap*N*L*epsR*eps0*exp(0.71866*tan(1.966*(duty-0.5)))', 'k0': 'pi/d'})
+        inst = design.add_var_instance(name="Consts1", origin=(-9.0, 1.75))
+        inst.vars.update({'duty': '0.55', 'eps0': '8.8541878176e-12', 'Z0_prima': '1'})
         # Since inst.vars does not contain 'X', we need to remove the first repeat.
         param = inst.parameters[0]
         assert isinstance(param, db.ParamRepeated)
         del(param.repeats[0])
 
-        inst = design.add_var_instance(name="VAR2", origin=(-5.375, 2.125))
-        inst.vars.update({'Z0': '(1-p)/(1+p)*Z0_prima', 'Z0R': '(1+p)/(1-p)*Z0_prima', 'phi': '2*alpha*L*N*sqrt(Z0_prima)', 'k': '2*pi*freq/vf', 'beta': 'sqrt((delta+k11)^2-k12^2)', 'delta': 'k-k0', 'p': '(beta-delta-k11)/k12', 'theta': '(beta*N*L)/2'})
+        inst = design.add_var_instance(name="Consts2", origin=(-9.0, -0.25))
+        inst.vars.update({'Rseries': '0.1', 'Rshunt': '400000', 'alphaC': '450'})
         # Since inst.vars does not contain 'X', we need to remove the first repeat.
         param = inst.parameters[0]
         assert isinstance(param, db.ParamRepeated)
         del(param.repeats[0])
 
-        inst = design.add_var_instance(name="VAR3", origin=(-5.375, -0.125))
-        inst.vars.update({'duty': '0.55', 'k11': '-82053.9-j*alphaC', 'k12': '59340', 'eps0': '8.8541878176e-12', 'vf': '3741.8', 'Z0_prima': '1', 'epsR': '39.56'})
+        inst = design.add_var_instance(name="Impedance_IDT", origin=(-6.125, 3.75))
+        inst.vars.update({'delta': 'k-k0', 'beta': 'sqrt((delta+k11)^2-k12^2)', 'p': '(beta-delta-k11)/k12', 'Z0': '(1-p)/(1+p)*Z0_prima', 'Z0R': '(1+p)/(1-p)*Z0_prima'})
         # Since inst.vars does not contain 'X', we need to remove the first repeat.
         param = inst.parameters[0]
         assert isinstance(param, db.ParamRepeated)
         del(param.repeats[0])
 
-        inst = design.add_var_instance(name="VAR4", origin=(-5.375, -2.25))
-        inst.vars.update({'Rshunt': '400000', 'Rseries': '0.1', 'alphaC': '450'})
+        inst = design.add_var_instance(name="Impedance_Refl", origin=(-6.125, 2.125))
+        inst.vars.update({'delta_refl': 'k-k0_refl', 'beta_refl': 'sqrt((delta_refl+k11)^2-k12^2)', 'p_refl': '(beta_refl-delta_refl-k11)/k12', 'Z0_refl': '(1-p_refl)/(1+p_refl)*Z0_prima', 'Z0R_refl': '(1+p_refl)/(1-p_refl)*Z0_prima'})
         # Since inst.vars does not contain 'X', we need to remove the first repeat.
         param = inst.parameters[0]
         assert isinstance(param, db.ParamRepeated)
         del(param.repeats[0])
 
-        inst = design.add_var_instance(name="VAR5", origin=(-5.375, -3.5))
-        inst.vars.update({'thetaR': '(beta*NR*L)/2', 'phiR': '2*alpha*L*NR*sqrt(Z0_prima)', 'CTR': 'Ap*NR*L*epsR*eps0*exp(0.71866*tan(1.966*(duty-0.5)))'})
+        inst = design.add_var_instance(name="Inputs", origin=(-9.0, 3.75))
+        inst.vars.update({'L': '2*d', 'L_refl': '2*d_refl', 'k0': 'pi/d', 'k0_refl': 'pi/d_refl', 'k': '2*pi*freq/vp', 'N': 'DigitsActiveIDT/2', 'NR': 'DigitsReflector/2'})
+        # Since inst.vars does not contain 'X', we need to remove the first repeat.
+        param = inst.parameters[0]
+        assert isinstance(param, db.ParamRepeated)
+        del(param.repeats[0])
+
+        inst = design.add_var_instance(name="Vars_IDT", origin=(-6.125, 0.5))
+        inst.vars.update({'theta': '(beta*N*L)/2', 'phi': '2*alpha*L*N*sqrt(Z0_prima)', 'CT': 'Ap*N*L*eps_r*eps0*exp(0.71866*tan(1.966*(duty-0.5)))'})
+        # Since inst.vars does not contain 'X', we need to remove the first repeat.
+        param = inst.parameters[0]
+        assert isinstance(param, db.ParamRepeated)
+        del(param.repeats[0])
+
+        inst = design.add_var_instance(name="Vars_Refl", origin=(-6.125, -0.625))
+        inst.vars.update({'theta_refl': '(beta_refl*NR*L_refl)/2', 'phi_refl': '2*alpha*L_refl*NR*sqrt(Z0_prima)', 'CT_refl': 'Ap*NR*L_refl*eps_r*eps0*exp(0.71866*tan(1.966*(duty-0.5)))'})
         # Since inst.vars does not contain 'X', we need to remove the first repeat.
         param = inst.parameters[0]
         assert isinstance(param, db.ParamRepeated)
@@ -608,12 +619,12 @@ def create_SchematicAndSymbol_lossyCOM(library: de.Library, library_name: str) -
         inst.parameters["Y[1,1]"].value = "j*2*pi*freq*CT"
         inst.update_item_annotation()
 
-        inst = design.add_instance("ads_datacmps:Y1P_Eqn", name="Y1P2", origin=(11.0, 5.0), angle=-90.0)
-        inst.parameters["Y[1,1]"].value = "j*2*pi*freq*CTR"
+        inst = design.add_instance("ads_datacmps:Y1P_Eqn", name="Y1P2", origin=(11.5, 5.0), angle=-90.0)
+        inst.parameters["Y[1,1]"].value = "j*2*pi*freq*CT_refl"
         inst.update_item_annotation()
 
-        inst = design.add_instance("ads_datacmps:Y1P_Eqn", name="Y1P3", origin=(10.75, -5.0), angle=-90.0)
-        inst.parameters["Y[1,1]"].value = "j*2*pi*freq*CTR"
+        inst = design.add_instance("ads_datacmps:Y1P_Eqn", name="Y1P3", origin=(11.5, -5.0), angle=-90.0)
+        inst.parameters["Y[1,1]"].value = "j*2*pi*freq*CT_refl"
         inst.update_item_annotation()
 
         inst = design.add_instance("ads_datacmps:Z1P_Eqn", name="Z1P2", origin=(1.0, 0.0))
@@ -633,35 +644,35 @@ def create_SchematicAndSymbol_lossyCOM(library: de.Library, library_name: str) -
         inst.update_item_annotation()
 
         inst = design.add_instance("ads_datacmps:Z1P_Eqn", name="Z1P6", origin=(0.0, 7.0), angle=-90.0)
-        inst.parameters["Z[1,1]"].value = "Z0R*tanh(j*thetaR)"
+        inst.parameters["Z[1,1]"].value = "Z0R_refl*tanh(j*theta_refl)"
         inst.update_item_annotation()
 
         inst = design.add_instance("ads_datacmps:Z1P_Eqn", name="Z1P7", origin=(0.0, 4.0), angle=-90.0)
-        inst.parameters["Z[1,1]"].value = "Z0R*tanh(j*thetaR)"
+        inst.parameters["Z[1,1]"].value = "Z0R_refl*tanh(j*theta_refl)"
         inst.update_item_annotation()
 
         inst = design.add_instance("ads_datacmps:Z1P_Eqn", name="Z1P8", origin=(1.0, 5.0))
-        inst.parameters["Z[1,1]"].value = "Z0R/(sinh(j*2*thetaR))"
+        inst.parameters["Z[1,1]"].value = "Z0R_refl/(sinh(j*2*theta_refl))"
         inst.update_item_annotation()
 
         inst = design.add_instance("ads_datacmps:Z1P_Eqn", name="Z1P9", origin=(0.0, -3.0), angle=-90.0)
-        inst.parameters["Z[1,1]"].value = "Z0R*tanh(j*thetaR)"
+        inst.parameters["Z[1,1]"].value = "Z0R_refl*tanh(j*theta_refl)"
         inst.update_item_annotation()
 
         inst = design.add_instance("ads_datacmps:Z1P_Eqn", name="Z1P10", origin=(0.0, -6.0), angle=-90.0)
-        inst.parameters["Z[1,1]"].value = "Z0R*tanh(j*thetaR)"
+        inst.parameters["Z[1,1]"].value = "Z0R_refl*tanh(j*theta_refl)"
         inst.update_item_annotation()
 
         inst = design.add_instance("ads_datacmps:Z1P_Eqn", name="Z1P11", origin=(1.0, -5.0))
-        inst.parameters["Z[1,1]"].value = "Z0R/(sinh(j*2*thetaR))"
+        inst.parameters["Z[1,1]"].value = "Z0R_refl/(sinh(j*2*theta_refl))"
         inst.update_item_annotation()
 
         inst = design.add_instance("ads_datacmps:Z1P_Eqn", name="Z1P12", origin=(6.0, 4.0), angle=90.0)
-        inst.parameters["Z[1,1]"].value = "j*2*thetaR*Z0/phiR^2"
+        inst.parameters["Z[1,1]"].value = "j*2*theta_refl*Z0_refl/phi_refl^2"
         inst.update_item_annotation()
 
         inst = design.add_instance("ads_datacmps:Z1P_Eqn", name="Z1P13", origin=(6.0, -6.0), angle=90.0)
-        inst.parameters["Z[1,1]"].value = "j*2*thetaR*Z0/phiR^2"
+        inst.parameters["Z[1,1]"].value = "j*2*theta_refl*Z0_refl/phi_refl^2"
         inst.update_item_annotation()
 
         inst = design.add_instance("ads_rflib:GROUND", name="G6", origin=(4.0, -1.0), angle=-90.0, ads_annot=False)
@@ -669,10 +680,10 @@ def create_SchematicAndSymbol_lossyCOM(library: de.Library, library_name: str) -
         inst = design.add_instance("ads_rflib:GROUND", name="G9", origin=(1.0, -8.0), ads_annot=False)
         inst = design.add_instance("ads_rflib:GROUND", name="G12", origin=(4.0, 4.0), angle=-90.0, ads_annot=False)
         inst = design.add_instance("ads_rflib:GROUND", name="G13", origin=(4.0, -6.0), angle=-90.0, ads_annot=False)
-        inst = design.add_instance("ads_rflib:GROUND", name="G14", origin=(11.0, 3.0), ads_annot=False)
-        inst = design.add_instance("ads_rflib:GROUND", name="G15", origin=(11.0, 5.75), ads_annot=False)
-        inst = design.add_instance("ads_rflib:GROUND", name="G16", origin=(10.75, -4.0), ads_annot=False)
-        inst = design.add_instance("ads_rflib:GROUND", name="G17", origin=(10.75, -7.75), ads_annot=False)
+        inst = design.add_instance("ads_rflib:GROUND", name="G14", origin=(11.5, 3.0), ads_annot=False)
+        inst = design.add_instance("ads_rflib:GROUND", name="G15", origin=(11.5, 5.75), ads_annot=False)
+        inst = design.add_instance("ads_rflib:GROUND", name="G16", origin=(11.5, -4.0), ads_annot=False)
+        inst = design.add_instance("ads_rflib:GROUND", name="G17", origin=(11.5, -7.75), ads_annot=False)
 
         inst = design.add_instance("ads_rflib:R", name="R1", origin=(9.0, 0.0), angle=-90.0)
         inst.parameters["R"].value = "Rshunt Ohm"
@@ -690,19 +701,19 @@ def create_SchematicAndSymbol_lossyCOM(library: de.Library, library_name: str) -
         inst.parameters["R"].value = "Z0_prima Ohm"
         inst.update_item_annotation()
 
-        inst = design.add_instance("ads_rflib:R", name="R6", origin=(11.0, 4.0), angle=-90.0)
+        inst = design.add_instance("ads_rflib:R", name="R6", origin=(11.5, 4.0), angle=-90.0)
         inst.parameters["R"].value = "Rseries Ohm"
         inst.update_item_annotation()
 
-        inst = design.add_instance("ads_rflib:R", name="R7", origin=(9.0, 5.0), angle=-90.0)
+        inst = design.add_instance("ads_rflib:R", name="R7", origin=(9.5, 5.0), angle=-90.0)
         inst.parameters["R"].value = "Rshunt Ohm"
         inst.update_item_annotation()
 
-        inst = design.add_instance("ads_rflib:R", name="R8", origin=(10.75, -6.75), angle=-90.0)
+        inst = design.add_instance("ads_rflib:R", name="R8", origin=(11.5, -6.75), angle=-90.0)
         inst.parameters["R"].value = "Rseries Ohm"
         inst.update_item_annotation()
 
-        inst = design.add_instance("ads_rflib:R", name="R9", origin=(8.75, -5.0), angle=-90.0)
+        inst = design.add_instance("ads_rflib:R", name="R9", origin=(9.5, -5.0), angle=-90.0)
         inst.parameters["R"].value = "Rshunt Ohm"
         inst.update_item_annotation()
 
@@ -711,11 +722,11 @@ def create_SchematicAndSymbol_lossyCOM(library: de.Library, library_name: str) -
         inst.update_item_annotation()
 
         inst = design.add_instance("ads_rflib:TF", name="TF3", origin=(5.0, 5.0), mirror="MirrorY")
-        inst.parameters["T"].value = "(2*thetaR*Z0)/(Z0_prima*phiR)"
+        inst.parameters["T"].value = "(2*theta_refl*Z0_refl)/(Z0_prima*phi_refl)"
         inst.update_item_annotation()
 
         inst = design.add_instance("ads_rflib:TF", name="TF4", origin=(5.0, -5.0), mirror="MirrorY")
-        inst.parameters["T"].value = "(2*thetaR*Z0)/(Z0_prima*phiR)"
+        inst.parameters["T"].value = "(2*theta_refl*Z0_refl)/(Z0_prima*phi_refl)"
         inst.update_item_annotation()
 
         transaction.commit()
@@ -723,12 +734,16 @@ def create_SchematicAndSymbol_lossyCOM(library: de.Library, library_name: str) -
     design.save_design()
     design = None
 
-    # ========= 2) mdlParams + ModelDef (caixeta jerárquica) =========
+    # ============================================= 2) mdlParams + ModelDef (caixeta jerárquica) =============================================
     formset = de.db_uu.model_lib.formsets["StdFormSet"]
 
     varD = de.db_uu.ModelParam("d", "Unitless", formset, de.db_uu.ModelUnitType.NO_UNIT)
     varD.default_value = de.db_uu.ParamItemString("d", "StdForm", str("0.1"))
     varD.is_displayed_by_default = True
+
+    varDR = de.db_uu.ModelParam("d_refl", "Unitless", formset, de.db_uu.ModelUnitType.NO_UNIT)
+    varDR.default_value = de.db_uu.ParamItemString("d_refl", "StdForm", str("0.1"))
+    varDR.is_displayed_by_default = True
 
     varAp = de.db_uu.ModelParam("Ap", "Unitless", formset, de.db_uu.ModelUnitType.NO_UNIT)
     varAp.default_value = de.db_uu.ParamItemString("Ap", "StdForm", str("0.01"))
@@ -746,14 +761,30 @@ def create_SchematicAndSymbol_lossyCOM(library: de.Library, library_name: str) -
     varAlpha.default_value = de.db_uu.ParamItemString("alpha", "StdForm", str("50"))
     varAlpha.is_displayed_by_default = True
 
+    varVp = de.db_uu.ModelParam("vp", "Unitless", formset, de.db_uu.ModelUnitType.NO_UNIT)
+    varVp.default_value = de.db_uu.ParamItemString("vp", "StdForm", str("50"))
+    varVp.is_displayed_by_default = True
+
+    varK11 = de.db_uu.ModelParam("k11", "Unitless", formset, de.db_uu.ModelUnitType.NO_UNIT)
+    varK11.default_value = de.db_uu.ParamItemString("k11", "StdForm", str("50"))
+    varK11.is_displayed_by_default = True
+
+    varK12 = de.db_uu.ModelParam("k12", "Unitless", formset, de.db_uu.ModelUnitType.NO_UNIT)
+    varK12.default_value = de.db_uu.ParamItemString("k12", "StdForm", str("50"))
+    varK12.is_displayed_by_default = True
+
+    varEpsR = de.db_uu.ModelParam("eps_r", "Unitless", formset, de.db_uu.ModelUnitType.NO_UNIT)
+    varEpsR.default_value = de.db_uu.ParamItemString("eps_r", "StdForm", str("50"))
+    varEpsR.is_displayed_by_default = True
+
     model_def = de.db_uu.ModelDef(CELL_COM_LOSSY, CELL_COM_LOSSY)
     model_def.inst_name_prefix = "lossyCOM"
     model_def.is_sub_design = True
-    model_def.parameters = [varD, varAp, varDigitsActiveIDT, varDigitsReflector, varAlpha]
+    model_def.parameters = [varD, varDR, varAp, varDigitsActiveIDT, varDigitsReflector, varAlpha, varVp, varK11, varK12, varEpsR]
 
     de.add_model_definition(library, model_def)
 
-    # ========= 3) Symbol view (mínimo) para instanciar la caixeta =========
+    # ============================================= 3) Symbol view (mínimo) para instanciar la caixeta =============================================
     assert de.version() >= 630
 
     design = db.create_symbol(f"{library_name}:{CELL_COM_LOSSY}:symbol")
@@ -1147,24 +1178,33 @@ def create_DDS_ladderFilter_COM(workspace_path: str) -> None:
     page = doc.pages[0]
     page.name = "S_Parameters"
 
+    # Definimos constantes de diseño para consistencia
+    plot_width = 4000
+    plot_height = 3000
+    margin_x = 500  # Espacio entre los dos gráficos
+
     # ========= 3) Crear Plot 1 (S11 y S33) =========
     traces_plot1 = [
         f"dB({dataset_name}..S(1,1))", 
         f"dB({dataset_name}..S(3,3))"
     ]
-    plot1 = page.add_plot((4000, 3000), traces_plot1, "Return Loss")
+    plot1 = page.add_plot((plot_width, plot_height), traces_plot1, "Return Loss")
+    # Lo movemos explícitamente al origen (opcional, suele ser el default)
+    plot1.move(dds.Point(0, 0))
 
     # ========= 4) Crear Plot 2 (S21 y S43) =========
     traces_plot2 = [
         f"dB({dataset_name}..S(2,1))", 
         f"dB({dataset_name}..S(4,3))"
     ]
-    plot2 = page.add_plot((4000, 3000), traces_plot2, "Insertion Loss")
+    plot2 = page.add_plot((plot_width, plot_height), traces_plot2, "Insertion Loss")
 
-    # ========= 5) Posicionar Plot 2 para evitar solapamiento =========
-    plot2.move(dds.Point(plot1.children_bbox.right, 0))
+    # ========= 5) Posicionar Plot 2 con lógica de la segunda función =========
+    # Calculamos la posición: ancho del primero + margen
+    x_pos_plot2 = plot_width + margin_x
+    plot2.move(dds.Point(x_pos_plot2, 0))
 
-    # ========= 6) Guardar (y DEJAR ABIERTO) =========
+    # ========= 6) Guardar =========
     dds_file_path = os.path.join(workspace_path, f"{CELL_FILTER_COM}.dds")
     doc.save(dds_file_path)
     dds.close_dds_file(doc)
@@ -1239,6 +1279,23 @@ def extract_data_debugging(workspace_path: str, order: int,list_BVD: list[BVD], 
 
     return list_BVD, list_COM
 
+def extract_data_filterCOM(workspace_path: str) -> FilterResponse:
+    dataset_name = CELL_FILTER_COM
+
+    # Extract data
+    output_dir = os.path.join(workspace_path, "data")
+    output_data = dataset.open(Path(os.path.join(output_dir, f"{dataset_name}.ds")))
+    dataf = output_data["SP1.SP"].to_dataframe().reset_index()
+
+    print_data_txt(output_data, output_dir, dataset_name)
+    
+    f = dataf["freq"]
+    y = dataf["S[2,1]"]
+
+    filter_response = FilterResponse(y, f)
+
+    return filter_response
+
 def print_data_txt(output_data: any, output_dir: any, dataset_name: any) -> None:
     # ==========================================
     # VOLCAR CONTENIDO DEL DATASET A UN .TXT
@@ -1281,10 +1338,10 @@ def print_data_txt(output_data: any, output_dir: any, dataset_name: any) -> None
 # ===================================== SCHEMATIC ORIENTED FUNCTIONS =====================================
 
 def instantiate_rflib_element(design: object, element_type: str, name: str, origin: tuple[float, float], 
-                              value: str, angle: float = 0.0, param_name: str = None) -> None:
+                              value: str, angle: float = 0.0) -> None:
     component_path = f"ads_rflib:{element_type}"
     inst = design.add_instance(component_path, name=name, origin=origin, angle=angle)
-    inst.parameters[param_name].value = value
+    inst.parameters[element_type].value = value
     inst.update_item_annotation()
 
     return
@@ -1312,10 +1369,15 @@ def instantiate_COM_in_schematic(design: object, library_name: str, list_COM: li
                                  num_COM: int, angle_COM: float, origin: tuple[float, float]) -> None:
     inst = design.add_instance((library_name, CELL_COM_LOSSY, "symbol"), origin=origin, name=list_COM[num_COM].name, angle=angle_COM)
     inst.parameters["d"].value = str(list_COM[num_COM].d)
+    inst.parameters["d_refl"].value = str(list_COM[num_COM].dR)
     inst.parameters["Ap"].value = str(list_COM[num_COM].Ap)
     inst.parameters["DigitsActiveIDT"].value = str(list_COM[num_COM].digitsN)
     inst.parameters["DigitsReflector"].value = str(list_COM[num_COM].digitsNR)
     inst.parameters["alpha"].value = str(list_COM[num_COM].alpha)
+    inst.parameters["vp"].value = str(list_COM[num_COM].constants.vp)
+    inst.parameters["k11"].value = str(list_COM[num_COM].constants.k11)
+    inst.parameters["k12"].value = str(list_COM[num_COM].constants.k12)
+    inst.parameters["eps_r"].value = str(list_COM[num_COM].constants.eps_r)
     inst.update_item_annotation()
     return
 
