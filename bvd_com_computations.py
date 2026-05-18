@@ -155,12 +155,12 @@ def compute_list_COM(list_BVD: list[BVD], parameters: dict) -> list[COM]:
         com = calcular_alpha_COM(bvd, com)
 
         # Calculamos las admitancias para optimizar digitsNR
-        if OPTIMIZE_DR:
-            com = compute_admitance_COM(com, parameters)
-            com = optimizar_pitchR(bvd, com, parameters)
         if OPTIMIZE_NR:
             com = compute_admitance_COM(com, parameters)
             com = optimizar_digitsNR(bvd, com, parameters)
+        if OPTIMIZE_DR:
+            com = compute_admitance_COM(com, parameters)
+            com = optimizar_pitchR(bvd, com, parameters)
 
         # Volvemos a hacer los reajustes de parámetros necesarios
         # puesto que la optimización de NR rompe la curva de admitancia

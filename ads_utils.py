@@ -1565,7 +1565,7 @@ def extract_data_filterCOM(workspace_path: str) -> FilterResponse:
     print_data_txt(output_data, output_dir, dataset_name)
     
     f = dataf["freq"]
-    y = dataf["Y[1,1]"]
+    y = dataf["S[2,1]"]
 
     filter_response = FilterResponse(y, f)
 
