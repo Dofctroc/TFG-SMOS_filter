@@ -71,10 +71,9 @@ class MainWindow(QMainWindow):
         self.layout_cuerpo = QHBoxLayout()
 
         # --- 2. PANEL IZQUIERDO (BVD) ---
-        self.panel_izquierdo = QGroupBox("BVD Parameters")
-        
-        self.layout_bvd = QVBoxLayout(self.panel_izquierdo)
-        self.setup_bvd_panel()
+        self.panel_izquierdo_contedor = QWidget()
+        self.layout_left_total = QVBoxLayout(self.panel_izquierdo_contedor)
+        self.setup_left_panel()
 
         # --- 2.5. PANEL CENTRAL (MATCHING NETWORKS + COM CONSTANTS)
         self.panel_central_contenedor = QWidget()
@@ -87,13 +86,13 @@ class MainWindow(QMainWindow):
         self.setup_right_panel()
 
         # --- 4. ENSAMBLAJE CUERPO ---
-        self.panel_izquierdo.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Preferred)
+        self.panel_izquierdo_contedor.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Preferred)
         self.panel_central_contenedor.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Preferred)
-        self.panel_izquierdo.setMinimumWidth(300)
+        self.panel_izquierdo_contedor.setMinimumWidth(300)
         self.panel_central_contenedor.setMinimumWidth(300)
         self.panel_derecho_contenedor.setMinimumWidth(600)
         
-        self.layout_cuerpo.addWidget(self.panel_izquierdo, stretch=0)
+        self.layout_cuerpo.addWidget(self.panel_izquierdo_contedor, stretch=0)
         self.layout_cuerpo.addWidget(self.panel_central_contenedor, stretch=0)
         self.layout_cuerpo.addWidget(self.panel_derecho_contenedor, stretch=1)
         
@@ -138,12 +137,6 @@ class MainWindow(QMainWindow):
         self.check_matching.setChecked(True) 
         self.check_matching.toggled.connect(self.update_view)
         view_menu.addAction(self.check_matching)
-
-        self.check_constants = QAction("Show COM Design Constants", self)
-        self.check_constants.setCheckable(True)
-        self.check_constants.setChecked(True) 
-        self.check_constants.toggled.connect(self.update_view)
-        view_menu.addAction(self.check_constants)
 
         # ==========================================
         # 3) MENÚ OPTIONS (Checkboxes)
@@ -211,8 +204,13 @@ class MainWindow(QMainWindow):
         self.barra_inferior.addStretch()
         self.barra_inferior.addWidget(self.btn_create_workspace)
         
-    def setup_bvd_panel(self):
-        self.panel_izquierdo.setStyleSheet("""
+    def setup_left_panel(self):
+        self.layout_left_total.setContentsMargins(0, 0, 0, 0) # Quitar márgenes internos
+
+        # Sub-bloque COM (Superior)
+        self.bloque_bvd = QGroupBox("COM Parameters")
+        self.bloque_bvd.setMaximumWidth(500)
+        self.bloque_bvd.setStyleSheet("""
             QGroupBox {
                 border: 1px solid black;
                 border-radius: 5px;
@@ -226,6 +224,18 @@ class MainWindow(QMainWindow):
                 padding: 0 3px 0 3px;
             }
         """)
+        
+        self.layout_bvd = QVBoxLayout(self.bloque_bvd)
+        self.setup_bvd_formLayout()
+
+        # Añadimos los sub-bloques al panel central
+        self.layout_left_total.addWidget(self.bloque_bvd)
+        
+        # Añadimos un espaciador al final para que si ocultas uno, 
+        # el otro no ocupe toda la pantalla a la fuerza.
+        self.layout_left_total.addStretch(1)
+
+    def setup_bvd_formLayout(self):
         # 1. El Desplegable (Selector)
         self.combo_bvd = QComboBox()
         self.combo_bvd.setFixedWidth(200)
@@ -234,9 +244,6 @@ class MainWindow(QMainWindow):
         # Conectamos el cambio de selección a una función
         self.combo_bvd.currentIndexChanged.connect(self.actualizar_formulario_bvd)
         self.combo_bvd.currentIndexChanged.connect(self.unificar_grafico_bvd)
-
-        # 2. El Formulario de parámetros
-        self.form_layout_BVD = QFormLayout()
         
         # Creamos los campos (QLineEdit)
         self.input_c0 = QLineEdit()
@@ -250,6 +257,13 @@ class MainWindow(QMainWindow):
         self.input_cadd_ser = QLineEdit()
         self.input_cadd_shu = QLineEdit()
         self.input_ladd_ground = QLineEdit()
+
+        # Campos de BVD general params
+        self.input_rs = QLineEdit()
+        self.input_rp = QLineEdit()
+        self.input_ql = QLineEdit()
+        self.input_qc = QLineEdit()
+        self.input_qa = QLineEdit()
         
         # Configuramos como "Solo lectura" y ponemos placeholders
         self.campos_form_bvd = [self.input_c0, self.input_cp, self.input_ca, self.input_la, self.input_fs, self.input_fp, self.input_ladd_ser,
@@ -260,6 +274,7 @@ class MainWindow(QMainWindow):
             inp.setStyleSheet("background-color: #f0f0f0; color: #555;")
 
         # Añadimos al layout del formulario
+        self.form_layout_BVD = QFormLayout()
         self.form_layout_BVD.addRow("C0 (pF):", self.input_c0)
         self.form_layout_BVD.addRow("Cp (pF):", self.input_cp)
         self.form_layout_BVD.addRow("Ca (pF):", self.input_ca)
@@ -272,14 +287,6 @@ class MainWindow(QMainWindow):
         self.form_layout_BVD.addRow("Cadd_shu (pF):", self.input_cadd_shu)
         self.form_layout_BVD.addRow("Ladd_gnd (nH):", self.input_ladd_ground)
 
-        # Añadir parámetros generales (rs, rp, ql, qc, qa) al formulario de BVD
-        self.form_layout_BVD_general = QFormLayout()
-
-        self.input_rs = QLineEdit()
-        self.input_rp = QLineEdit()
-        self.input_ql = QLineEdit()
-        self.input_qc = QLineEdit()
-        self.input_qa = QLineEdit()
 
         # Configuramos como "Solo lectura" y ponemos placeholders
         self.campos_form_bvdgeneral = [self.input_rs, self.input_rp, self.input_ql, self.input_qc, self.input_qa]
@@ -288,6 +295,8 @@ class MainWindow(QMainWindow):
             inp.setPlaceholderText("---")
             inp.setStyleSheet("background-color: #f0f0f0; color: #555;")
 
+        # Añadir parámetros generales (rs, rp, ql, qc, qa) al formulario de BVD
+        self.form_layout_BVD_general = QFormLayout()
         self.form_layout_BVD_general.addRow("Rs (Ω):", self.input_rs)
         self.form_layout_BVD_general.addRow("Rp (Ω):", self.input_rp)
         self.form_layout_BVD_general.addRow("Ql (-):", self.input_ql)
@@ -332,9 +341,10 @@ class MainWindow(QMainWindow):
     def setup_central_panel(self):
         self.layout_central_total.setContentsMargins(0, 0, 0, 0) # Quitar márgenes internos
 
-        # Sub-bloque MN (Superior)
-        self.bloque_matchnetw = QGroupBox("Matching Networks Parameters")
-        self.bloque_matchnetw.setStyleSheet("""
+        # Sub-bloque COM (Superior)
+        self.bloque_com = QGroupBox("COM Parameters")
+        self.bloque_com.setMaximumWidth(500)
+        self.bloque_com.setStyleSheet("""
             QGroupBox {
                 border: 1px solid black;
                 border-radius: 5px;
@@ -349,41 +359,130 @@ class MainWindow(QMainWindow):
             }
         """)
         
-        self.layout_matchnetw = QVBoxLayout(self.bloque_matchnetw)
-        self.setup_matchnetw_panel()
-
-        # Sub-bloque COM_consts (Inferior)
-        self.bloque_constsCOM = QGroupBox("COM Design Constants")
-        self.bloque_constsCOM.setStyleSheet("""
-            QGroupBox {
-                border: 1px solid black;
-                border-radius: 5px;
-                margin-top: 10px;
-                padding-top: 10px;
-                color: black;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 10px;
-                padding: 0 3px 0 3px;
-            }
-        """)
-        
-        self.layout_constsCOM = QVBoxLayout(self.bloque_constsCOM)
-        self.setup_constsCOM_panel()
+        self.layout_com = QVBoxLayout(self.bloque_com)
+        self.setup_com_formLayout()
 
         # Añadimos los sub-bloques al panel central
-        self.layout_central_total.addWidget(self.bloque_matchnetw)
-        self.layout_central_total.addWidget(self.bloque_constsCOM)
+        self.layout_central_total.addWidget(self.bloque_com)
         
         # Añadimos un espaciador al final para que si ocultas uno, 
         # el otro no ocupe toda la pantalla a la fuerza.
         self.layout_central_total.addStretch(1)
 
-        # Llamamos a la función una vez al final para aplicar el estado inicial
-        self.update_view()
+    def setup_com_formLayout(self):
+        K11 = -82053.9 - 1j*450
+        K12 = 59340.0
 
-    def setup_matchnetw_panel(self):
+        VP = 3741.8
+        EPS_R = 39.56
+        EPS_0 = 8.854e-12
+        DUTY = 0.55
+
+        Z0_PRIMA = 1
+        R_SHUNT = 4e5
+        R_SERIE = 0.1
+
+        # 1. El Desplegable (Selector)
+        self.combo_com = QComboBox()
+        self.combo_com.setFixedWidth(200)
+        self.combo_com.addItem("Pending Conversion")
+        
+        # Conectamos el cambio de selección a una función
+        self.combo_com.currentIndexChanged.connect(self.actualizar_formulario_com)
+        self.combo_com.currentIndexChanged.connect(self.unificar_grafico_com)
+        
+        # Creamos los campos (QLineEdit)
+        self.input_pitch = QLineEdit()
+        self.input_pitch_refl = QLineEdit()
+        self.input_Ct_COM = QLineEdit()
+        self.input_digitsIDT = QLineEdit()
+        self.input_digitsREFL = QLineEdit()
+        
+        # Nuevos campos para la segunda columna
+        self.input_aperture = QLineEdit()
+        self.input_alpha = QLineEdit()
+        self.input_alpha_n = QLineEdit()
+        self.input_fs_COM = QLineEdit()
+        self.input_fp_COM = QLineEdit()
+        
+        # Configuramos como "Solo lectura" y ponemos placeholders
+        self.campos_form_com = [self.input_pitch, self.input_pitch_refl, self.input_aperture, self.input_Ct_COM, self.input_digitsIDT, 
+                    self.input_digitsREFL, self.input_alpha, self.input_alpha_n, self.input_fs_COM, self.input_fp_COM]
+        for inp in self.campos_form_com:
+            inp.setReadOnly(True)
+            inp.setPlaceholderText("---")
+            inp.setStyleSheet("background-color: #f0f0f0; color: #555;")
+
+        # Creamos los campos de constantes
+        self.input_K11 = QLineEdit()
+        self.input_K12 = QLineEdit()
+        self.input_VP = QLineEdit()
+        self.input_EPS_R = QLineEdit()
+        self.input_EPS_0 = QLineEdit()
+        self.input_DUTY = QLineEdit()
+        self.input_Z0_PRIMA = QLineEdit()
+        self.input_R_SHUNT = QLineEdit()
+        self.input_R_SERIE = QLineEdit()
+        
+        # Configuramos como "Solo lectura" y ponemos placeholders
+        self.campos_form_comparameters = [self.input_K11, self.input_K12, self.input_VP, self.input_EPS_R, self.input_EPS_0, 
+                    self.input_DUTY, self.input_Z0_PRIMA, self.input_R_SHUNT, self.input_R_SERIE]
+        for inp in self.campos_form_comparameters:
+            inp.setReadOnly(True)
+            inp.setPlaceholderText("---")
+            inp.setStyleSheet("background-color: #f0f0f0; color: #555;")
+
+        # Añadimos al layout del formulario
+        self.form_layout_COM = QFormLayout()
+        self.form_layout_COM.addRow("p IDT (m):", self.input_pitch)
+        self.form_layout_COM.addRow("p REFL (m):", self.input_pitch_refl)
+        self.form_layout_COM.addRow("Ap (λ0):", self.input_aperture)
+        self.form_layout_COM.addRow("Ct (H):", self.input_Ct_COM)
+        self.form_layout_COM.addRow("Digits IDT (-):", self.input_digitsIDT)
+        self.form_layout_COM.addRow("Digits REFL (-):", self.input_digitsREFL)
+        self.form_layout_COM.addRow("α (-):", self.input_alpha)
+        self.form_layout_COM.addRow("α_n (-):", self.input_alpha_n)
+
+        # Formulario Derecho: Resultados de Frecuencia
+        # self.form_layout_COM.addRow("fs (Hz):", self.input_fs_COM)
+        # self.form_layout_COM.addRow("fp (Hz):", self.input_fp_COM)
+
+        # Añadimos al layout del formulario consts
+        self.form_layout_constCOM = QFormLayout()
+        self.form_layout_constCOM.addRow("k11 (?):", self.input_K11)
+        self.form_layout_constCOM.addRow("k12 (?):", self.input_K12)
+        self.form_layout_constCOM.addRow("Vp (m/s):", self.input_VP)
+        self.form_layout_constCOM.addRow("ε_r (-):", self.input_EPS_R)
+        self.form_layout_constCOM.addRow("ε_0 (-):", self.input_EPS_0)
+        self.form_layout_constCOM.addRow("η (-):", self.input_DUTY)
+        # self.form_layout_constCOM.addRow("Z0' (Ω):", self.input_Z0_PRIMA)
+        self.form_layout_constCOM.addRow("Rp (Ω):", self.input_R_SHUNT)
+        self.form_layout_constCOM.addRow("Rs (Ω):", self.input_R_SERIE)
+        
+        self.input_K11.setText(str(K11))
+        self.input_K12.setText(str(K12))
+        self.input_VP.setText(str(VP))
+        self.input_EPS_R.setText(str(EPS_R))
+        self.input_EPS_0.setText(str(EPS_0))
+        self.input_DUTY.setText(str(DUTY))
+        self.input_Z0_PRIMA.setText(str(Z0_PRIMA))
+        self.input_R_SHUNT.setText(str(R_SHUNT))
+        self.input_R_SERIE.setText(str(R_SERIE))
+
+        # 3. Montaje en el panel derecho
+        # Limpiamos el layout_com por si acaso y añadimos
+        self.layout_com.addWidget(self.combo_com)
+        self.layout_com.addSpacing(10) # Espacio visual
+        self.layout_com.addLayout(self.form_layout_COM)
+
+        self.layout_com.addSpacing(20) # Espacio visual
+        label_general_com=QLabel("Dataset COM constants:")
+        label_general_com.setStyleSheet("font-weight: bold; color: darkgray;")
+        self.layout_com.addWidget(label_general_com)
+        self.layout_com.addLayout(self.form_layout_constCOM)
+        self.layout_com.addStretch()
+
+    def setup_matchnetw_formLayout(self):
         # 2. El Formulario de parámetros
         self.form_layout_MN = QFormLayout()
         
@@ -417,75 +516,12 @@ class MainWindow(QMainWindow):
         self.layout_matchnetw.addLayout(self.form_layout_MN)
         self.layout_matchnetw.addStretch()
 
-    def setup_constsCOM_panel(self):
-        K11 = -82053.9 - 1j*450
-        K12 = 59340.0
-
-        VP = 3741.8
-        EPS_R = 39.56
-        EPS_0 = 8.854e-12
-        DUTY = 0.55
-
-        Z0_PRIMA = 1
-        R_SHUNT = 4e5
-        R_SERIE = 0.1
-
-        # 2. El Formulario de parámetros
-        self.form_layout_constCOM = QFormLayout()
-        
-        # Creamos los campos (QLineEdit)
-        self.input_K11 = QLineEdit()
-        self.input_K12 = QLineEdit()
-        self.input_VP = QLineEdit()
-        self.input_EPS_R = QLineEdit()
-        self.input_EPS_0 = QLineEdit()
-        self.input_DUTY = QLineEdit()
-        self.input_Z0_PRIMA = QLineEdit()
-        self.input_R_SHUNT = QLineEdit()
-        self.input_R_SERIE = QLineEdit()
-        
-        # Configuramos como "Solo lectura" y ponemos placeholders
-        self.campos_form_comparameters = [self.input_K11, self.input_K12, self.input_VP, self.input_EPS_R, self.input_EPS_0, 
-                    self.input_DUTY, self.input_Z0_PRIMA, self.input_R_SHUNT, self.input_R_SERIE]
-        for inp in self.campos_form_comparameters:
-            inp.setReadOnly(True)
-            inp.setPlaceholderText("---")
-            inp.setStyleSheet("background-color: #f0f0f0; color: #555;")
-
-        # Añadimos al layout del formulario
-        self.form_layout_constCOM.addRow("k11 (?):", self.input_K11)
-        self.form_layout_constCOM.addRow("k12 (?):", self.input_K12)
-        self.form_layout_constCOM.addRow("Vp (m/s):", self.input_VP)
-        self.form_layout_constCOM.addRow("ε_r (-):", self.input_EPS_R)
-        self.form_layout_constCOM.addRow("ε_0 (-):", self.input_EPS_0)
-        self.form_layout_constCOM.addRow("η (-):", self.input_DUTY)
-        self.form_layout_constCOM.addRow("Z0' (Ω):", self.input_Z0_PRIMA)
-        self.form_layout_constCOM.addRow("Rp (Ω):", self.input_R_SHUNT)
-        self.form_layout_constCOM.addRow("Rs (Ω):", self.input_R_SERIE)
-        
-        self.input_K11.setText(str(K11))
-        self.input_K12.setText(str(K12))
-        self.input_VP.setText(str(VP))
-        self.input_EPS_R.setText(str(EPS_R))
-        self.input_EPS_0.setText(str(EPS_0))
-        self.input_DUTY.setText(str(DUTY))
-        self.input_Z0_PRIMA.setText(str(Z0_PRIMA))
-        self.input_R_SHUNT.setText(str(R_SHUNT))
-        self.input_R_SERIE.setText(str(R_SERIE))
-
-        # 3. Montaje en el panel derecho
-        # Limpiamos el layout_com por si acaso y añadimos
-        self.layout_constsCOM.addSpacing(10) # Espacio visual
-        self.layout_constsCOM.addLayout(self.form_layout_constCOM)
-        self.layout_constsCOM.addStretch()
-
     def setup_right_panel(self):
-        self.layout_derecha_total.setContentsMargins(0, 0, 0, 0) # Quitar márgenes internos
+        self.layout_derecha_total.setContentsMargins(0, 0, 0, 0) # Quitar márgenes internos       
 
-        # Sub-bloque COM (Superior)
-        self.bloque_com = QGroupBox("COM Parameters")
-        self.bloque_com.setMaximumWidth(500)
-        self.bloque_com.setStyleSheet("""
+        # Sub-bloque MN (Superior)
+        self.bloque_matchnetw = QGroupBox("Matching Networks Parameters")
+        self.bloque_matchnetw.setStyleSheet("""
             QGroupBox {
                 border: 1px solid black;
                 border-radius: 5px;
@@ -500,8 +536,8 @@ class MainWindow(QMainWindow):
             }
         """)
         
-        self.layout_com = QVBoxLayout(self.bloque_com)
-        self.setup_com_panel()
+        self.layout_matchnetw = QVBoxLayout(self.bloque_matchnetw)
+        self.setup_matchnetw_formLayout()
 
         # Sub-bloque Gráfico (Inferior)
         self.bloque_grafico = QGroupBox("Admitance Visualization")
@@ -524,71 +560,10 @@ class MainWindow(QMainWindow):
         self.setup_graph_panel()
 
         # Añadimos los sub-bloques al panel derecho
-        self.layout_derecha_total.addWidget(self.bloque_com, stretch=0)
+        self.layout_derecha_total.addWidget(self.bloque_matchnetw, stretch=0)
         self.layout_derecha_total.addWidget(self.bloque_grafico, stretch=1)
 
-    def setup_com_panel(self):
-        # 1. El Desplegable (Selector)
-        self.combo_com = QComboBox()
-        self.combo_com.setFixedWidth(200)
-        self.combo_com.addItem("Pending Conversion")
-        
-        # Conectamos el cambio de selección a una función
-        self.combo_com.currentIndexChanged.connect(self.actualizar_formulario_com)
-        self.combo_com.currentIndexChanged.connect(self.unificar_grafico_com)
-        
-        # Creamos los campos (QLineEdit)
-        self.input_pitch = QLineEdit()
-        self.input_pitch_refl = QLineEdit()
-        self.input_Ct_COM = QLineEdit()
-        self.input_digitsIDT = QLineEdit()
-        self.input_digitsREFL = QLineEdit()
-        
-        # Nuevos campos para la segunda columna
-        self.input_aperture = QLineEdit()
-        self.input_alpha = QLineEdit()
-        self.input_alpha_n = QLineEdit()
-        self.input_fs_COM = QLineEdit()
-        self.input_fp_COM = QLineEdit()
-        
-        # Configuramos como "Solo lectura" y ponemos placeholders
-        self.campos_form_com = [self.input_pitch, self.input_pitch_refl, self.input_aperture, self.input_Ct_COM, self.input_digitsIDT, 
-                    self.input_digitsREFL, self.input_alpha, self.input_alpha_n, self.input_fs_COM, self.input_fp_COM]
-        for inp in self.campos_form_com:
-            inp.setReadOnly(True)
-            inp.setPlaceholderText("---")
-            inp.setStyleSheet("background-color: #f0f0f0; color: #555;")
-
-        # 3. Organización en dos columnas (Layout Horizontal con dos FormLayouts)
-        self.layout_horizontal_formularios = QHBoxLayout()
-
-        # Añadimos al layout del formulario
-        self.form_layout_COM_izq = QFormLayout()
-        self.form_layout_COM_izq.addRow("p IFT (m):", self.input_pitch)
-        self.form_layout_COM_izq.addRow("p REFL (m):", self.input_pitch_refl)
-        self.form_layout_COM_izq.addRow("Ct (H):", self.input_Ct_COM)
-        self.form_layout_COM_izq.addRow("Digits IDT (-):", self.input_digitsIDT)
-        self.form_layout_COM_izq.addRow("Digits REFL (-):", self.input_digitsREFL)
-
-        # Formulario Derecho: Resultados de Frecuencia
-        self.form_layout_COM_der = QFormLayout()
-        self.form_layout_COM_der.addRow("Ap (λ0):", self.input_aperture)
-        self.form_layout_COM_der.addRow("α (-):", self.input_alpha)
-        self.form_layout_COM_der.addRow("α_n (-):", self.input_alpha_n)
-        self.form_layout_COM_der.addRow("fs (Hz):", self.input_fs_COM)
-        self.form_layout_COM_der.addRow("fp (Hz):", self.input_fp_COM)
-
-        # Ensamblamos los dos formularios
-        self.layout_horizontal_formularios.addLayout(self.form_layout_COM_izq)
-        self.layout_horizontal_formularios.addSpacing(20) # Separación entre columnas
-        self.layout_horizontal_formularios.addLayout(self.form_layout_COM_der)
-
-        # 3. Montaje en el panel derecho
-        # Limpiamos el layout_com por si acaso y añadimos
-        self.layout_com.addWidget(self.combo_com)
-        self.layout_com.addSpacing(10) # Espacio visual
-        self.layout_com.addLayout(self.layout_horizontal_formularios)
-        self.layout_com.addStretch()
+        self.update_view()
 
     def actualizar_formulario_com(self):
         index = self.combo_com.currentIndex()
@@ -875,15 +850,7 @@ class MainWindow(QMainWindow):
     def update_view(self):
         # 1. Visibilidad de los bloques internos
         show_mn = self.check_matching.isChecked()
-        show_com = self.check_constants.isChecked()
-        
         self.bloque_matchnetw.setVisible(show_mn)
-        self.bloque_constsCOM.setVisible(show_com)
-
-        # 2. Visibilidad del CONTENEDOR central
-        # Si alguno de los dos es True, el contenedor debe verse. 
-        # Si ambos son False, el contenedor se oculta por completo.
-        self.panel_central_contenedor.setVisible(show_mn or show_com)
         
     def btn_readNetworkFile_clicked(self):
         try:
