@@ -33,6 +33,8 @@ class MplCanvas(FigureCanvas):
 USE_DEFAULT_WORKSPACE_NAME = True
 CREATE_DEBUGGING_SCHEMATIC = False
 
+DEFAULT_WORKSPACE_NAME = "unnamed_wrk"
+
 # ========================== CLASE PRINCIPAL DE LA APLICACIÓN ===========================
 
 class MainWindow(QMainWindow):
@@ -191,7 +193,7 @@ class MainWindow(QMainWindow):
 
         self.label_workspace_name = QLabel("Workspace Name:")
         self.input_workspace_name = QLineEdit()
-        self.input_workspace_name.setPlaceholderText("try_wrk")
+        self.input_workspace_name.setPlaceholderText(DEFAULT_WORKSPACE_NAME)
         self.input_workspace_name.setFixedWidth(200)
         self.input_workspace_name.setMaxLength(20)
 
@@ -1054,7 +1056,7 @@ class MainWindow(QMainWindow):
             if not USE_DEFAULT_WORKSPACE_NAME:
                 QMessageBox.critical(self, "Error", "Error: Input a workspace name first")
                 return
-            workspace_name = "try_wrk"
+            workspace_name = DEFAULT_WORKSPACE_NAME
 
         # Crear la ruta completa del workspace
         full_workspace_path = self.workspace_path + "/" + workspace_name
