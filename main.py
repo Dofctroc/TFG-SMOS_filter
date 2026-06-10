@@ -1068,7 +1068,7 @@ class MainWindow(QMainWindow):
             if workspace is None: 
                 QMessageBox.critical(self, "Error", "Error: A workspace with that name already exists")
                 return
-            lib = ads.create_a_library_and_add_it_to_the_workspace(workspace, library_name)
+            library = ads.create_a_library_and_add_it_to_the_workspace(workspace, library_name)
         except Exception as e:
             error_detallado = traceback.format_exc()
             QMessageBox.critical(self, "Error", 
@@ -1081,19 +1081,26 @@ class MainWindow(QMainWindow):
         # Crear los esquemáticos y los símbolos correspondientes
         try:
             inicio = time.time()       
-            # =============================================== 1) Generate BVD and COM symbols ===============================================
-            ads.create_SchematicAndSymbol_lossyBVD(lib, library_name)
-            ads.create_SchematicAndSymbol_lossyCOM(lib, library_name)
+            # =============================================== 0) Generate BVD and COM symbols ===============================================
+            ads.create_SchematicAndSymbol_lossyBVD(library, library_name)
+            ads.create_SchematicAndSymbol_lossyCOM(library, library_name)
             log_tiempo(f"Paso 1 completado en: {time.time() - inicio:.2f} segundos")
 
-            # ========================================== 2) Debugging and tunning schematic and DDS ==========================================
-            # Dependiendo del checkbox "duplicar resonadores"
+            # =============================================== 1) Duplicate resonnators if necessary ===============================================
             if self.check_duplicate.isChecked():
                 list_COM_ADS = mat_bvd_com.duplicar_resonadores(self.list_BVD, self.list_COM, self.network_parameters)
                 log_tiempo(f"Paso 1.5 completado en: {time.time() - inicio:.2f} segundos")
             else:
                 list_COM_ADS = self.list_COM
 
+            # =============================================== 2.0) Genearate BUSBAR layout and simulation ===============================================
+            library.setup_schematic_tech()
+            library.create_layout_tech_std_ads("millimeter", 10000, False)
+
+            for com in list_COM_ADS:
+                ads.create_busbars_layout(library, library_name, com)
+
+            # ========================================== 2.1) Debugging and tunning schematic and DDS ==========================================
             if self.check_debug.isChecked():
                 ads.create_Schematic_debugging(full_workspace_path, library_name, self.network_parameters, self.list_BVD, list_COM_ADS)
                 log_tiempo(f"Paso 2 completado en: {time.time() - inicio:.2f} segundos")

@@ -7,7 +7,9 @@ from keysight.ads import de
 from keysight.ads.de import PointF
 from keysight.ads.de import db_uu as db
 from keysight.ads.de.db import Transaction
+from keysight.ads.de.db import LayerId
 from keysight.edatoolbox import ads as eda_ads
+from keysight.ads import subst
 import keysight.ads.dds as dds
 import keysight.ads.dataset as dataset
 
@@ -22,6 +24,7 @@ CELL_FILTER_BVD = "Ladder_Filter_BVD"   # celda jerárquica (schematic)
 CELL_COM_LOSSY = "COM_Lossy_symb"       # celda jerárquica (schematic+symbol)
 CELL_FILTER_COM = "Ladder_Filter_COM"   # celda jerárquica (schematic)
 CELL_DEBUG = "Debugging"
+CELL_BUSBAR_LAYOUT = "Busbar_layout"
 
 def test_import_keysight_ads_de_example() -> None:
     try:
@@ -1334,6 +1337,139 @@ def print_data_txt(output_data: any, output_dir: any, dataset_name: any) -> None
             f.write("\n" + "=" * 50 + "\n\n")
             
     return
+
+# ===================================== CREATION OF LAYOUT FUNCTIONS =====================================
+def create_busbars_layout(library: de.Library, library_name: str, com: COM) -> None:
+    # ========= 1) Basic layout creation of busbar =========
+    assert de.version() >= 630
+
+    design = db.create_layout(f"{library_name}:{CELL_BUSBAR_LAYOUT}_{com.name}:layout")
+    design = db.open_design(f"{library_name}:{CELL_BUSBAR_LAYOUT}_{com.name}:layout")
+
+    # Properties
+    db.StringProp.create(design, "SIM_CONTROLLER_DESIGN", f"{library_name}:{CELL_BUSBAR_LAYOUT}_{com.name}:emSetup")
+    cond = LayerId.create_layer_id_from_library(library, "cond", "drawing")
+
+    # Dimensions (converting them to millimeters)
+    dx = com.digitsN * com.d * 1e3
+    dy = 15 * 1e-3
+
+    dx2 = dx / 10
+    dy2 = 2 * 1e-3
+
+    aperture = (com.Ap * com.d + com.d) * 1e3
+
+    # Shapes
+    shape = design.add_rectangle(cond, PointF(0, 0), PointF(dx, dy))
+    shape = design.add_rectangle(cond, PointF(dx/2 - dx2/2, dy), PointF(dx/2 + dx2/2, dy + dy2))
+
+    shape = design.add_rectangle(cond, PointF(0, -aperture), PointF(dx, -aperture -dy))
+    shape = design.add_rectangle(cond, PointF(dx/2 - dx2/2, -aperture -dy), PointF(dx/2 + dx2/2, -aperture -dy -dy2))
+
+    # Terms
+    net = design.add_net("P1")
+    term = design.add_term(net, "P1")
+    shape = design.add_dot(cond, loc=PointF(dx/2, dy + dy2))
+    pin = design.add_pin(term, shape, angle=90.0, add_annot=False)
+
+    net = design.add_net("P2")
+    term = design.add_term(net, "P2")
+    shape = design.add_dot(cond, loc=PointF(dx/2, -aperture -dy -dy2))
+    pin = design.add_pin(term, shape, angle=-90.0, add_annot=False)
+
+    net = design.add_net("P3")
+    term = design.add_term(net, "P3")
+    shape = design.add_dot(cond, loc=PointF(dx/2, 0))
+    pin = design.add_pin(term, shape, angle=-90.0, add_annot=False)
+
+    net = design.add_net("P4")
+    term = design.add_term(net, "P4")
+    shape = design.add_dot(cond, loc=PointF(dx/2, -aperture))
+    pin = design.add_pin(term, shape, angle=90.0, add_annot=False)
+
+    design.save_design()
+    design = None
+    return
+
+def create_lithium_niobate_substrate(library, design):
+    """
+    Creates EM substrate for Momentum with the requested stack:
+
+    AIR
+    Si (100 nm, eps_r = 11.7)
+    SiO2 (250 nm, eps_r = 3.9)
+    LiNbO3 X-cut (500 nm, eps_r = 45.62)
+    Metal (200 nm Cu, lossless)
+    AIR
+    """
+
+    # =========================
+    # 1) Create substrate object
+    # =========================
+    substrate = db.create_substrate(design)
+
+    # =========================
+    # 2) Define materials
+    # =========================
+
+    si = substrate.add_material("Si")
+    si.epsilon_r = 11.7
+    si.loss_tangent = 0.0
+
+    sio2 = substrate.add_material("SiO2")
+    sio2.epsilon_r = 3.9
+    sio2.loss_tangent = 0.0
+
+    lno = substrate.add_material("LiNbO3")
+    lno.epsilon_r = 45.62
+    lno.loss_tangent = 0.0
+
+    air = substrate.add_material("AIR")
+    air.epsilon_r = 1.0
+    air.loss_tangent = 0.0
+
+    cu = substrate.add_material("Copper")
+    cu.epsilon_r = 1.0
+    cu.loss_tangent = 0.0
+    cu.conductivity = 5.8e7
+
+    # =========================
+    # 3) Define stack (bottom -> top)
+    # =========================
+
+    substrate.stack_up = []
+
+    # Bottom AIR
+    substrate.add_layer("AIR_BOTTOM", material=air, thickness=1e-6)
+
+    # Si 100 nm
+    substrate.add_layer("Si", material=si, thickness=100e-9)
+
+    # SiO2 250 nm
+    substrate.add_layer("SiO2", material=sio2, thickness=250e-9)
+
+    # LiNbO3 500 nm (X-cut assumed isotropic here)
+    substrate.add_layer("LiNbO3", material=lno, thickness=500e-9)
+
+    # Metal layer (cond) 200 nm
+    metal_layer = substrate.add_conductor_layer(
+        "cond",
+        material=cu,
+        thickness=200e-9
+    )
+
+    # Top AIR
+    substrate.add_layer("AIR_TOP", material=air, thickness=1e-6)
+
+    # =========================
+    # 4) EM settings
+    # =========================
+
+    substrate.temperature = 25
+    substrate.enable_dielectric_losses = False
+    substrate.enable_conductor_losses = False
+
+    return substrate
 
 # ===================================== SCHEMATIC ORIENTED FUNCTIONS =====================================
 
