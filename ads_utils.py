@@ -1391,85 +1391,102 @@ def create_busbars_layout(library: de.Library, library_name: str, com: COM) -> N
     design = None
     return
 
-def create_lithium_niobate_substrate(library, design):
-    """
-    Creates EM substrate for Momentum with the requested stack:
+def create_saw_substrate(library, name: str = "substrate_SAW"):
 
-    AIR
-    Si (100 nm, eps_r = 11.7)
-    SiO2 (250 nm, eps_r = 3.9)
-    LiNbO3 X-cut (500 nm, eps_r = 45.62)
-    Metal (200 nm Cu, lossless)
-    AIR
-    """
+    # =========================================================
+    # 1. CREATE SUBSTRATE CONTAINER
+    # =========================================================
+    sub = subst.create_substrate(library, name)
 
-    # =========================
-    # 1) Create substrate object
-    # =========================
-    substrate = db.create_substrate(design)
+    # =========================================================
+    # 2. MATERIAL SETUP (EDIT EXISTING DEFAULTS)
+    # =========================================================
+    # ADS crea normalmente AIR por defecto arriba/abajo
+    # En tu caso queremos stack personalizado
 
-    # =========================
-    # 2) Define materials
-    # =========================
+    materials = sub.materials
 
-    si = substrate.add_material("Si")
-    si.epsilon_r = 11.7
-    si.loss_tangent = 0.0
+    # Helper: resolver materiales existentes por nombre
+    def mat_by_name(n):
+        for m in materials:
+            if m.material_name == n:
+                return m
+        return None
 
-    sio2 = substrate.add_material("SiO2")
-    sio2.epsilon_r = 3.9
-    sio2.loss_tangent = 0.0
+    air_top = mat_by_name("AIR")
+    air_bot = mat_by_name("AIR")
 
-    lno = substrate.add_material("LiNbO3")
-    lno.epsilon_r = 45.62
-    lno.loss_tangent = 0.0
+    # =========================================================
+    # 3. INSERTION STRATEGY
+    # =========================================================
+    # En ADS el stack es MATERIAL + INTERFACE entre ellos
+    # insert_material_and_interface_* crea pares verticales
 
-    air = substrate.add_material("AIR")
-    air.epsilon_r = 1.0
-    air.loss_tangent = 0.0
+    # Queremos construir:
+    #
+    # AIR
+    # Cu
+    # LiNbO3
+    # SiO2
+    # Si
+    # AIR
 
-    cu = substrate.add_material("Copper")
-    cu.epsilon_r = 1.0
-    cu.loss_tangent = 0.0
-    cu.conductivity = 5.8e7
+    # ---------------------------------------------------------
+    # 3.1 Insert conductor layer (Cu) near top air
+    # ---------------------------------------------------------
+    sub.insert_material_and_interface_below(0)
 
-    # =========================
-    # 3) Define stack (bottom -> top)
-    # =========================
+    cu = sub.materials[1]
+    cu.material_name = "Copper"
 
-    substrate.stack_up = []
+    # conductor properties
+    cu.thickness = 200e-9
 
-    # Bottom AIR
-    substrate.add_layer("AIR_BOTTOM", material=air, thickness=1e-6)
+    # ---------------------------------------------------------
+    # 3.2 Insert LiNbO3 dielectric
+    # ---------------------------------------------------------
+    sub.insert_material_and_interface_below(1)
 
-    # Si 100 nm
-    substrate.add_layer("Si", material=si, thickness=100e-9)
+    lno = sub.materials[2]
+    lno.material_name = "LiNbO3"
+    lno.thickness = 500e-9
+    lno.er_real = 45.62
+    lno.er_loss_tangent = 0.0
 
-    # SiO2 250 nm
-    substrate.add_layer("SiO2", material=sio2, thickness=250e-9)
+    # ---------------------------------------------------------
+    # 3.3 Insert SiO2
+    # ---------------------------------------------------------
+    sub.insert_material_and_interface_below(2)
 
-    # LiNbO3 500 nm (X-cut assumed isotropic here)
-    substrate.add_layer("LiNbO3", material=lno, thickness=500e-9)
+    sio2 = sub.materials[3]
+    sio2.material_name = "SiO2"
+    sio2.thickness = 250e-9
+    sio2.er_real = 3.9
+    sio2.er_loss_tangent = 0.0
 
-    # Metal layer (cond) 200 nm
-    metal_layer = substrate.add_conductor_layer(
-        "cond",
-        material=cu,
-        thickness=200e-9
-    )
+    # ---------------------------------------------------------
+    # 3.4 Insert Si
+    # ---------------------------------------------------------
+    sub.insert_material_and_interface_below(3)
 
-    # Top AIR
-    substrate.add_layer("AIR_TOP", material=air, thickness=1e-6)
+    si = sub.materials[4]
+    si.material_name = "Si"
+    si.thickness = 100e-9
+    si.er_real = 11.7
+    si.er_loss_tangent = 0.0
 
-    # =========================
-    # 4) EM settings
-    # =========================
+    # =========================================================
+    # 4. OPTIONAL: boundary conditions (AIR bottom is default)
+    # =========================================================
 
-    substrate.temperature = 25
-    substrate.enable_dielectric_losses = False
-    substrate.enable_conductor_losses = False
+    # AIR top/bottom ya está implícito
 
-    return substrate
+    # =========================================================
+    # 5. SAVE SUBSTRATE
+    # =========================================================
+    sub.save_substrate()
+
+    return sub
 
 # ===================================== SCHEMATIC ORIENTED FUNCTIONS =====================================
 

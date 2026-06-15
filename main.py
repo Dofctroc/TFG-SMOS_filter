@@ -34,6 +34,7 @@ USE_DEFAULT_WORKSPACE_NAME = True
 CREATE_DEBUGGING_SCHEMATIC = False
 
 DEFAULT_WORKSPACE_NAME = "unnamed_wrk"
+DEFAULT_SUBSTRATE_NAME = "substrate_SAW"
 
 # ========================== CLASE PRINCIPAL DE LA APLICACIÓN ===========================
 
@@ -1099,6 +1100,8 @@ class MainWindow(QMainWindow):
 
             for com in list_COM_ADS:
                 ads.create_busbars_layout(library, library_name, com)
+            
+            ads.create_saw_substrate(library, DEFAULT_SUBSTRATE_NAME)
 
             # ========================================== 2.1) Debugging and tunning schematic and DDS ==========================================
             if self.check_debug.isChecked():
