@@ -1391,25 +1391,18 @@ def create_busbars_layout(library: de.Library, library_name: str, com: COM) -> N
     design = None
     return
 
-def create_saw_substrate(library: de.Library, subst_name: str) -> subst.Substrate:
+def create_smos_substrate(library: de.Library, subst_name: str = "smos_substrate") -> subst.Substrate:
     """
     Crea el sustrato para el filtro SMOS usando capas infinitas continuas (Slabs).
-    
-    Stackup final de arriba a abajo:
-    - AIR (Infinito Superior)
-    - Capa metal cond (Copper, 200 nm, mapeada en la interfaz superior)
-    - Subst_1 (LiNbO3): 500 nm
-    - SiO2: 250 nm
-    - Silicio: 100 micras (100e-6 m)
-    - AIR (Infinito Inferior)
+    Construido de abajo hacia arriba empujando consecutivamente desde el AIR superior (index 0).
     """
     
-    # 1. Limpieza previa
+    # 1. Limpieza previa de sustratos homónimos
     if subst.substrate_exists(library, subst_name):
         print(f"[INFO] El sustrato '{subst_name}' ya existe. Regenerando...")
         subst.delete_substrate(library, subst_name)
         
-    # 2. Crear contenedor de sustrato vacío (Por defecto tiene Material[0]=AIR superior y Material[1]=AIR inferior)
+    # 2. Crear contenedor de sustrato vacío
     s = subst.create_substrate(library, subst_name)
     
     # =========================================================================
@@ -1439,40 +1432,35 @@ def create_saw_substrate(library: de.Library, subst_name: str) -> subst.Substrat
         cop_mat.imag = "0.0"
 
     # =========================================================================
-    # 4. CONSTRUCCIÓN DEL STACKUP DIELÉCTRICO (Capas Infinitas Continuas)
+    # 4. CONSTRUCCIÓN DEL STACKUP DIELÉCTRICO (Efecto Cascada desde Index 0)
     # =========================================================================
-    # Usamos insert_material_and_interface_below() para crear particiones infinitas completas.
-    # Inicialmente tenemos: s.materials[0] = AIR (Top) y s.materials[1] = AIR (Bottom)
     
-    # 4.1. Insertamos una capa debajo de s.materials[0] (AIR Top) -> Esta será nuestro LiNbO3
+    # 4.1. Insertamos Silicio debajo del AIR superior (Índice 0)
     s.insert_material_and_interface_below(material_index=0)
-    # Ahora s.materials[1] es la nueva capa intermedia
+    silicio_layer = s.materials[1]
+    silicio_layer.material_name = "Silicio"
+    silicio_layer.thickness = 100e-6  # 100 micras reales
+
+    # 4.2. Insertamos SiO2 debajo del AIR superior (Índice 0) -> Desplaza al Silicio al índice 2
+    s.insert_material_and_interface_below(material_index=0)
+    sio2_layer = s.materials[1]
+    sio2_layer.material_name = "SiO2"
+    sio2_layer.thickness = 250e-9
+
+    # 4.3. Insertamos Subst_1 debajo del AIR superior (Índice 0) -> Desplaza a SiO2 y Silicio hacia abajo
+    s.insert_material_and_interface_below(material_index=0)
     linbo3_layer = s.materials[1]
     linbo3_layer.material_name = "Subst_1"
     linbo3_layer.thickness = 500e-9
 
-    # 4.2. Insertamos otra capa debajo del LiNbO3 recién creado (que ahora está en el índice 1) -> SiO2
-    s.insert_material_and_interface_below(material_index=1)
-    # La nueva capa intermedia se desplaza al índice 2
-    sio2_layer = s.materials[2]
-    sio2_layer.material_name = "SiO2"
-    sio2_layer.thickness = 250e-9
-
-    # 4.3. Insertamos la última capa debajo del SiO2 (que está en el índice 2) -> Silicio
-    s.insert_material_and_interface_below(material_index=2)
-    # El Silicio se sitúa en el índice 3, quedando justo encima del AIR inferior original
-    silicio_layer = s.materials[3]
-    silicio_layer.material_name = "Silicio"
-    silicio_layer.thickness = 100e-6  # 100 micras
-
-    # En este punto el sándwich de Slabs infinitas está cerrado y ordenado de arriba a abajo.
+    # El resultado exacto en s.materials es: 
+    # [0]=AIR(Top), [1]=Subst_1, [2]=SiO2, [3]=Silicio, [4]=AIR(Bottom)
 
     # =========================================================================
-    # 5. CREACIÓN DE LA CAPA METÁLICA DEL LAYOUT (cond)
+    # 5. CREACIÓN Y COLOCACIÓN DE LA CAPA METÁLICA (cond)
     # =========================================================================
-    # Buscamos la interfaz que está inmediatamente por encima del bloque 'Subst_1' (LiNbO3).
-    # Como 'Subst_1' es s.materials[1], la interfaz que tiene arriba comparte su mismo índice relativo (1)
-    # o podemos usar dinámicamente la interfaz s.interfaces[1] que separa el AIR superior del LiNbO3.
+    # Queremos colocar el metal entre s.materials[0] (AIR Top) y s.materials[1] (Subst_1).
+    # En la API de ADS, esa interfaz es exactamente la index_or_interface=0.
     
     try:
         role_conductor = de.ProcessRole.CONDUCTOR
@@ -1480,11 +1468,20 @@ def create_saw_substrate(library: de.Library, subst_name: str) -> subst.Substrat
         from keysight.ads.de._pde.tech import ProcessRole
         role_conductor = ProcessRole.CONDUCTOR
 
-    # Insertamos la metalografía en la interfaz frontera con el AIR superior
-    cond_layer = s.insert_layer(index_or_interface=1, process_role=role_conductor)
+    # Insertamos la capa en la interfaz 0 (Techo de Subst_1 / Suelo de AIR Top)
+    cond_layer = s.insert_layer(index_or_interface=0, process_role=role_conductor)
     cond_layer.material_name = "Copper"
     cond_layer.thickness = 200e-9
     
+    # --- CONFIGURACIÓN DE INTRUSIÓN HACIA EL AIR TOP ---
+    # Para que la capa esté instruida (incrustada hacia arriba en el aire) en vez de hundida,
+    # ADS utiliza una propiedad booleana o de enumeración. Dependiendo de la subversión de la API:
+    if hasattr(cond_layer, 'intruded'):
+        cond_layer.intruded = True
+    elif hasattr(cond_layer, 'layer_type'):
+        # En algunas versiones de ADS, 'intruded' se define cambiando el tipo a intrudido explícito
+        cond_layer.layer_type = "Intruded"
+
     # Mapeo al nombre de capa de layout "cond"
     if hasattr(cond_layer, 'layer_name'):
         cond_layer.layer_name = "cond"
@@ -1495,7 +1492,7 @@ def create_saw_substrate(library: de.Library, subst_name: str) -> subst.Substrat
     # 6. GUARDAR EL SUSTRATO
     # =========================================================================
     s.save_substrate()
-    print(f"[SUCCESS] Sustrato '{subst_name}' generado como capas continuas infinitas.")
+    print(f"[SUCCESS] Sustrato '{subst_name}' reordenado e intrudido en AIR superior con éxito.")
     
     return s
 
