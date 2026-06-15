@@ -1439,19 +1439,15 @@ def create_smos_substrate(library: de.Library, subst_name: str = "smos_substrate
         cop_mat.imag = "0.0"
 
     # =========================================================================
-    # 4. CONSTRUCCIÓN DEL STACKUP DIELÉCTRICO (De Abajo hacia Arriba Real)
+    # 4. CONSTRUCCIÓN DEL STACKUP DIELÉCTRICO
     # =========================================================================
-    # Al insertar siempre debajo de AIR Top (index 0), para obtener el orden correcto 
-    # de arriba a abajo, el orden de inserción en el código debe ser el inverso:
-    # Primero insertamos Subst_1, luego SiO2, luego Silicio.
-    
     try:
         role_conductor = de.ProcessRole.CONDUCTOR
     except AttributeError:
         from keysight.ads.de._pde.tech import ProcessRole
         role_conductor = ProcessRole.CONDUCTOR
 
-    # Insertamos la capa en la interfaz 1 (Frontera superior de Subst_1 con AIR Top)
+    # Insertamos la capa metálica en la interfaz 1 (Frontera superior de Subst_1 con AIR Top)
     cond_layer = s.insert_layer(index_or_interface=1, process_role=role_conductor)
     cond_layer.material_name = "Copper"
     cond_layer.thickness = 200e-9
@@ -1462,39 +1458,27 @@ def create_smos_substrate(library: de.Library, subst_name: str = "smos_substrate
     linbo3_layer.material_name = "Subst_1"
     linbo3_layer.thickness = 500e-9
 
-    # 4.2. Insertamos la capa intermedia: SiO2 (250 nm) debajo de Subst_1 (que está en index 1)
+    # 4.2. Insertamos la capa intermedia: SiO2 (250 nm) debajo de Subst_1
     s.insert_material_and_interface_below(material_index=0)
     sio2_layer = s.materials[1]
     sio2_layer.material_name = "SiO2"
     sio2_layer.thickness = 250e-9
 
-    # 4.3. Insertamos la capa base: Silicio (100 um) debajo de SiO2 (que está en index 2)
+    # 4.3. Insertamos la capa base: Silicio (100 um) debajo de SiO2
     s.insert_material_and_interface_below(material_index=0)
     silicio_layer = s.materials[1]
     silicio_layer.material_name = "Silicio"
     silicio_layer.thickness = 100e-6
 
-    # Ahora el sándwich queda impecable de arriba a abajo en s.materials: 
-    # [0]=AIR(Top), [1]=Subst_1, [2]=SiO2, [3]=Silicio, [4]=AIR(Bottom)
-
     # =========================================================================
-    # 5. CREACIÓN Y COLOCACIÓN DE LA CAPA METÁLICA (cond)
+    # 5. CONFIGURACIÓN DE INTRUSIÓN "ABOVE SURFACE" (Datos validados por consola)
     # =========================================================================
-    # Queremos colocar el metal en la frontera (interfaz) entre AIR Top (0) y Subst_1 (1).
-    # En la jerarquía de interfaces de ADS, esta es exactamente la interfaz de índice 1.
-        
-    # --- CONFIGURACIÓN DE INTRUSIÓN "ABOVE SURFACE" ---
-    # Para calcar las propiedades de la UI ("intrude into substrate" -> "above surface"):
-    if hasattr(cond_layer, 'intruded'):
-        cond_layer.intruded = True
     
-    # En la API de ADS2026, la dirección de intrusión o la posición respecto a la interfaz 
-    # se suele controlar con la propiedad 'intrude_direction', 'placement' o 'alignment'.
-    # Forzamos los parámetros comunes que mapean a "above surface" / "intrude into opposite":
-    if hasattr(cond_layer, 'intrude_direction'):
-        cond_layer.intrude_direction = "Above"  # O "Up" según la versión exacta del wrapper
-    elif hasattr(cond_layer, 'placement'):
-        cond_layer.placement = "Above"
+    # Al desactivar 'sheet', forzamos a ADS a tratarlo como metal grueso (Thick) 
+    # y a expandirlo volumétricamente hacia el sustrato superior (AIR Top) debido a is_above=True
+    cond_layer.sheet = False
+    cond_layer.is_above = True
+    cond_layer.model_type = cond_layer.ModelType.USE_DEFAULT
 
     # Mapeo al nombre de capa de layout "cond"
     if hasattr(cond_layer, 'layer_name'):
