@@ -1391,102 +1391,113 @@ def create_busbars_layout(library: de.Library, library_name: str, com: COM) -> N
     design = None
     return
 
-def create_saw_substrate(library, name: str = "substrate_SAW"):
+def create_saw_substrate(library: de.Library, subst_name: str) -> subst.Substrate:
+    """
+    Crea el sustrato para el filtro SMOS usando capas infinitas continuas (Slabs).
+    
+    Stackup final de arriba a abajo:
+    - AIR (Infinito Superior)
+    - Capa metal cond (Copper, 200 nm, mapeada en la interfaz superior)
+    - Subst_1 (LiNbO3): 500 nm
+    - SiO2: 250 nm
+    - Silicio: 100 micras (100e-6 m)
+    - AIR (Infinito Inferior)
+    """
+    
+    # 1. Limpieza previa
+    if subst.substrate_exists(library, subst_name):
+        print(f"[INFO] El sustrato '{subst_name}' ya existe. Regenerando...")
+        subst.delete_substrate(library, subst_name)
+        
+    # 2. Crear contenedor de sustrato vacío (Por defecto tiene Material[0]=AIR superior y Material[1]=AIR inferior)
+    s = subst.create_substrate(library, subst_name)
+    
+    # =========================================================================
+    # 3. DEFINICIÓN DE MATERIALES (Strings obligatorios)
+    # =========================================================================
+    existing_dielectrics = subst.get_dielectric_names(library)
+    existing_conductors = subst.get_conductor_names(library)
+    
+    if "Silicio" not in existing_dielectrics:
+        si_mat = subst.SubstrateDielectric("Silicio")
+        si_mat.er_real = "11.7"
+        si_mat.er_loss_tangent = "0.0"
+        
+    if "SiO2" not in existing_dielectrics:
+        sio2_mat = subst.SubstrateDielectric("SiO2")
+        sio2_mat.er_real = "3.9"
+        sio2_mat.er_loss_tangent = "0.0"
 
-    # =========================================================
-    # 1. CREATE SUBSTRATE CONTAINER
-    # =========================================================
-    sub = subst.create_substrate(library, name)
+    if "Subst_1" not in existing_dielectrics:
+        linbo3_mat = subst.SubstrateDielectric("Subst_1")
+        linbo3_mat.er_real = "45.62"
+        linbo3_mat.er_loss_tangent = "0.0"
 
-    # =========================================================
-    # 2. MATERIAL SETUP (EDIT EXISTING DEFAULTS)
-    # =========================================================
-    # ADS crea normalmente AIR por defecto arriba/abajo
-    # En tu caso queremos stack personalizado
+    if "Copper" not in existing_conductors:
+        cop_mat = subst.SubstrateConductor("Copper")
+        cop_mat.real = "5.8e7"
+        cop_mat.imag = "0.0"
 
-    materials = sub.materials
+    # =========================================================================
+    # 4. CONSTRUCCIÓN DEL STACKUP DIELÉCTRICO (Capas Infinitas Continuas)
+    # =========================================================================
+    # Usamos insert_material_and_interface_below() para crear particiones infinitas completas.
+    # Inicialmente tenemos: s.materials[0] = AIR (Top) y s.materials[1] = AIR (Bottom)
+    
+    # 4.1. Insertamos una capa debajo de s.materials[0] (AIR Top) -> Esta será nuestro LiNbO3
+    s.insert_material_and_interface_below(material_index=0)
+    # Ahora s.materials[1] es la nueva capa intermedia
+    linbo3_layer = s.materials[1]
+    linbo3_layer.material_name = "Subst_1"
+    linbo3_layer.thickness = 500e-9
 
-    # Helper: resolver materiales existentes por nombre
-    def mat_by_name(n):
-        for m in materials:
-            if m.material_name == n:
-                return m
-        return None
+    # 4.2. Insertamos otra capa debajo del LiNbO3 recién creado (que ahora está en el índice 1) -> SiO2
+    s.insert_material_and_interface_below(material_index=1)
+    # La nueva capa intermedia se desplaza al índice 2
+    sio2_layer = s.materials[2]
+    sio2_layer.material_name = "SiO2"
+    sio2_layer.thickness = 250e-9
 
-    air_top = mat_by_name("AIR")
-    air_bot = mat_by_name("AIR")
+    # 4.3. Insertamos la última capa debajo del SiO2 (que está en el índice 2) -> Silicio
+    s.insert_material_and_interface_below(material_index=2)
+    # El Silicio se sitúa en el índice 3, quedando justo encima del AIR inferior original
+    silicio_layer = s.materials[3]
+    silicio_layer.material_name = "Silicio"
+    silicio_layer.thickness = 100e-6  # 100 micras
 
-    # =========================================================
-    # 3. INSERTION STRATEGY
-    # =========================================================
-    # En ADS el stack es MATERIAL + INTERFACE entre ellos
-    # insert_material_and_interface_* crea pares verticales
+    # En este punto el sándwich de Slabs infinitas está cerrado y ordenado de arriba a abajo.
 
-    # Queremos construir:
-    #
-    # AIR
-    # Cu
-    # LiNbO3
-    # SiO2
-    # Si
-    # AIR
+    # =========================================================================
+    # 5. CREACIÓN DE LA CAPA METÁLICA DEL LAYOUT (cond)
+    # =========================================================================
+    # Buscamos la interfaz que está inmediatamente por encima del bloque 'Subst_1' (LiNbO3).
+    # Como 'Subst_1' es s.materials[1], la interfaz que tiene arriba comparte su mismo índice relativo (1)
+    # o podemos usar dinámicamente la interfaz s.interfaces[1] que separa el AIR superior del LiNbO3.
+    
+    try:
+        role_conductor = de.ProcessRole.CONDUCTOR
+    except AttributeError:
+        from keysight.ads.de._pde.tech import ProcessRole
+        role_conductor = ProcessRole.CONDUCTOR
 
-    # ---------------------------------------------------------
-    # 3.1 Insert conductor layer (Cu) near top air
-    # ---------------------------------------------------------
-    sub.insert_material_and_interface_below(0)
+    # Insertamos la metalografía en la interfaz frontera con el AIR superior
+    cond_layer = s.insert_layer(index_or_interface=1, process_role=role_conductor)
+    cond_layer.material_name = "Copper"
+    cond_layer.thickness = 200e-9
+    
+    # Mapeo al nombre de capa de layout "cond"
+    if hasattr(cond_layer, 'layer_name'):
+        cond_layer.layer_name = "cond"
+    elif hasattr(cond_layer, 'name'):
+        cond_layer.name = "cond"
 
-    cu = sub.materials[1]
-    cu.material_name = "Copper"
-
-    # conductor properties
-    cu.thickness = 200e-9
-
-    # ---------------------------------------------------------
-    # 3.2 Insert LiNbO3 dielectric
-    # ---------------------------------------------------------
-    sub.insert_material_and_interface_below(1)
-
-    lno = sub.materials[2]
-    lno.material_name = "LiNbO3"
-    lno.thickness = 500e-9
-    lno.er_real = 45.62
-    lno.er_loss_tangent = 0.0
-
-    # ---------------------------------------------------------
-    # 3.3 Insert SiO2
-    # ---------------------------------------------------------
-    sub.insert_material_and_interface_below(2)
-
-    sio2 = sub.materials[3]
-    sio2.material_name = "SiO2"
-    sio2.thickness = 250e-9
-    sio2.er_real = 3.9
-    sio2.er_loss_tangent = 0.0
-
-    # ---------------------------------------------------------
-    # 3.4 Insert Si
-    # ---------------------------------------------------------
-    sub.insert_material_and_interface_below(3)
-
-    si = sub.materials[4]
-    si.material_name = "Si"
-    si.thickness = 100e-9
-    si.er_real = 11.7
-    si.er_loss_tangent = 0.0
-
-    # =========================================================
-    # 4. OPTIONAL: boundary conditions (AIR bottom is default)
-    # =========================================================
-
-    # AIR top/bottom ya está implícito
-
-    # =========================================================
-    # 5. SAVE SUBSTRATE
-    # =========================================================
-    sub.save_substrate()
-
-    return sub
+    # =========================================================================
+    # 6. GUARDAR EL SUSTRATO
+    # =========================================================================
+    s.save_substrate()
+    print(f"[SUCCESS] Sustrato '{subst_name}' generado como capas continuas infinitas.")
+    
+    return s
 
 # ===================================== SCHEMATIC ORIENTED FUNCTIONS =====================================
 
