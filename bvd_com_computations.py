@@ -88,6 +88,8 @@ R_SERIE = 0.1
 N_POINTS_GRAPH = int(1e4)
 R_TERMG = 50
 
+DO_FITTING = True
+
 OPTIMIZE_NR = True
 OPTIMIZE_DR = True
 
@@ -160,11 +162,12 @@ def compute_list_COM(list_BVD: list[BVD], parameters: dict) -> list[COM]:
         com = compute_admitance_COM(com, parameters)
 
         # Hacemos los reajustes de parámetros necesarios
-        com = reajuste_pitch(bvd, com)
-        com.dR = com.d
-        com = compute_admitance_COM(com, parameters)
-        com = reajuste_Ap_Nidt(bvd, com)
-        com = calcular_alpha_COM(bvd, com)
+        if DO_FITTING:
+            com = reajuste_pitch(bvd, com)
+            com.dR = com.d
+            com = compute_admitance_COM(com, parameters)
+            com = reajuste_Ap_Nidt(bvd, com)
+            com = calcular_alpha_COM(bvd, com)
 
         # Calculamos las admitancias para optimizar digitsNR
         if OPTIMIZE_NR:

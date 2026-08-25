@@ -116,9 +116,13 @@ class MainWindow(QMainWindow):
         # ==========================================
         file_menu = bar.addMenu("&File")
 
-        self.action_open = QAction("Select new Network File", self)
-        self.action_open.triggered.connect(self.btn_readNetworkFile_clicked)
-        file_menu.addAction(self.action_open)
+        self.action_open_network = QAction("Select Network File", self)
+        self.action_open_network.triggered.connect(self.btn_readNetworkFile_clicked)
+        file_menu.addAction(self.action_open_network)
+
+        self.action_open_mask = QAction("Select Mask File", self)
+        self.action_open_mask.triggered.connect(self.btn_readMask_clicked)
+        file_menu.addAction(self.action_open_mask)
 
         self.action_workspace = QAction("Select Workspace Directory", self)
         self.action_workspace.triggered.connect(self.btn_readDirectoy_clicked)
@@ -210,8 +214,8 @@ class MainWindow(QMainWindow):
     def setup_left_panel(self):
         self.layout_left_total.setContentsMargins(0, 0, 0, 0) # Quitar márgenes internos
 
-        # Sub-bloque COM (Superior)
-        self.bloque_bvd = QGroupBox("COM Parameters")
+        # Sub-bloque BVD (Superior)
+        self.bloque_bvd = QGroupBox("BVD Parameters")
         self.bloque_bvd.setMaximumWidth(500)
         self.bloque_bvd.setStyleSheet("""
             QGroupBox {
@@ -452,8 +456,8 @@ class MainWindow(QMainWindow):
 
         # Añadimos al layout del formulario consts
         self.form_layout_constCOM = QFormLayout()
-        self.form_layout_constCOM.addRow("k11 (?):", self.input_K11)
-        self.form_layout_constCOM.addRow("k12 (?):", self.input_K12)
+        self.form_layout_constCOM.addRow("k11 (rad/m):", self.input_K11)
+        self.form_layout_constCOM.addRow("k12 (rad/m):", self.input_K12)
         self.form_layout_constCOM.addRow("Vp (m/s):", self.input_VP)
         self.form_layout_constCOM.addRow("ε_r (-):", self.input_EPS_R)
         self.form_layout_constCOM.addRow("ε_0 (-):", self.input_EPS_0)
@@ -1101,7 +1105,7 @@ class MainWindow(QMainWindow):
             for com in list_COM_ADS:
                 ads.create_busbars_layout(library, library_name, com)
             
-            ads.create_saw_substrate(library, DEFAULT_SUBSTRATE_NAME)
+            ads.create_smos_substrate(library, DEFAULT_SUBSTRATE_NAME)
 
             # ========================================== 2.1) Debugging and tunning schematic and DDS ==========================================
             if self.check_debug.isChecked():

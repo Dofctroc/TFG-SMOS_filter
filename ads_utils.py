@@ -1471,20 +1471,23 @@ def create_smos_substrate(library: de.Library, subst_name: str = "smos_substrate
     silicio_layer.thickness = 100e-6
 
     # =========================================================================
-    # 5. CONFIGURACIÓN DE INTRUSIÓN "ABOVE SURFACE" (Datos validados por consola)
+    # 5. CONFIGURACIÓN DE INTRUSIÓN Y MAPEO A LAYER "cond" (Layer 1)
     # =========================================================================
     
-    # Al desactivar 'sheet', forzamos a ADS a tratarlo como metal grueso (Thick) 
-    # y a expandirlo volumétricamente hacia el sustrato superior (AIR Top) debido a is_above=True
+    # Intrusión y modelo físico (Thick Conductor)
     cond_layer.sheet = False
     cond_layer.is_above = True
     cond_layer.model_type = cond_layer.ModelType.USE_DEFAULT
 
-    # Mapeo al nombre de capa de layout "cond"
+    # --- MAPEO A LA CAPA COND (Layer 1) ---
+    # Asignamos el número de capa 1 de forma explícita
+    cond_layer.layer_number = 1
+    
+    # Mantenemos los nombres por compatibilidad con la API
     if hasattr(cond_layer, 'layer_name'):
         cond_layer.layer_name = "cond"
     elif hasattr(cond_layer, 'name'):
-        cond_layer.name = "cond"
+        cond_layer.name = "cond"    
 
     # =========================================================================
     # 6. GUARDAR EL SUSTRATO
