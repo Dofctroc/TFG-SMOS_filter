@@ -1340,17 +1340,19 @@ def print_data_txt(output_data: any, output_dir: any, dataset_name: any) -> None
 
 # ===================================== CREATION OF LAYOUT FUNCTIONS =====================================
 def create_busbars_layout(library: de.Library, library_name: str, com: COM) -> None:
-    # ========= 1) Basic layout creation of busbar =========
     assert de.version() >= 630
 
     design = db.create_layout(f"{library_name}:{CELL_BUSBAR_LAYOUT}_{com.name}:layout")
     design = db.open_design(f"{library_name}:{CELL_BUSBAR_LAYOUT}_{com.name}:layout")
 
-    # Properties
+    # Propiedades
     db.StringProp.create(design, "SIM_CONTROLLER_DESIGN", f"{library_name}:{CELL_BUSBAR_LAYOUT}_{com.name}:emSetup")
     cond = LayerId.create_layer_id_from_library(library, "cond", "drawing")
 
-    # Dimensions (converting them to millimeters)
+    # Grupo para empaquetar la geometría de las Busbars en el Layout (patrón extraído del doc)
+    group = db.FigGroup(design, "Busbars")
+
+    # Dimensiones (en mm)
     dx = com.digitsN * com.d * 1e3
     dy = 15 * 1e-3
 
@@ -1359,14 +1361,17 @@ def create_busbars_layout(library: de.Library, library_name: str, com: COM) -> N
 
     aperture = (com.Ap * com.d + com.d) * 1e3
 
-    # Shapes
-    shape = design.add_rectangle(cond, PointF(0, 0), PointF(dx, dy))
-    shape = design.add_rectangle(cond, PointF(dx/2 - dx2/2, dy), PointF(dx/2 + dx2/2, dy + dy2))
+    # Creación de Figuras y asignación al grupo
+    r1 = design.add_rectangle(cond, PointF(0, 0), PointF(dx, dy))
+    r2 = design.add_rectangle(cond, PointF(dx/2 - dx2/2, dy), PointF(dx/2 + dx2/2, dy + dy2))
 
-    shape = design.add_rectangle(cond, PointF(0, -aperture), PointF(dx, -aperture -dy))
-    shape = design.add_rectangle(cond, PointF(dx/2 - dx2/2, -aperture -dy), PointF(dx/2 + dx2/2, -aperture -dy -dy2))
+    r3 = design.add_rectangle(cond, PointF(0, -aperture), PointF(dx, -aperture -dy))
+    r4 = design.add_rectangle(cond, PointF(dx/2 - dx2/2, -aperture -dy), PointF(dx/2 + dx2/2, -aperture -dy -dy2))
 
-    # Terms
+    for rect in (r1, r2, r3, r4):
+        group.add_to_fig_group(rect)
+
+    # Definición de Puertos y Terminals
     net = design.add_net("P1")
     term = design.add_term(net, "P1")
     shape = design.add_dot(cond, loc=PointF(dx/2, dy + dy2))
@@ -1394,32 +1399,19 @@ def create_busbars_layout(library: de.Library, library_name: str, com: COM) -> N
 def create_smos_substrate(library: de.Library, subst_name: str = "smos_substrate") -> subst.Substrate:
     """
     Crea el sustrato para el filtro SMOS usando capas infinitas continuas (Slabs).
-    
-    Orden deseado de arriba a abajo:
-    - AIR (Top)
-    - [Capa de metal cond (Copper) colocada en la interfaz entre AIR y Subst_1, instruida "above"]
-    - Subst_1 (LiNbO3): 500 nm
-    - SiO2: 250 nm
-    - Silicio: 100 micras (100e-6 m)
-    - AIR (Bottom)
     """
-    
-    # 1. Limpieza previa de sustratos homónimos
     if subst.substrate_exists(library, subst_name):
         print(f"[INFO] El sustrato '{subst_name}' ya existe. Regenerando...")
         subst.delete_substrate(library, subst_name)
         
-    # 2. Crear contenedor de sustrato vacío (Material[0] = AIR Top, Material[1] = AIR Bottom)
     s = subst.create_substrate(library, subst_name)
     
-    # =========================================================================
-    # 3. DEFINICIÓN DE MATERIALES (Strings obligatorios)
-    # =========================================================================
+    # 3. DEFINICIÓN DE MATERIALES
     existing_dielectrics = subst.get_dielectric_names(library)
     existing_conductors = subst.get_conductor_names(library)
     
-    if "Silicio" not in existing_dielectrics:
-        si_mat = subst.SubstrateDielectric("Silicio")
+    if "Silicon" not in existing_dielectrics:
+        si_mat = subst.SubstrateDielectric("Silicon")
         si_mat.er_real = "11.7"
         si_mat.er_loss_tangent = "0.0"
         
@@ -1438,63 +1430,54 @@ def create_smos_substrate(library: de.Library, subst_name: str = "smos_substrate
         cop_mat.real = "5.8e7"
         cop_mat.imag = "0.0"
 
-    # =========================================================================
     # 4. CONSTRUCCIÓN DEL STACKUP DIELÉCTRICO
-    # =========================================================================
     try:
         role_conductor = de.ProcessRole.CONDUCTOR
     except AttributeError:
         from keysight.ads.de._pde.tech import ProcessRole
         role_conductor = ProcessRole.CONDUCTOR
 
-    # Insertamos la capa metálica en la interfaz 1 (Frontera superior de Subst_1 con AIR Top)
+    # Capa conductora (Copper, 200 nm)
     cond_layer = s.insert_layer(index_or_interface=1, process_role=role_conductor)
     cond_layer.material_name = "Copper"
-    cond_layer.thickness = 200e-9
-    
-    # 4.1. Insertamos la capa más alta: Subst_1 (LiNbO3, 500 nm) justo debajo de AIR Top
+    cond_layer.thickness_expr = '200'
+    cond_layer.thickness_unit = subst.Unit.NANOMETER
+    cond_layer.precedence = 1  # Prioridad electromagnética extraída de las referencias del documento
+
+    # Capa 1: Subst_1 (LiNbO3, 500 nm)
     s.insert_material_and_interface_below(material_index=0)
     linbo3_layer = s.materials[1]
     linbo3_layer.material_name = "Subst_1"
-    linbo3_layer.thickness = 500e-9
+    linbo3_layer.thickness_expr = '500'
+    linbo3_layer.thickness_unit = subst.Unit.NANOMETER
 
-    # 4.2. Insertamos la capa intermedia: SiO2 (250 nm) debajo de Subst_1
+    # Capa 2: SiO2 (250 nm)
     s.insert_material_and_interface_below(material_index=0)
     sio2_layer = s.materials[1]
     sio2_layer.material_name = "SiO2"
-    sio2_layer.thickness = 250e-9
+    sio2_layer.thickness_expr = '250'
+    sio2_layer.thickness_unit = subst.Unit.NANOMETER
 
-    # 4.3. Insertamos la capa base: Silicio (100 um) debajo de SiO2
+    # Capa 3: Silicon (100 um)
     s.insert_material_and_interface_below(material_index=0)
-    silicio_layer = s.materials[1]
-    silicio_layer.material_name = "Silicio"
-    silicio_layer.thickness = 100e-6
+    silicon_layer = s.materials[1]
+    silicon_layer.material_name = "Silicon"
+    silicon_layer.thickness_expr = '100'
+    silicon_layer.thickness_unit = subst.Unit.MICRON
 
-    # =========================================================================
-    # 5. CONFIGURACIÓN DE INTRUSIÓN Y MAPEO A LAYER "cond" (Layer 1)
-    # =========================================================================
-    
-    # Intrusión y modelo físico (Thick Conductor)
+    # 5. INTRUSIÓN Y MAPEO DE CAPA
     cond_layer.sheet = False
     cond_layer.is_above = True
     cond_layer.model_type = cond_layer.ModelType.USE_DEFAULT
-
-    # --- MAPEO A LA CAPA COND (Layer 1) ---
-    # Asignamos el número de capa 1 de forma explícita
     cond_layer.layer_number = 1
     
-    # Mantenemos los nombres por compatibilidad con la API
     if hasattr(cond_layer, 'layer_name'):
         cond_layer.layer_name = "cond"
     elif hasattr(cond_layer, 'name'):
         cond_layer.name = "cond"    
 
-    # =========================================================================
-    # 6. GUARDAR EL SUSTRATO
-    # =========================================================================
     s.save_substrate()
-    print(f"[SUCCESS] Sustrato '{subst_name}' creado con el orden e intrusión correctos.")
-    
+    print(f"[SUCCESS] Sustrato '{subst_name}' actualizado y guardado correctamente.")
     return s
 
 # ===================================== SCHEMATIC ORIENTED FUNCTIONS =====================================
