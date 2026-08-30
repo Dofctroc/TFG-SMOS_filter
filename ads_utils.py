@@ -1345,104 +1345,125 @@ def create_busbars_layout(library: de.Library, library_name: str, com: COM) -> N
     design = db.create_layout(f"{library_name}:{CELL_BUSBAR_LAYOUT}_{com.name}:layout")
     design = db.open_design(f"{library_name}:{CELL_BUSBAR_LAYOUT}_{com.name}:layout")
 
-    # Propiedades
     db.StringProp.create(design, "SIM_CONTROLLER_DESIGN", f"{library_name}:{CELL_BUSBAR_LAYOUT}_{com.name}:emSetup")
     cond = LayerId.create_layer_id_from_library(library, "cond", "drawing")
 
-    # Grupo para empaquetar la geometría de las Busbars en el Layout (patrón extraído del doc)
-    group = db.FigGroup(design, "Busbars")
+    # --- ESCALADO A MICRAS (um) ---
+    # Convertimos com.d (metros) a micras (* 1e6)
+    d_um = com.d * 1e6                          # ~ 1.332 um
+    
+    # Ancho del busbar proporcional al número de dígitos
+    dx_um = com.digitsN * d_um                  
+    
+    # Apertura entre busbars en micras
+    aperture_um = (com.Ap * d_um) + d_um        
+    
+    # Ancho (dy) y terminales (dy2) escalados proporcionalmente al diseño
+    dy_um = d_um * 10                           # Altura de la barra principal
+    dx2_um = dx_um * 0.1                        # Ancho de la pestaña de contacto
+    dy2_um = d_um * 5                           # Largo de la pestaña de contacto
 
-    # Dimensiones (en mm)
-    dx = com.digitsN * com.d * 1e3
-    dy = 15 * 1e-3
+    # --- DIBUJO DE GEOMETRÍAS (Coordenadas en um) ---
+    # Barra superior y su terminal
+    r1 = design.add_rectangle(cond, PointF(0, 0), PointF(dx_um, dy_um))
+    r2 = design.add_rectangle(cond, PointF(dx_um/2 - dx2_um/2, dy_um), 
+                                    PointF(dx_um/2 + dx2_um/2, dy_um + dy2_um))
 
-    dx2 = dx / 10
-    dy2 = 2 * 1e-3
+    # Barra inferior y su terminal (desplazada por la apertura)
+    r3 = design.add_rectangle(cond, PointF(0, -aperture_um), PointF(dx_um, -aperture_um - dy_um))
+    r4 = design.add_rectangle(cond, PointF(dx_um/2 - dx2_um/2, -aperture_um - dy_um), 
+                                    PointF(dx_um/2 + dx2_um/2, -aperture_um - dy_um - dy2_um))
 
-    aperture = (com.Ap * com.d + com.d) * 1e3
+    # --- PUERTOS Y PINES ---
+    net1 = design.add_net("P1")
+    term1 = design.add_term(net1, "P1")
+    shape1 = design.add_dot(cond, loc=PointF(dx_um/2, dy_um + dy2_um))
+    design.add_pin(term1, shape1, angle=90.0, add_annot=False)
 
-    # Creación de Figuras y asignación al grupo
-    r1 = design.add_rectangle(cond, PointF(0, 0), PointF(dx, dy))
-    r2 = design.add_rectangle(cond, PointF(dx/2 - dx2/2, dy), PointF(dx/2 + dx2/2, dy + dy2))
+    net2 = design.add_net("P2")
+    term2 = design.add_term(net2, "P2")
+    shape2 = design.add_dot(cond, loc=PointF(dx_um/2, -aperture_um - dy_um - dy2_um))
+    design.add_pin(term2, shape2, angle=-90.0, add_annot=False)
 
-    r3 = design.add_rectangle(cond, PointF(0, -aperture), PointF(dx, -aperture -dy))
-    r4 = design.add_rectangle(cond, PointF(dx/2 - dx2/2, -aperture -dy), PointF(dx/2 + dx2/2, -aperture -dy -dy2))
+    net3 = design.add_net("P3")
+    term3 = design.add_term(net3, "P3")
+    shape3 = design.add_dot(cond, loc=PointF(dx_um/2, 0))
+    design.add_pin(term3, shape3, angle=-90.0, add_annot=False)
 
-    for rect in (r1, r2, r3, r4):
-        group.add_to_fig_group(rect)
-
-    # Definición de Puertos y Terminals
-    net = design.add_net("P1")
-    term = design.add_term(net, "P1")
-    shape = design.add_dot(cond, loc=PointF(dx/2, dy + dy2))
-    pin = design.add_pin(term, shape, angle=90.0, add_annot=False)
-
-    net = design.add_net("P2")
-    term = design.add_term(net, "P2")
-    shape = design.add_dot(cond, loc=PointF(dx/2, -aperture -dy -dy2))
-    pin = design.add_pin(term, shape, angle=-90.0, add_annot=False)
-
-    net = design.add_net("P3")
-    term = design.add_term(net, "P3")
-    shape = design.add_dot(cond, loc=PointF(dx/2, 0))
-    pin = design.add_pin(term, shape, angle=-90.0, add_annot=False)
-
-    net = design.add_net("P4")
-    term = design.add_term(net, "P4")
-    shape = design.add_dot(cond, loc=PointF(dx/2, -aperture))
-    pin = design.add_pin(term, shape, angle=90.0, add_annot=False)
+    net4 = design.add_net("P4")
+    term4 = design.add_term(net4, "P4")
+    shape4 = design.add_dot(cond, loc=PointF(dx_um/2, -aperture_um))
+    design.add_pin(term4, shape4, angle=90.0, add_annot=False)
 
     design.save_design()
     design = None
+
     return
 
 def create_smos_substrate(library: de.Library, subst_name: str = "smos_substrate") -> subst.Substrate:
     """
-    Crea el sustrato para el filtro SMOS usando capas infinitas continuas (Slabs).
+    Crea el sustrato SMOS garantizando la persistencia física de los materiales en materials.mat.
     """
-    if subst.substrate_exists(library, subst_name):
-        print(f"[INFO] El sustrato '{subst_name}' ya existe. Regenerando...")
-        subst.delete_substrate(library, subst_name)
-        
-    s = subst.create_substrate(library, subst_name)
+    # 1. RUTA Y CARGA DE LA BASE DE DATOS DE MATERIALES
+    lib_path = library.path() if callable(library.path) else library.path
+    mat_filename = os.path.join(lib_path, "materials.mat")
     
-    # 3. DEFINICIÓN DE MATERIALES
-    existing_dielectrics = subst.get_dielectric_names(library)
-    existing_conductors = subst.get_conductor_names(library)
+    if os.path.exists(mat_filename):
+        materials_db = subst.load_materials(mat_filename)
+    else:
+        materials_db = subst.Materials()
+
+    # 2. CREACIÓN Y REGISTRO DE MATERIALES USANDO .add()
     
-    if "Silicon" not in existing_dielectrics:
-        si_mat = subst.SubstrateDielectric("Silicon")
-        si_mat.er_real = "11.7"
-        si_mat.er_loss_tangent = "0.0"
-        
-    if "SiO2" not in existing_dielectrics:
-        sio2_mat = subst.SubstrateDielectric("SiO2")
-        sio2_mat.er_real = "3.9"
-        sio2_mat.er_loss_tangent = "0.0"
-
-    if "Subst_1" not in existing_dielectrics:
-        linbo3_mat = subst.SubstrateDielectric("Subst_1")
-        linbo3_mat.er_real = "45.62"
-        linbo3_mat.er_loss_tangent = "0.0"
-
-    if "Copper" not in existing_conductors:
+    # Cobre (Conductor)
+    if "Copper" not in materials_db.conductors.names():
         cop_mat = subst.SubstrateConductor("Copper")
         cop_mat.real = "5.8e7"
         cop_mat.imag = "0.0"
+        materials_db.conductors.add(cop_mat)
 
-    # 4. CONSTRUCCIÓN DEL STACKUP DIELÉCTRICO
+    # Dieléctricos
+    existing_diels = materials_db.dielectrics.names()
+
+    if "Silicio" not in existing_diels:
+        si_mat = subst.SubstrateDielectric("Silicio")
+        si_mat.er_real = "11.7"
+        si_mat.er_loss_tangent = "0.0"
+        materials_db.dielectrics.add(si_mat)
+
+    if "SiO2" not in existing_diels:
+        sio2_mat = subst.SubstrateDielectric("SiO2")
+        sio2_mat.er_real = "3.9"
+        sio2_mat.er_loss_tangent = "0.0"
+        materials_db.dielectrics.add(sio2_mat)
+
+    if "Subst_1" not in existing_diels:
+        linbo3_mat = subst.SubstrateDielectric("Subst_1")
+        linbo3_mat.er_real = "45.62"
+        linbo3_mat.er_loss_tangent = "0.0"
+        materials_db.dielectrics.add(linbo3_mat)
+
+    # 3. PERSISTENCIA EN DISCO
+    subst.save_materials(mat_filename, materials_db)
+
+    # 4. CONSTRUCCIÓN DEL STACKUP DE SUSTRATO
+    if subst.substrate_exists(library, subst_name):
+        subst.delete_substrate(library, subst_name)
+        
+    s = subst.create_substrate(library, subst_name)
+
     try:
         role_conductor = de.ProcessRole.CONDUCTOR
     except AttributeError:
         from keysight.ads.de._pde.tech import ProcessRole
         role_conductor = ProcessRole.CONDUCTOR
 
-    # Capa conductora (Copper, 200 nm)
+    # Conductor (Copper, 200 nm)
     cond_layer = s.insert_layer(index_or_interface=1, process_role=role_conductor)
     cond_layer.material_name = "Copper"
     cond_layer.thickness_expr = '200'
     cond_layer.thickness_unit = subst.Unit.NANOMETER
-    cond_layer.precedence = 1  # Prioridad electromagnética extraída de las referencias del documento
+    cond_layer.precedence = 1
 
     # Capa 1: Subst_1 (LiNbO3, 500 nm)
     s.insert_material_and_interface_below(material_index=0)
@@ -1458,14 +1479,14 @@ def create_smos_substrate(library: de.Library, subst_name: str = "smos_substrate
     sio2_layer.thickness_expr = '250'
     sio2_layer.thickness_unit = subst.Unit.NANOMETER
 
-    # Capa 3: Silicon (100 um)
+    # Capa 3: Silicio (100 um)
     s.insert_material_and_interface_below(material_index=0)
-    silicon_layer = s.materials[1]
-    silicon_layer.material_name = "Silicon"
-    silicon_layer.thickness_expr = '100'
-    silicon_layer.thickness_unit = subst.Unit.MICRON
+    silicio_layer = s.materials[1]
+    silicio_layer.material_name = "Silicio"
+    silicio_layer.thickness_expr = '100'
+    silicio_layer.thickness_unit = subst.Unit.MICRON
 
-    # 5. INTRUSIÓN Y MAPEO DE CAPA
+    # Configuración de Capa y Guardado
     cond_layer.sheet = False
     cond_layer.is_above = True
     cond_layer.model_type = cond_layer.ModelType.USE_DEFAULT
@@ -1474,10 +1495,10 @@ def create_smos_substrate(library: de.Library, subst_name: str = "smos_substrate
     if hasattr(cond_layer, 'layer_name'):
         cond_layer.layer_name = "cond"
     elif hasattr(cond_layer, 'name'):
-        cond_layer.name = "cond"    
+        cond_layer.name = "cond"
 
     s.save_substrate()
-    print(f"[SUCCESS] Sustrato '{subst_name}' actualizado y guardado correctamente.")
+    print(f"[SUCCESS] Sustrato '{subst_name}' y materiales 'Silicio', 'SiO2', 'Subst_1' compilados correctamente.")
     return s
 
 # ===================================== SCHEMATIC ORIENTED FUNCTIONS =====================================

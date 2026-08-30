@@ -1100,7 +1100,7 @@ class MainWindow(QMainWindow):
 
             # =============================================== 2.0) Genearate BUSBAR layout and simulation ===============================================
             library.setup_schematic_tech()
-            library.create_layout_tech_std_ads("millimeter", 10000, False)
+            library.create_layout_tech_std_ads("micron", 10000, False)
 
             for com in list_COM_ADS:
                 ads.create_busbars_layout(library, library_name, com)
