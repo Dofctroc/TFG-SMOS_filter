@@ -1141,11 +1141,12 @@ def create_DDS_ladderFilter_COM(workspace_path: str) -> None:
     # Definimos constantes de diseño para consistencia
     plot_width = 4000
     plot_height = 3000
-    margin_x = 500  # Espacio entre los dos gráficos
+    margin_x = 600  # Espacio entre los dos gráficos
 
     # ========= 3) Crear Plot 1 (S11 y S33) =========
     traces_plot1 = [
         f"dB({dataset_name}..S(1,1))", 
+        f"dB({dataset_name}..S(3,3))", 
         f"dB({dataset_name}..S(5,5))"
     ]
     plot1 = page.add_plot((plot_width, plot_height), traces_plot1, "Return Loss")
@@ -1154,7 +1155,8 @@ def create_DDS_ladderFilter_COM(workspace_path: str) -> None:
 
     # ========= 4) Crear Plot 2 (S21 y S43) =========
     traces_plot2 = [
-        f"dB({dataset_name}..S(2,1))", 
+        f"dB({dataset_name}..S(2,1))",  
+        f"dB({dataset_name}..S(4,3))",
         f"dB({dataset_name}..S(6,5))"
     ]
     plot2 = page.add_plot((plot_width, plot_height), traces_plot2, "Insertion Loss")
@@ -1357,93 +1359,34 @@ def create_busbars_layout(library: de.Library, library_name: str, com: COM) -> N
 
     return
 
+
 def create_smos_substrate(library: de.Library, subst_name: str = "smos_substrate") -> subst.Substrate:
     """
-    Crea el sustrato SMOS garantizando la persistencia física de los materiales en materials.mat.
+    Construye el sustrato SMOS en la librería activa.
+    Requiere que los materiales 'Copper', 'Subst_1', 'SiO2' y 'Silicio' 
+    existan previamente en la tecnología/workspace.
     """
-    # 1. RUTA Y CARGA DE LA BASE DE DATOS DE MATERIALES
-    lib_path = library.path() if callable(library.path) else library.path
-    mat_filename = os.path.join(lib_path, "materials.mat")
-    
-    if os.path.exists(mat_filename):
-        materials_db = subst.load_materials(mat_filename)
-    else:
-        materials_db = subst.Materials()
-
-    # 2. CREACIÓN Y REGISTRO DE MATERIALES USANDO .add()
-    
-    # Cobre (Conductor)
-    if "Copper" not in materials_db.conductors.names():
-        cop_mat = subst.SubstrateConductor("Copper")
-        cop_mat.real = "5.8e7"
-        cop_mat.imag = "0.0"
-        materials_db.conductors.add(cop_mat)
-
-    # Dieléctricos
-    existing_diels = materials_db.dielectrics.names()
-
-    if "Silicio" not in existing_diels:
-        si_mat = subst.SubstrateDielectric("Silicio")
-        si_mat.er_real = "11.7"
-        si_mat.er_loss_tangent = "0.0"
-        materials_db.dielectrics.add(si_mat)
-
-    if "SiO2" not in existing_diels:
-        sio2_mat = subst.SubstrateDielectric("SiO2")
-        sio2_mat.er_real = "3.9"
-        sio2_mat.er_loss_tangent = "0.0"
-        materials_db.dielectrics.add(sio2_mat)
-
-    if "Subst_1" not in existing_diels:
-        linbo3_mat = subst.SubstrateDielectric("Subst_1")
-        linbo3_mat.er_real = "45.62"
-        linbo3_mat.er_loss_tangent = "0.0"
-        materials_db.dielectrics.add(linbo3_mat)
-
-    # 3. PERSISTENCIA EN DISCO
-    subst.save_materials(mat_filename, materials_db)
-
-    # 4. CONSTRUCCIÓN DEL STACKUP DE SUSTRATO
+    # 1. Recrear el sustrato si ya existía
     if subst.substrate_exists(library, subst_name):
         subst.delete_substrate(library, subst_name)
         
     s = subst.create_substrate(library, subst_name)
 
+    # 2. Obtener rol de conductor
     try:
         role_conductor = de.ProcessRole.CONDUCTOR
     except AttributeError:
         from keysight.ads.de._pde.tech import ProcessRole
         role_conductor = ProcessRole.CONDUCTOR
 
-    # Conductor (Copper, 200 nm)
+    # ---------------------------------------------------------------------
+    # CAPA CONDUCTORA: cond (Copper, 200 nm)
+    # ---------------------------------------------------------------------
     cond_layer = s.insert_layer(index_or_interface=1, process_role=role_conductor)
     cond_layer.material_name = "Copper"
     cond_layer.thickness_expr = '200'
     cond_layer.thickness_unit = subst.Unit.NANOMETER
     cond_layer.precedence = 1
-
-    # Capa 1: Subst_1 (LiNbO3, 500 nm)
-    s.insert_material_and_interface_below(material_index=0)
-    linbo3_layer = s.materials[1]
-    linbo3_layer.material_name = "Subst_1"
-    linbo3_layer.thickness_expr = '500'
-    linbo3_layer.thickness_unit = subst.Unit.NANOMETER
-
-    # Capa 2: SiO2 (250 nm)
-    s.insert_material_and_interface_below(material_index=0)
-    sio2_layer = s.materials[1]
-    sio2_layer.material_name = "SiO2"
-    sio2_layer.thickness_expr = '250'
-    sio2_layer.thickness_unit = subst.Unit.NANOMETER
-
-    # Capa 3: Silicio (100 um)
-    s.insert_material_and_interface_below(material_index=0)
-    silicio_layer = s.materials[1]
-    silicio_layer.material_name = "Silicio"
-    silicio_layer.thickness_expr = '100'
-    silicio_layer.thickness_unit = subst.Unit.MICRON
-
-    # Configuración de Capa y Guardado
     cond_layer.sheet = False
     cond_layer.is_above = True
     cond_layer.model_type = cond_layer.ModelType.USE_DEFAULT
@@ -1454,8 +1397,36 @@ def create_smos_substrate(library: de.Library, subst_name: str = "smos_substrate
     elif hasattr(cond_layer, 'name'):
         cond_layer.name = "cond"
 
+    # ---------------------------------------------------------------------
+    # CAPA DIELÉCTRICA 1: Subst_1 (LiNbO3, 500 nm)
+    # ---------------------------------------------------------------------
+    s.insert_material_and_interface_below(material_index=0)
+    linbo3_layer = s.materials[1]
+    linbo3_layer.material_name = "Subst_1"
+    linbo3_layer.thickness_expr = '500'
+    linbo3_layer.thickness_unit = subst.Unit.NANOMETER
+
+    # ---------------------------------------------------------------------
+    # CAPA DIELÉCTRICA 2: SiO2 (250 nm)
+    # ---------------------------------------------------------------------
+    s.insert_material_and_interface_below(material_index=0)
+    sio2_layer = s.materials[1]
+    sio2_layer.material_name = "SiO2"
+    sio2_layer.thickness_expr = '250'
+    sio2_layer.thickness_unit = subst.Unit.NANOMETER
+
+    # ---------------------------------------------------------------------
+    # CAPA DIELÉCTRICA 3: Silicio (100 µm)
+    # ---------------------------------------------------------------------
+    s.insert_material_and_interface_below(material_index=0)
+    silicio_layer = s.materials[1]
+    silicio_layer.material_name = "Silicio"
+    silicio_layer.thickness_expr = '100'
+    silicio_layer.thickness_unit = subst.Unit.MICRON
+
+    # Guardar en librería
     s.save_substrate()
-    print(f"[SUCCESS] Sustrato '{subst_name}' y materiales 'Silicio', 'SiO2', 'Subst_1' compilados correctamente.")
+    print(f"[SUCCESS] Sustrato '{subst_name}' compilado correctamente.")
     return s
 
 # ===================================== SCHEMATIC ORIENTED FUNCTIONS =====================================
