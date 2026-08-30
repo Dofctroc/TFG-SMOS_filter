@@ -20,9 +20,10 @@ from bvd_com_computations import FilterResponse
 FORCE_RECREATE = True
 
 CELL_BVD_LOSSY = "BVD_Lossy_symb"       # celda jerárquica (schematic+symbol)
-CELL_FILTER_BVD = "Ladder_Filter_BVD"   # celda jerárquica (schematic)
 CELL_COM_LOSSY = "COM_Lossy_symb"       # celda jerárquica (schematic+symbol)
+CELL_FILTER_BVD = "Ladder_Filter_BVD"   # celda jerárquica (schematic)
 CELL_FILTER_COM = "Ladder_Filter_COM"   # celda jerárquica (schematic)
+CELL_FILTER = "Filters"                 # celda jerárquica (schematic)
 CELL_DEBUG = "Debugging"
 CELL_BUSBAR_LAYOUT = "Busbar_layout"
 
@@ -293,222 +294,6 @@ def create_SchematicAndSymbol_lossyBVD(library: de.Library, library_name: str) -
 
     design.save_design()
     design = None
-
-def create_Schematic_ladderFilter_BVD(workspace_path: str, library_name: str, dataset_s2p_path: str, parameters: dict, list_BVD: list[BVD]) -> None:
-    assert de.version() >= 630
-
-    design = db.create_schematic(f"{library_name}:{CELL_FILTER_BVD}:schematic")
-    design = db.open_design(f"{library_name}:{CELL_FILTER_BVD}:schematic")
-
-    # READ Basic Ladder parameters
-    order = int(parameters["norder_ini"])
-    startBVD_type = parameters["typeseriesshunt_ini"]
-    
-    # Determine the type of the last BVD based on the order and the type of the first BVD
-    if order % 2 == 0:
-        endBVD_type = "shunt" if startBVD_type == "series" else "series"
-    else:
-        endBVD_type = "series" if startBVD_type == "series" else "shunt"
-
-    current_BVD_type = startBVD_type
-
-    # READ Matching network parameters
-    matching_network = parameters["matching_network"]
-    mntype1 = parameters["mntype1"]
-    input_l = parameters["input_l"]
-    lfini1 = parameters["lfini1"]
-    lfini2 = parameters["lfini2"]
-    cfini1 = parameters["cfini1"]
-    cfini2 = parameters["cfini2"]
-    
-    # Sweep parameters
-    fstart = parameters["fstart1"]
-    fstop = parameters["fstop1"]
-    npoints = parameters["npoints1"]
-    
-    # Grid positon parameters
-    xpos = 0.0
-    ypos = 0.0
-    x_margin = 1.0
-    y_margin = 1.0
-    num_BVD = 0
-
-    with Transaction(design) as transaction:
-        # =========================================== Ladder Filter of Lossy BVDs ===========================================
-        instantiate_term_g(design, "TermG1", 1, (xpos, ypos))
-
-        # INPUT MATCHING NETWORK
-        if startBVD_type == "series":
-            d = Decimal(input_l)
-            if d.adjusted() > -10:
-                xpos = advance_x(design, xpos, ypos, x_margin)
-                instantiate_rflib_element(design, "L", "L_input", (xpos, ypos), input_l + "H", -90.0)
-                instantiate_ground(design, f"G{num_BVD}", (xpos, ypos - 1.0))
-            xpos = advance_x(design, xpos, ypos, x_margin)
-        else:
-            xpos = advance_x(design, xpos, ypos, x_margin)
-            instantiate_rflib_element(design, "L", "L_input", (xpos, ypos), input_l + "H", 0.0)
-            xpos = advance_x(design, xpos + 1.0, ypos, x_margin)
-
-        ypos = 0.0
-
-        # BVD LADDER: Único bucle para toda la escalera
-        while num_BVD < len(list_BVD):
-            xpos = advance_x(design, xpos, ypos, x_margin)
-
-            angle_BVD = 0.0 if current_BVD_type == "series" else -90.0
-            
-            if current_BVD_type == "shunt" and not list_BVD[num_BVD].name.endswith("_1s"):
-                instantiate_ground(design, f"G{num_BVD+1}", (xpos, ypos - 1.0))
-            
-            instantiate_BVD_in_schematic(design, library_name, list_BVD, num_BVD, angle_BVD, (xpos, ypos))
-
-            xpos += 1.0 if current_BVD_type == "series" else 0.0
-            ypos -= 1.0 if current_BVD_type == "shunt" else 0.0
-
-            duplicate = False
-
-            if list_BVD[num_BVD].name.endswith("_1s"):
-                duplicate = True
-                if current_BVD_type == "series":
-                    xpos = advance_x(design, xpos, ypos, x_margin)
-                    angle_BVD = 0.0
-                else:
-                    design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos, y=ypos - y_margin)])
-                    ypos -= y_margin
-                    instantiate_ground(design, f"G{num_BVD}", (xpos, ypos - 1.0))
-                    angle_BVD = -90.0
-
-            elif list_BVD[num_BVD].name.endswith("_1p"):
-                duplicate = True
-                if current_BVD_type == "series":
-                    xpos -= 1.0
-                    design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos, y=ypos - y_margin)])
-                    design.add_wire([PointF(x=xpos + 1.0, y=ypos), PointF(x=xpos + 1.0, y=ypos - y_margin)])
-                    ypos -= y_margin
-                    angle_BVD = 0.0
-                else:
-                    ypos += 1.0
-                    xpos = advance_x(design, xpos, ypos, x_margin)
-                    advance_x(design, xpos - x_margin, ypos - y_margin, x_margin)
-                    angle_BVD = -90.0
-
-            if duplicate:
-                num_BVD += 1
-                instantiate_BVD_in_schematic(design, library_name, list_BVD, num_BVD, angle_BVD, (xpos, ypos))
-
-            xpos += 1.0 if current_BVD_type == "series" and list_BVD[num_BVD-1].name.endswith(("_1p", "_1s")) else 0.0
-            ypos += 1.0 if (current_BVD_type == "series" and list_BVD[num_BVD-1].name.endswith("_1p")) or (current_BVD_type == "shunt" and list_BVD[num_BVD-1].name.endswith("_1s")) else 0.0
-
-            ypos = 0.0
-            xpos = advance_x(design, xpos, ypos, x_margin)
-            num_BVD += 1
-            current_BVD_type = "shunt" if current_BVD_type == "series" else "series"
-
-        # OUTPUT MATCHING NETWORK
-        xpos = advance_x(design, xpos, ypos, x_margin)
-
-        if matching_network == "0.0":
-            if endBVD_type == "series":
-                if float(lfini2) > 0.0:
-                    instantiate_rflib_element(design, "L", "L_output", (xpos, ypos), lfini2 + "H", -90.0)
-                    instantiate_ground(design, f"G{num_BVD}", (xpos, ypos - 1.0))
-                xpos = advance_x(design, xpos, ypos, x_margin)
-            else:
-                if float(lfini2) > 0.0:
-                    instantiate_rflib_element(design, "L", "L_output", (xpos, ypos), lfini2 + "H", 0.0)
-                    xpos += 1.0
-                xpos = advance_x(design, xpos, ypos, x_margin)
-
-        else:
-            if mntype1 == "s":
-                if float(lfini1) > 0.0:
-                    instantiate_rflib_element(design, "L", "L_output", (xpos, ypos), lfini1 + "H", 0.0)
-                    xpos += 1.0
-                xpos = advance_x(design, xpos, ypos, x_margin)
-
-                if float(cfini2) > 0.0:
-                    instantiate_rflib_element(design, "C", "C_output", (xpos, ypos), cfini2 + "F", -90.0)
-                    instantiate_ground(design, f"G{num_BVD}", (xpos, ypos - 1.0))
-                xpos = advance_x(design, xpos, ypos, x_margin)
-
-            else:
-                if float(cfini1) > 0.0:
-                    instantiate_rflib_element(design, "C", "C_output", (xpos, ypos), cfini1 + "F", -90.0)
-                    instantiate_ground(design, f"G{num_BVD}", (xpos, ypos - 1.0))
-                xpos = advance_x(design, xpos, ypos, x_margin)
-
-                if float(lfini2) > 0.0:
-                    instantiate_rflib_element(design, "L", "L_output", (xpos, ypos), lfini2 + "H", 0.0)
-                    xpos += 1.0
-                xpos = advance_x(design, xpos, ypos, x_margin)
-
-        # TermG2
-        instantiate_term_g(design, "TermG2", 2, (xpos, ypos))
-
-        # Variables 
-        inst = design.add_var_instance(name="VAR_Sweep", origin=(3.0, 3.0))
-        inst.vars.update({'fstart': fstart, 'fstop': fstop, 'npoints': npoints})
-        # Since inst.vars does not contain 'X', we need to remove the first repeat.
-        assert isinstance(inst.parameters[0], db.ParamRepeated)
-        del(inst.parameters[0].repeats[0])
-
-
-        # =========================================== Sparameters Data Item for Comparison ===========================================
-        if dataset_s2p_path is not None:
-            inst = design.add_instance("ads_simulation:TermG", name="TermG3", origin=(6.0, 3.0), angle=-90.0)
-            inst.parameters["Num"].value = "3"
-            inst.update_item_annotation()
-            design.add_wire([PointF(6.0, 3.0), PointF(7.0, 3.0)])
-
-            inst = design.add_instance("ads_datacmps:SnP", name="SnP1", origin=(7.0, 3.0))
-            inst.parameters["NumPorts"].value = "2"
-            inst.parameters["File"].value = dataset_s2p_path
-            inst.parameters["Type"].value = '"touchstone"'
-            inst.parameters["port_name_list"].value = "0 "
-            with de.db.ExpressionContext(design) as expr_context, db.Transaction(design) as trans:
-                expr_context.update_pcell_params(inst)
-                trans.commit()
-            inst.update_item_annotation()
-
-            design.add_wire([PointF(7.75, 3.0), PointF(9.0, 3.0)])
-            inst = design.add_instance("ads_simulation:TermG", name="TermG4", origin=(9.0, 3.0), angle=-90.0)
-            inst.parameters["Num"].value = "4"
-            inst.update_item_annotation()
-
-
-        # =========================================== S parameters simulation ===========================================
-        inst = design.add_instance("ads_simulation:S_Param", name="SP1", origin=(0.0, 3.0))
-        inst.parameters["Start"].value = "fstart Hz"
-        inst.parameters["Stop"].value = "fstop Hz"
-        inst.parameters["Step"].value = "(fstop-fstart)/1000 Hz"
-        inst.parameters["Sort"].value = "LINEAR START STEP "
-        inst.parameters["CalcY"].value = "yes"
-        inst.parameters["Freq"].value = " "
-        inst.update_item_annotation()
-
-
-        # FINISH
-        transaction.commit()
-
-    design.save_design()
-
-    # =========================================== EXTRAER EL NETLIST Y SIMULAR ===========================================
-    netlist = design.generate_netlist()
-
-    # Definimos dónde queremos que se guarde el archivo de datos (.ds)
-    output_dir = os.path.join(workspace_path, "data")
-    os.makedirs(output_dir, exist_ok=True)
-
-    simulator = eda_ads.CircuitSimulator()
-    
-    # Esto bloqueará la ejecución de Python hasta que la simulación termine
-    simulator.run_netlist(netlist, output_dir=output_dir)
-
-    # Limpiamos
-    design = None
-
-    return
 
 def create_SchematicAndSymbol_lossyCOM(library: de.Library, library_name: str) -> None:
     # ============================================= 1) Schematic interno losstCOM =============================================
@@ -830,12 +615,247 @@ def create_SchematicAndSymbol_lossyCOM(library: de.Library, library_name: str) -
     design.save_design()
     design = None
 
-def create_Schematic_ladderFilter_COM(workspace_path: str, library_name: str, dataset_s2p_path: str, parameters: dict, list_COM: list[COM]) -> None:
+def create_Schematic_ladder_filters(workspace_path: str, library_name: str, dataset_s2p_path: str, parameters: dict, list_BVD: list[BVD], list_COM: list[COM]) -> None:
     assert de.version() >= 630
 
-    design = db.create_schematic(f"{library_name}:{CELL_FILTER_COM}:schematic")
-    design = db.open_design(f"{library_name}:{CELL_FILTER_COM}:schematic")
+    design = db.create_schematic(f"{library_name}:{CELL_FILTER}:schematic")
+    design = db.open_design(f"{library_name}:{CELL_FILTER}:schematic")
+    
+    # Sweep parameters
+    fstart = parameters["fstart1"]
+    fstop = parameters["fstop1"]
+    npoints = parameters["npoints1"]
 
+    with Transaction(design) as transaction:
+
+        # =========================================== Sparameters Data Item for Comparison ===========================================
+        if dataset_s2p_path is not None:
+            inst = design.add_instance("ads_simulation:TermG", name="TermG1", origin=(6.0, 3.0), angle=-90.0)
+            inst.parameters["Num"].value = "1"
+            inst.update_item_annotation()
+            design.add_wire([PointF(6.0, 3.0), PointF(7.0, 3.0)])
+
+            inst = design.add_instance("ads_datacmps:SnP", name="SnP1", origin=(7.0, 3.0))
+            inst.parameters["NumPorts"].value = "2"
+            inst.parameters["File"].value = dataset_s2p_path
+            inst.parameters["Type"].value = '"touchstone"'
+            inst.parameters["port_name_list"].value = "0 "
+            with de.db.ExpressionContext(design) as expr_context, db.Transaction(design) as trans:
+                expr_context.update_pcell_params(inst)
+                trans.commit()
+            inst.update_item_annotation()
+
+            design.add_wire([PointF(7.75, 3.0), PointF(9.0, 3.0)])
+            inst = design.add_instance("ads_simulation:TermG", name="TermG2", origin=(9.0, 3.0), angle=-90.0)
+            inst.parameters["Num"].value = "2"
+            inst.update_item_annotation()
+
+
+        # =========================================== S parameters simulation ===========================================
+        inst = design.add_instance("ads_simulation:S_Param", name="SP1", origin=(0.0, 3.0))
+        inst.parameters["Start"].value = "fstart Hz"
+        inst.parameters["Stop"].value = "fstop Hz"
+        inst.parameters["Step"].value = "(fstop-fstart)/1000 Hz"
+        inst.parameters["Sort"].value = "LINEAR START STEP "
+        inst.parameters["CalcY"].value = "yes"
+        inst.parameters["Freq"].value = " "
+        inst.update_item_annotation()
+
+        # Variables 
+        inst = design.add_var_instance(name="VAR_Sweep", origin=(3.0, 3.0))
+        inst.vars.update({'fstart': fstart, 'fstop': fstop, 'npoints': npoints})
+        # Since inst.vars does not contain 'X', we need to remove the first repeat.
+        assert isinstance(inst.parameters[0], db.ParamRepeated)
+        del(inst.parameters[0].repeats[0])
+
+        
+        # =========================================== BVD ladder filter build ===========================================
+        initial_xpos_BVD = 0
+        initial_ypos_BVD = 0
+        initial_TermG_BVD = 3
+        build_ladder_filter_circuit_BVD(design, initial_xpos_BVD, initial_ypos_BVD, initial_TermG_BVD, parameters, list_BVD, library_name)
+
+        # =========================================== COM ladder filter build ===========================================
+        initial_xpos_COM = 0
+        initial_ypos_COM = -4
+        initial_TermG_COM = 5
+        build_ladder_filter_circuit_COM(design, initial_xpos_COM, initial_ypos_COM, initial_TermG_COM, parameters, list_COM, library_name)
+
+
+        # FINISH
+        transaction.commit()
+
+    design.save_design()
+
+    # =========================================== EXTRAER EL NETLIST Y SIMULAR ===========================================
+    netlist = design.generate_netlist()
+
+    # Definimos dónde queremos que se guarde el archivo de datos (.ds)
+    output_dir = os.path.join(workspace_path, "data")
+    os.makedirs(output_dir, exist_ok=True)
+
+    simulator = eda_ads.CircuitSimulator()
+    
+    # Esto bloqueará la ejecución de Python hasta que la simulación termine
+    simulator.run_netlist(netlist, output_dir=output_dir)
+
+    # Limpiamos
+    design = None
+
+    return
+
+def build_ladder_filter_circuit_BVD(design: db.Design, initial_xpos: int, initial_ypos: int, initial_TermG: int, parameters: dict, list_BVD: list[BVD], library_name: str) -> None:
+    # READ Basic Ladder parameters
+    order = int(parameters["norder_ini"])
+    startBVD_type = parameters["typeseriesshunt_ini"]
+    
+    # Determine the type of the last BVD based on the order and the type of the first BVD
+    if order % 2 == 0:
+        endBVD_type = "shunt" if startBVD_type == "series" else "series"
+    else:
+        endBVD_type = "series" if startBVD_type == "series" else "shunt"
+
+    current_BVD_type = startBVD_type
+
+    # READ Matching network parameters
+    matching_network = parameters["matching_network"]
+    mntype1 = parameters["mntype1"]
+    input_l = parameters["input_l"]
+    lfini1 = parameters["lfini1"]
+    lfini2 = parameters["lfini2"]
+    cfini1 = parameters["cfini1"]
+    cfini2 = parameters["cfini2"]
+
+    x_margin = 1.0
+    y_margin = 1.0
+
+    xpos = initial_xpos
+    ypos = initial_ypos
+
+    ground_count = 1
+    num_BVD = 0
+
+    # =========================================== Ladder Filter of Lossy BVDs ===========================================
+    instantiate_term_g(design, f"TermG{initial_TermG}", initial_TermG, (xpos, ypos))
+
+    # INPUT MATCHING NETWORK (Renombrados con _BVD)
+    if startBVD_type == "series":
+        d = Decimal(input_l)
+        if d.adjusted() > -10:
+            xpos = advance_x(design, xpos, ypos, x_margin)
+            instantiate_rflib_element(design, "L", "L_input_BVD", (xpos, ypos), input_l + "H", -90.0)
+            instantiate_ground(design, f"G{ground_count}_BVD", (xpos, ypos - 1.0))
+            ground_count += 1
+        xpos = advance_x(design, xpos, ypos, x_margin)
+    else:
+        xpos = advance_x(design, xpos, ypos, x_margin)
+        instantiate_rflib_element(design, "L", "L_input_BVD", (xpos, ypos), input_l + "H", 0.0)
+        xpos = advance_x(design, xpos + 1.0, ypos, x_margin)
+
+    ypos = initial_ypos
+
+    # BVD LADDER: Único bucle para toda la escalera
+    while num_BVD < len(list_BVD):
+        xpos = advance_x(design, xpos, ypos, x_margin)
+
+        angle_BVD = 0.0 if current_BVD_type == "series" else -90.0
+        
+        if current_BVD_type == "shunt" and not list_BVD[num_BVD].name.endswith("_1s"):
+            instantiate_ground(design, f"G{ground_count}_BVD", (xpos, ypos - 1.0))
+            ground_count += 1
+        
+        instantiate_BVD_in_schematic(design, library_name, list_BVD, num_BVD, angle_BVD, (xpos, ypos))
+
+        xpos += 1.0 if current_BVD_type == "series" else 0.0
+        ypos -= 1.0 if current_BVD_type == "shunt" else 0.0
+
+        duplicate = False
+
+        if list_BVD[num_BVD].name.endswith("_1s"):
+            duplicate = True
+            if current_BVD_type == "series":
+                xpos = advance_x(design, xpos, ypos, x_margin)
+                angle_BVD = 0.0
+            else:
+                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos, y=ypos - y_margin)])
+                ypos -= y_margin
+                instantiate_ground(design, f"G{ground_count}_BVD", (xpos, ypos - 1.0))
+                ground_count += 1
+                angle_BVD = -90.0
+
+        elif list_BVD[num_BVD].name.endswith("_1p"):
+            duplicate = True
+            if current_BVD_type == "series":
+                xpos -= 1.0
+                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos, y=ypos - y_margin)])
+                design.add_wire([PointF(x=xpos + 1.0, y=ypos), PointF(x=xpos + 1.0, y=ypos - y_margin)])
+                ypos -= y_margin
+                angle_BVD = 0.0
+            else:
+                ypos += 1.0
+                xpos = advance_x(design, xpos, ypos, x_margin)
+                advance_x(design, xpos - x_margin, ypos - y_margin, x_margin)
+                angle_BVD = -90.0
+
+        if duplicate:
+            num_BVD += 1
+            instantiate_BVD_in_schematic(design, library_name, list_BVD, num_BVD, angle_BVD, (xpos, ypos))
+
+        xpos += 1.0 if current_BVD_type == "series" and list_BVD[num_BVD-1].name.endswith(("_1p", "_1s")) else 0.0
+        ypos += 1.0 if (current_BVD_type == "series" and list_BVD[num_BVD-1].name.endswith("_1p")) or (current_BVD_type == "shunt" and list_BVD[num_BVD-1].name.endswith("_1s")) else 0.0
+
+        ypos = initial_ypos
+        xpos = advance_x(design, xpos, ypos, x_margin)
+        num_BVD += 1
+        current_BVD_type = "shunt" if current_BVD_type == "series" else "series"
+
+    # OUTPUT MATCHING NETWORK (Renombrados con _BVD)
+    xpos = advance_x(design, xpos, ypos, x_margin)
+
+    if matching_network == "0.0":
+        if endBVD_type == "series":
+            if float(lfini2) > 0.0:
+                instantiate_rflib_element(design, "L", "L_output_BVD", (xpos, ypos), lfini2 + "H", -90.0)
+                instantiate_ground(design, f"G{ground_count}_BVD", (xpos, ypos - 1.0))
+                ground_count += 1
+            xpos = advance_x(design, xpos, ypos, x_margin)
+        else:
+            if float(lfini2) > 0.0:
+                instantiate_rflib_element(design, "L", "L_output_BVD", (xpos, ypos), lfini2 + "H", 0.0)
+                xpos += 1.0
+            xpos = advance_x(design, xpos, ypos, x_margin)
+
+    else:
+        if mntype1 == "s":
+            if float(lfini1) > 0.0:
+                instantiate_rflib_element(design, "L", "L_output1_BVD", (xpos, ypos), lfini1 + "H", 0.0)
+                xpos += 1.0
+            xpos = advance_x(design, xpos, ypos, x_margin)
+
+            if float(cfini2) > 0.0:
+                instantiate_rflib_element(design, "C", "C_output2_BVD", (xpos, ypos), cfini2 + "F", -90.0)
+                instantiate_ground(design, f"G{ground_count}_BVD", (xpos, ypos - 1.0))
+                ground_count += 1
+            xpos = advance_x(design, xpos, ypos, x_margin)
+
+        else:
+            if float(cfini1) > 0.0:
+                instantiate_rflib_element(design, "C", "C_output1_BVD", (xpos, ypos), cfini1 + "F", -90.0)
+                instantiate_ground(design, f"G{ground_count}_BVD", (xpos, ypos - 1.0))
+                ground_count += 1
+            xpos = advance_x(design, xpos, ypos, x_margin)
+
+            if float(lfini2) > 0.0:
+                instantiate_rflib_element(design, "L", "L_output2_BVD", (xpos, ypos), lfini2 + "H", 0.0)
+                xpos += 1.0
+            xpos = advance_x(design, xpos, ypos, x_margin)
+
+    # TermG2
+    instantiate_term_g(design, f"TermG{initial_TermG+1}", initial_TermG+1, (xpos, ypos))
+
+    return
+
+def build_ladder_filter_circuit_COM(design: db.Design, initial_xpos: int, initial_ypos: int, initial_TermG: int, parameters: dict, list_COM: list[COM], library_name: str) -> None:
     # READ Basic Ladder parameters
     order = int(parameters["norder_ini"])
     startCOM_type = parameters["typeseriesshunt_ini"]
@@ -858,202 +878,139 @@ def create_Schematic_ladderFilter_COM(workspace_path: str, library_name: str, da
     cfini1 = parameters["cfini1"]
     cfini2 = parameters["cfini2"]
     
-    # Sweep parameters
-    fstart = parameters["fstart1"]
-    fstop = parameters["fstop1"]
-    npoints = parameters["npoints1"]
-    
-    # Grid positon parameters
-    xpos = 0.0
-    ypos = 0.0
+    # Grid position parameters
+    xpos = initial_xpos
+    ypos = initial_ypos
 
     x_margin = 1.0
     y_margin = 1.0
 
     num_COM = 0
+    ground_count = 1  # Contador dedicado para tierras únicas (G1, G2, G3...)
 
-    with Transaction(design) as transaction:
-        # =========================================== Ladder Filter of Lossy COMs ===========================================
-        instantiate_term_g(design, "TermG1", 1, (xpos, ypos))
+    # =========================================== Ladder Filter of Lossy COMs ===========================================
+    instantiate_term_g(design, f"TermG{initial_TermG}", initial_TermG, (xpos, ypos))
 
-        # INPUT MATCHING NETWORK
-        if startCOM_type == "series":
-            d = Decimal(input_l)
-            if d.adjusted() > -10:
-                xpos = advance_x(design, xpos, ypos, x_margin)
-                instantiate_rflib_element(design, "L", "L_input", (xpos, ypos), input_l + "H", -90.0)
-                instantiate_ground(design, f"G{num_COM}", (xpos, ypos - 1.0))
+    # INPUT MATCHING NETWORK (Renombrados con _COM)
+    if startCOM_type == "series":
+        d = Decimal(input_l)
+        if d.adjusted() > -10:
             xpos = advance_x(design, xpos, ypos, x_margin)
-        else:
-            xpos = advance_x(design, xpos, ypos, x_margin)
-            instantiate_rflib_element(design, "L", "L_input", (xpos, ypos), input_l + "H", 0.0)
-            xpos = advance_x(design, xpos + 1.0, ypos, x_margin) # Sumamos 1.0 por el tamaño del inductor
+            instantiate_rflib_element(design, "L", "L_input_COM", (xpos, ypos), input_l + "H", -90.0)
+            instantiate_ground(design, f"G{ground_count}_COM", (xpos, ypos - 1.0))
+            ground_count += 1
+        xpos = advance_x(design, xpos, ypos, x_margin)
+    else:
+        xpos = advance_x(design, xpos, ypos, x_margin)
+        instantiate_rflib_element(design, "L", "L_input_COM", (xpos, ypos), input_l + "H", 0.0)
+        xpos = advance_x(design, xpos + 1.0, ypos, x_margin) # Sumamos 1.0 por el tamaño del inductor
 
-        ypos = 0.0
+    ypos = initial_ypos
 
-        # ÚNICO BUCLE COM LADDER (Maneja el primero y todos los demás)
-        while num_COM < len(list_COM):
-            xpos = advance_x(design, xpos, ypos, x_margin)
-
-            angle_COM = 0.0 if current_COM_type == "series" else -90.0
-            
-            if current_COM_type == "shunt" and not list_COM[num_COM].name.endswith("_1s"):
-                instantiate_ground(design, f"G{num_COM+1}", (xpos, ypos - 1.0))
-            
-            instantiate_COM_in_schematic(design, library_name, list_COM, num_COM, angle_COM, (xpos, ypos))
-
-            xpos += 1.0 if current_COM_type == "series" else 0.0
-            ypos -= 1.0 if current_COM_type == "shunt" else 0.0
-
-            duplicate = False
-
-            if list_COM[num_COM].name.endswith("_1s"):
-                duplicate = True
-                if current_COM_type == "series":
-                    xpos = advance_x(design, xpos, ypos, x_margin)
-                    angle_COM = 0.0
-                else:
-                    design.add_wire([PointF(xpos, ypos), PointF(xpos, ypos - y_margin)])
-                    ypos -= y_margin
-                    instantiate_ground(design, f"G{num_COM}", (xpos, ypos - 1.0))
-                    angle_COM = -90.0
-
-            elif list_COM[num_COM].name.endswith("_1p"):
-                duplicate = True
-                if current_COM_type == "series":
-                    xpos -= 1.0
-                    design.add_wire([PointF(xpos, ypos), PointF(xpos, ypos - y_margin)])
-                    design.add_wire([PointF(xpos + 1.0, ypos), PointF(xpos + 1.0, ypos - y_margin)])
-                    ypos -= y_margin
-                    angle_COM = 0.0
-                else:
-                    ypos += 1.0
-                    xpos = advance_x(design, xpos, ypos, x_margin)
-                    advance_x(design, xpos - x_margin, ypos - y_margin, x_margin) # Wire inferior
-                    angle_COM = -90.0
-
-            if duplicate:
-                num_COM += 1
-                instantiate_COM_in_schematic(design, library_name, list_COM, num_COM, angle_COM, (xpos, ypos))
-
-            xpos += 1.0 if current_COM_type == "series" and list_COM[num_COM-1].name.endswith(("_1p", "_1s")) else 0.0
-            ypos += 1.0 if (current_COM_type == "series" and list_COM[num_COM-1].name.endswith("_1p")) or (current_COM_type == "shunt" and list_COM[num_COM-1].name.endswith("_1s")) else 0.0
-
-            ypos = 0.0
-            xpos = advance_x(design, xpos, ypos, x_margin)
-            num_COM += 1
-            current_COM_type = "shunt" if current_COM_type == "series" else "series"
-
-
-        # OUTPUT MATCHING NETWORK: (need to know if last COM is series or shunt)
+    # ÚNICO BUCLE COM LADDER (Maneja el primero y todos los demás)
+    while num_COM < len(list_COM):
         xpos = advance_x(design, xpos, ypos, x_margin)
 
-        if matching_network == "0.0":
-            if endCOM_type == "series":
-                # Bobina en shunt (lfini2)
-                if float(lfini2) > 0.0:
-                    instantiate_rflib_element(design, "L", "L_output", (xpos, ypos), lfini2 + "H", -90.0)
-                    instantiate_ground(design, f"G{num_COM}", (xpos, ypos - 1.0))
-                xpos = advance_x(design, xpos, ypos, x_margin)
+        angle_COM = 0.0 if current_COM_type == "series" else -90.0
+        
+        if current_COM_type == "shunt" and not list_COM[num_COM].name.endswith("_1s"):
+            instantiate_ground(design, f"G{ground_count}_COM", (xpos, ypos - 1.0))
+            ground_count += 1
+        
+        instantiate_COM_in_schematic(design, library_name, list_COM, num_COM, angle_COM, (xpos, ypos))
 
-            else:
-                # Bobina en serie (lfini2)
-                if float(lfini2) > 0.0:
-                    instantiate_rflib_element(design, "L", "L_output", (xpos, ypos), lfini2 + "H", 0.0)
-                    xpos += 1.0 # Sumamos 1.0 por el tamaño del componente
+        xpos += 1.0 if current_COM_type == "series" else 0.0
+        ypos -= 1.0 if current_COM_type == "shunt" else 0.0
+
+        duplicate = False
+
+        if list_COM[num_COM].name.endswith("_1s"):
+            duplicate = True
+            if current_COM_type == "series":
                 xpos = advance_x(design, xpos, ypos, x_margin)
+                angle_COM = 0.0
+            else:
+                design.add_wire([PointF(xpos, ypos), PointF(xpos, ypos - y_margin)])
+                ypos -= y_margin
+                instantiate_ground(design, f"G{ground_count}_COM", (xpos, ypos - 1.0))
+                ground_count += 1
+                angle_COM = -90.0
+
+        elif list_COM[num_COM].name.endswith("_1p"):
+            duplicate = True
+            if current_COM_type == "series":
+                xpos -= 1.0
+                design.add_wire([PointF(xpos, ypos), PointF(xpos, ypos - y_margin)])
+                design.add_wire([PointF(xpos + 1.0, ypos), PointF(xpos + 1.0, ypos - y_margin)])
+                ypos -= y_margin
+                angle_COM = 0.0
+            else:
+                ypos += 1.0
+                xpos = advance_x(design, xpos, ypos, x_margin)
+                advance_x(design, xpos - x_margin, ypos - y_margin, x_margin) # Wire inferior
+                angle_COM = -90.0
+
+        if duplicate:
+            num_COM += 1
+            instantiate_COM_in_schematic(design, library_name, list_COM, num_COM, angle_COM, (xpos, ypos))
+
+        xpos += 1.0 if current_COM_type == "series" and list_COM[num_COM-1].name.endswith(("_1p", "_1s")) else 0.0
+        ypos += 1.0 if (current_COM_type == "series" and list_COM[num_COM-1].name.endswith("_1p")) or (current_COM_type == "shunt" and list_COM[num_COM-1].name.endswith("_1s")) else 0.0
+
+        ypos = initial_ypos
+        xpos = advance_x(design, xpos, ypos, x_margin)
+        num_COM += 1
+        current_COM_type = "shunt" if current_COM_type == "series" else "series"
+
+    # OUTPUT MATCHING NETWORK (Renombrados con _COM)
+    xpos = advance_x(design, xpos, ypos, x_margin)
+
+    if matching_network == "0.0":
+        if endCOM_type == "series":
+            # Bobina en shunt (lfini2)
+            if float(lfini2) > 0.0:
+                instantiate_rflib_element(design, "L", "L_output_COM", (xpos, ypos), lfini2 + "H", -90.0)
+                instantiate_ground(design, f"G{ground_count}_COM", (xpos, ypos - 1.0))
+                ground_count += 1
+            xpos = advance_x(design, xpos, ypos, x_margin)
 
         else:
-            # Add the matching network for the output
-            if mntype1 == "s":
-                # Bobina Serie (lfini1) seguida de Condensador Shunt (Cfini2)
-                if float(lfini1) > 0.0:
-                    instantiate_rflib_element(design, "L", "L_output", (xpos, ypos), lfini1 + "H", 0.0)
-                    xpos += 1.0
-                xpos = advance_x(design, xpos, ypos, x_margin)
+            # Bobina en serie (lfini2)
+            if float(lfini2) > 0.0:
+                instantiate_rflib_element(design, "L", "L_output_COM", (xpos, ypos), lfini2 + "H", 0.0)
+                xpos += 1.0 # Sumamos 1.0 por el tamaño del componente
+            xpos = advance_x(design, xpos, ypos, x_margin)
 
-                if float(cfini2) > 0.0:
-                    instantiate_rflib_element(design, "C", "C_output", (xpos, ypos), cfini2 + "F", -90.0)
-                    instantiate_ground(design, f"G{num_COM}", (xpos, ypos - 1.0))
-                xpos = advance_x(design, xpos, ypos, x_margin)
+    else:
+        # Add the matching network for the output
+        if mntype1 == "s":
+            # Bobina Serie (lfini1) seguida de Condensador Shunt (Cfini2)
+            if float(lfini1) > 0.0:
+                instantiate_rflib_element(design, "L", "L_output1_COM", (xpos, ypos), lfini1 + "H", 0.0)
+                xpos += 1.0
+            xpos = advance_x(design, xpos, ypos, x_margin)
 
-            else:
-                # Condensador Shunt (Cfini1) seguido de Bobina Serie (lfini2)
-                if float(cfini1) > 0.0:
-                    instantiate_rflib_element(design, "C", "C_output", (xpos, ypos), cfini1 + "F", -90.0)
-                    instantiate_ground(design, f"G{num_COM}", (xpos, ypos - 1.0))
-                xpos = advance_x(design, xpos, ypos, x_margin)
+            if float(cfini2) > 0.0:
+                instantiate_rflib_element(design, "C", "C_output2_COM", (xpos, ypos), cfini2 + "F", -90.0)
+                instantiate_ground(design, f"G{ground_count}_COM", (xpos, ypos - 1.0))
+                ground_count += 1
+            xpos = advance_x(design, xpos, ypos, x_margin)
 
-                if float(lfini2) > 0.0:
-                    instantiate_rflib_element(design, "L", "L_output", (xpos, ypos), lfini2 + "H", 0.0)
-                    xpos += 1.0
-                xpos = advance_x(design, xpos, ypos, x_margin)
+        else:
+            # Condensador Shunt (Cfini1) seguido de Bobina Serie (lfini2)
+            if float(cfini1) > 0.0:
+                instantiate_rflib_element(design, "C", "C_output1_COM", (xpos, ypos), cfini1 + "F", -90.0)
+                instantiate_ground(design, f"G{ground_count}_COM", (xpos, ypos - 1.0))
+                ground_count += 1
+            xpos = advance_x(design, xpos, ypos, x_margin)
 
+            if float(lfini2) > 0.0:
+                instantiate_rflib_element(design, "L", "L_output2_COM", (xpos, ypos), lfini2 + "H", 0.0)
+                xpos += 1.0
+            xpos = advance_x(design, xpos, ypos, x_margin)
 
-        # TermG2
-        instantiate_term_g(design, "TermG2", 2, (xpos, ypos))
-
-        # Variables 
-        inst = design.add_var_instance(name="VAR_Sweep", origin=(3.0, 3.0))
-        inst.vars.update({'fstart': fstart, 'fstop': fstop, 'npoints': npoints})
-        # Since inst.vars does not contain 'X', we need to remove the first repeat.
-        assert isinstance(inst.parameters[0], db.ParamRepeated)
-        del(inst.parameters[0].repeats[0])
-
-
-        # =========================================== Sparameters Data Item for Comparison ===========================================
-        if dataset_s2p_path is not None:
-            inst = design.add_instance("ads_simulation:TermG", name="TermG3", origin=(6.0, 3.0), angle=-90.0)
-            inst.parameters["Num"].value = "3"
-            inst.update_item_annotation()
-            design.add_wire([PointF(6.0, 3.0), PointF(7.0, 3.0)])
-
-            inst = design.add_instance("ads_datacmps:SnP", name="SnP1", origin=(7.0, 3.0))
-            inst.parameters["NumPorts"].value = "2"
-            inst.parameters["File"].value = dataset_s2p_path
-            inst.parameters["Type"].value = '"touchstone"'
-            inst.parameters["port_name_list"].value = "0 "
-            with de.db.ExpressionContext(design) as expr_context, db.Transaction(design) as trans:
-                expr_context.update_pcell_params(inst)
-                trans.commit()
-            inst.update_item_annotation()
-
-            design.add_wire([PointF(7.75, 3.0), PointF(9.0, 3.0)])
-            inst = design.add_instance("ads_simulation:TermG", name="TermG4", origin=(9.0, 3.0), angle=-90.0)
-            inst.parameters["Num"].value = "4"
-            inst.update_item_annotation()
-
-
-        # =========================================== S parameters simulation ===========================================
-        inst = design.add_instance("ads_simulation:S_Param", name="SP1", origin=(0.0, 3.0))
-        inst.parameters["Start"].value = "fstart Hz"
-        inst.parameters["Stop"].value = "fstop Hz"
-        inst.parameters["Step"].value = "(fstop-fstart)/1000 Hz"
-        inst.parameters["Sort"].value = "LINEAR START STEP "
-        inst.parameters["CalcY"].value = "yes"
-        inst.parameters["Freq"].value = " "
-        inst.update_item_annotation()
-
-
-        # FINISH
-        transaction.commit()
-
-    design.save_design()
-
-    # =========================================== EXTRAER EL NETLIST Y SIMULAR ===========================================
-    netlist = design.generate_netlist()
-
-    # Definimos dónde queremos que se guarde el archivo de datos (.ds)
-    output_dir = os.path.join(workspace_path, "data")
-    os.makedirs(output_dir, exist_ok=True)
-
-    simulator = eda_ads.CircuitSimulator()
-    
-    # Esto bloqueará la ejecución de Python hasta que la simulación termine
-    simulator.run_netlist(netlist, output_dir=output_dir)
-
-    # Limpiamos
-    design = None
+    # TermG2
+    instantiate_term_g(design, f"TermG{initial_TermG+1}", initial_TermG+1, (xpos, ypos))
 
     return
 
@@ -1174,7 +1131,7 @@ def create_Schematic_debugging(workspace_path: str, library_name: str, parameter
 
 def create_DDS_ladderFilter_COM(workspace_path: str) -> None:
     # ========= 1) Crear el documento DDS =========
-    dataset_name = CELL_FILTER_COM
+    dataset_name = CELL_FILTER
     doc = dds.new_dds_file(dataset_name, workspace_path)
     
     # ========= 2) Configurar la página =========
@@ -1189,7 +1146,7 @@ def create_DDS_ladderFilter_COM(workspace_path: str) -> None:
     # ========= 3) Crear Plot 1 (S11 y S33) =========
     traces_plot1 = [
         f"dB({dataset_name}..S(1,1))", 
-        f"dB({dataset_name}..S(3,3))"
+        f"dB({dataset_name}..S(5,5))"
     ]
     plot1 = page.add_plot((plot_width, plot_height), traces_plot1, "Return Loss")
     # Lo movemos explícitamente al origen (opcional, suele ser el default)
@@ -1198,7 +1155,7 @@ def create_DDS_ladderFilter_COM(workspace_path: str) -> None:
     # ========= 4) Crear Plot 2 (S21 y S43) =========
     traces_plot2 = [
         f"dB({dataset_name}..S(2,1))", 
-        f"dB({dataset_name}..S(4,3))"
+        f"dB({dataset_name}..S(6,5))"
     ]
     plot2 = page.add_plot((plot_width, plot_height), traces_plot2, "Insertion Loss")
 
@@ -1208,7 +1165,7 @@ def create_DDS_ladderFilter_COM(workspace_path: str) -> None:
     plot2.move(dds.Point(x_pos_plot2, 0))
 
     # ========= 6) Guardar =========
-    dds_file_path = os.path.join(workspace_path, f"{CELL_FILTER_COM}.dds")
+    dds_file_path = os.path.join(workspace_path, f"{dataset_name}.dds")
     doc.save(dds_file_path)
     dds.close_dds_file(doc)
 
@@ -1283,7 +1240,7 @@ def extract_data_debugging(workspace_path: str, order: int,list_BVD: list[BVD], 
     return list_BVD, list_COM
 
 def extract_data_filterCOM(workspace_path: str) -> FilterResponse:
-    dataset_name = CELL_FILTER_COM
+    dataset_name = CELL_FILTER
 
     # Extract data
     output_dir = os.path.join(workspace_path, "data")
@@ -1293,7 +1250,7 @@ def extract_data_filterCOM(workspace_path: str) -> FilterResponse:
     print_data_txt(output_data, output_dir, dataset_name)
     
     f = dataf["freq"]
-    y = dataf["S[2,1]"]
+    y = dataf["S[6,5]"]
 
     filter_response = FilterResponse(y, f)
 
@@ -1350,7 +1307,7 @@ def create_busbars_layout(library: de.Library, library_name: str, com: COM) -> N
 
     # --- ESCALADO A MICRAS (um) ---
     # Convertimos com.d (metros) a micras (* 1e6)
-    d_um = com.d * 1e6                          # ~ 1.332 um
+    d_um = com.d * 1e6
     
     # Ancho del busbar proporcional al número de dígitos
     dx_um = com.digitsN * d_um                  

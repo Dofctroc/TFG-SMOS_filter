@@ -1115,8 +1115,7 @@ class MainWindow(QMainWindow):
                 log_tiempo(f"Paso 3 completado en: {time.time() - inicio:.2f} segundos")
 
             # ============================================ 3) Generate BVD and COM LADDER FILTERS ============================================
-            ads.create_Schematic_ladderFilter_BVD(full_workspace_path, library_name, self.dataset_s2p_file_path, self.network_parameters, self.list_BVD)
-            ads.create_Schematic_ladderFilter_COM(full_workspace_path, library_name, self.dataset_s2p_file_path, self.network_parameters, list_COM_ADS)
+            ads.create_Schematic_ladder_filters(full_workspace_path, library_name, self.dataset_s2p_file_path, self.network_parameters, self.list_BVD, list_COM_ADS)
             log_tiempo(f"Paso 4 completado en: {time.time() - inicio:.2f} segundos")
 
             # ========================================== 4) Generate BVD and COM filters' DDS pages ==========================================
