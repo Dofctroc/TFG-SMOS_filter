@@ -715,8 +715,6 @@ def build_ladder_filter_circuit_BVD(design: db.Design, initial_xpos: int, initia
     else:
         endBVD_type = "series" if startBVD_type == "series" else "shunt"
 
-    current_BVD_type = startBVD_type
-
     # READ Matching network parameters
     matching_network = parameters["matching_network"]
     mntype1 = parameters["mntype1"]
@@ -726,8 +724,8 @@ def build_ladder_filter_circuit_BVD(design: db.Design, initial_xpos: int, initia
     cfini1 = parameters["cfini1"]
     cfini2 = parameters["cfini2"]
 
-    x_margin = 1.0
-    y_margin = 1.0
+    x_margin = 1.5
+    y_margin = 1.5
 
     xpos = initial_xpos
     ypos = initial_ypos
@@ -750,22 +748,24 @@ def build_ladder_filter_circuit_BVD(design: db.Design, initial_xpos: int, initia
     else:
         xpos = advance_x(design, xpos, ypos, x_margin)
         instantiate_rflib_element(design, "L", "L_input_BVD", (xpos, ypos), input_l + "H", 0.0)
-        xpos = advance_x(design, xpos + 1.0, ypos, x_margin)
+        xpos += 1
+        xpos = advance_x(design, xpos, ypos, x_margin) # Sumamos 1.0 por el tamaño del inductor
 
     ypos = initial_ypos
 
+    current_BVD_type = startBVD_type
     # BVD LADDER: Único bucle para toda la escalera
     while num_BVD < len(list_BVD):
         xpos = advance_x(design, xpos, ypos, x_margin)
 
         angle_BVD = 0.0 if current_BVD_type == "series" else -90.0
         
+        instantiate_BVD_in_schematic(design, library_name, list_BVD, num_BVD, angle_BVD, (xpos, ypos))
+
         if current_BVD_type == "shunt" and not list_BVD[num_BVD].name.endswith("_1s"):
             instantiate_ground(design, f"G{ground_count}_BVD", (xpos, ypos - 1.0))
             ground_count += 1
         
-        instantiate_BVD_in_schematic(design, library_name, list_BVD, num_BVD, angle_BVD, (xpos, ypos))
-
         xpos += 1.0 if current_BVD_type == "series" else 0.0
         ypos -= 1.0 if current_BVD_type == "shunt" else 0.0
 
@@ -813,12 +813,13 @@ def build_ladder_filter_circuit_BVD(design: db.Design, initial_xpos: int, initia
     xpos = advance_x(design, xpos, ypos, x_margin)
 
     if matching_network == "0.0":
+        # INDUCTANCE TERMINATION - Add inductor
         if endBVD_type == "series":
             if float(lfini2) > 0.0:
                 instantiate_rflib_element(design, "L", "L_output_BVD", (xpos, ypos), lfini2 + "H", -90.0)
                 instantiate_ground(design, f"G{ground_count}_BVD", (xpos, ypos - 1.0))
                 ground_count += 1
-            xpos = advance_x(design, xpos, ypos, x_margin)
+            xpos = advance_x(design, xpos, ypos, x_margin*2)
         else:
             if float(lfini2) > 0.0:
                 instantiate_rflib_element(design, "L", "L_output_BVD", (xpos, ypos), lfini2 + "H", 0.0)
@@ -826,6 +827,7 @@ def build_ladder_filter_circuit_BVD(design: db.Design, initial_xpos: int, initia
             xpos = advance_x(design, xpos, ypos, x_margin)
 
     else:
+        # CL/LC MATCHING NETWORK - Add the matching network for the output
         if mntype1 == "s":
             if float(lfini1) > 0.0:
                 instantiate_rflib_element(design, "L", "L_output1_BVD", (xpos, ypos), lfini1 + "H", 0.0)
@@ -836,14 +838,14 @@ def build_ladder_filter_circuit_BVD(design: db.Design, initial_xpos: int, initia
                 instantiate_rflib_element(design, "C", "C_output2_BVD", (xpos, ypos), cfini2 + "F", -90.0)
                 instantiate_ground(design, f"G{ground_count}_BVD", (xpos, ypos - 1.0))
                 ground_count += 1
-            xpos = advance_x(design, xpos, ypos, x_margin)
+            xpos = advance_x(design, xpos, ypos, x_margin*2)
 
         else:
             if float(cfini1) > 0.0:
                 instantiate_rflib_element(design, "C", "C_output1_BVD", (xpos, ypos), cfini1 + "F", -90.0)
                 instantiate_ground(design, f"G{ground_count}_BVD", (xpos, ypos - 1.0))
                 ground_count += 1
-            xpos = advance_x(design, xpos, ypos, x_margin)
+            xpos = advance_x(design, xpos, ypos, x_margin*2)
 
             if float(lfini2) > 0.0:
                 instantiate_rflib_element(design, "L", "L_output2_BVD", (xpos, ypos), lfini2 + "H", 0.0)
@@ -867,8 +869,6 @@ def build_ladder_filter_circuit_COM(design: db.Design, initial_xpos: int, initia
     else:
         endCOM_type = "series" if startCOM_type == "series" else "shunt"
 
-    current_COM_type = startCOM_type
-
     # READ Matching network parameters
     matching_network = parameters["matching_network"]
     mntype1 = parameters["mntype1"]
@@ -882,8 +882,8 @@ def build_ladder_filter_circuit_COM(design: db.Design, initial_xpos: int, initia
     xpos = initial_xpos
     ypos = initial_ypos
 
-    x_margin = 1.0
-    y_margin = 1.0
+    x_margin = 1.5
+    y_margin = 1.5
 
     num_COM = 0
     ground_count = 1  # Contador dedicado para tierras únicas (G1, G2, G3...)
@@ -903,21 +903,23 @@ def build_ladder_filter_circuit_COM(design: db.Design, initial_xpos: int, initia
     else:
         xpos = advance_x(design, xpos, ypos, x_margin)
         instantiate_rflib_element(design, "L", "L_input_COM", (xpos, ypos), input_l + "H", 0.0)
-        xpos = advance_x(design, xpos + 1.0, ypos, x_margin) # Sumamos 1.0 por el tamaño del inductor
+        xpos += 1
+        xpos = advance_x(design, xpos, ypos, x_margin) # Sumamos 1.0 por el tamaño del inductor
 
     ypos = initial_ypos
 
     # ÚNICO BUCLE COM LADDER (Maneja el primero y todos los demás)
+    current_COM_type = startCOM_type
     while num_COM < len(list_COM):
         xpos = advance_x(design, xpos, ypos, x_margin)
 
         angle_COM = 0.0 if current_COM_type == "series" else -90.0
         
+        instantiate_COM_in_schematic(design, library_name, list_COM, num_COM, angle_COM, (xpos, ypos))
+        
         if current_COM_type == "shunt" and not list_COM[num_COM].name.endswith("_1s"):
             instantiate_ground(design, f"G{ground_count}_COM", (xpos, ypos - 1.0))
             ground_count += 1
-        
-        instantiate_COM_in_schematic(design, library_name, list_COM, num_COM, angle_COM, (xpos, ypos))
 
         xpos += 1.0 if current_COM_type == "series" else 0.0
         ypos -= 1.0 if current_COM_type == "shunt" else 0.0
@@ -940,14 +942,14 @@ def build_ladder_filter_circuit_COM(design: db.Design, initial_xpos: int, initia
             duplicate = True
             if current_COM_type == "series":
                 xpos -= 1.0
-                design.add_wire([PointF(xpos, ypos), PointF(xpos, ypos - y_margin)])
+                design.add_wire([PointF(xpos, ypos), PointF(xpos, ypos - y_margin*2)])
                 design.add_wire([PointF(xpos + 1.0, ypos), PointF(xpos + 1.0, ypos - y_margin)])
-                ypos -= y_margin
+                ypos -= y_margin*2
                 angle_COM = 0.0
             else:
                 ypos += 1.0
-                xpos = advance_x(design, xpos, ypos, x_margin)
-                advance_x(design, xpos - x_margin, ypos - y_margin, x_margin) # Wire inferior
+                xpos = advance_x(design, xpos, ypos, x_margin*2)
+                advance_x(design, xpos - x_margin*2, ypos - 1.0, x_margin*2) # Wire inferior
                 angle_COM = -90.0
 
         if duplicate:
@@ -966,13 +968,14 @@ def build_ladder_filter_circuit_COM(design: db.Design, initial_xpos: int, initia
     xpos = advance_x(design, xpos, ypos, x_margin)
 
     if matching_network == "0.0":
+        # INDUCTANCE TERMINATION - Add inductor
         if endCOM_type == "series":
             # Bobina en shunt (lfini2)
             if float(lfini2) > 0.0:
                 instantiate_rflib_element(design, "L", "L_output_COM", (xpos, ypos), lfini2 + "H", -90.0)
                 instantiate_ground(design, f"G{ground_count}_COM", (xpos, ypos - 1.0))
                 ground_count += 1
-            xpos = advance_x(design, xpos, ypos, x_margin)
+            xpos = advance_x(design, xpos, ypos, x_margin*2)
 
         else:
             # Bobina en serie (lfini2)
@@ -982,7 +985,7 @@ def build_ladder_filter_circuit_COM(design: db.Design, initial_xpos: int, initia
             xpos = advance_x(design, xpos, ypos, x_margin)
 
     else:
-        # Add the matching network for the output
+        # CL/LC MATCHING NETWORK - Add the matching network for the output
         if mntype1 == "s":
             # Bobina Serie (lfini1) seguida de Condensador Shunt (Cfini2)
             if float(lfini1) > 0.0:
@@ -994,7 +997,7 @@ def build_ladder_filter_circuit_COM(design: db.Design, initial_xpos: int, initia
                 instantiate_rflib_element(design, "C", "C_output2_COM", (xpos, ypos), cfini2 + "F", -90.0)
                 instantiate_ground(design, f"G{ground_count}_COM", (xpos, ypos - 1.0))
                 ground_count += 1
-            xpos = advance_x(design, xpos, ypos, x_margin)
+            xpos = advance_x(design, xpos, ypos, x_margin*2)
 
         else:
             # Condensador Shunt (Cfini1) seguido de Bobina Serie (lfini2)
@@ -1002,7 +1005,7 @@ def build_ladder_filter_circuit_COM(design: db.Design, initial_xpos: int, initia
                 instantiate_rflib_element(design, "C", "C_output1_COM", (xpos, ypos), cfini1 + "F", -90.0)
                 instantiate_ground(design, f"G{ground_count}_COM", (xpos, ypos - 1.0))
                 ground_count += 1
-            xpos = advance_x(design, xpos, ypos, x_margin)
+            xpos = advance_x(design, xpos, ypos, x_margin*2)
 
             if float(lfini2) > 0.0:
                 instantiate_rflib_element(design, "L", "L_output2_COM", (xpos, ypos), lfini2 + "H", 0.0)
