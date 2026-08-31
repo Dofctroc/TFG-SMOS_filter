@@ -33,6 +33,9 @@ class MplCanvas(FigureCanvas):
 USE_DEFAULT_WORKSPACE_NAME = True
 CREATE_DEBUGGING_SCHEMATIC = False
 
+DEFAULT_WORKSPACE_NAME = "unnamed_wrk"
+DEFAULT_SUBSTRATE_NAME = "substrate_SAW"
+
 # ========================== CLASE PRINCIPAL DE LA APLICACIÓN ===========================
 
 class MainWindow(QMainWindow):
@@ -113,9 +116,13 @@ class MainWindow(QMainWindow):
         # ==========================================
         file_menu = bar.addMenu("&File")
 
-        self.action_open = QAction("Select new Network File", self)
-        self.action_open.triggered.connect(self.btn_readNetworkFile_clicked)
-        file_menu.addAction(self.action_open)
+        self.action_open_network = QAction("Select Network File", self)
+        self.action_open_network.triggered.connect(self.btn_readNetworkFile_clicked)
+        file_menu.addAction(self.action_open_network)
+
+        self.action_open_mask = QAction("Select Mask File", self)
+        self.action_open_mask.triggered.connect(self.btn_readMask_clicked)
+        file_menu.addAction(self.action_open_mask)
 
         self.action_workspace = QAction("Select Workspace Directory", self)
         self.action_workspace.triggered.connect(self.btn_readDirectoy_clicked)
@@ -191,7 +198,7 @@ class MainWindow(QMainWindow):
 
         self.label_workspace_name = QLabel("Workspace Name:")
         self.input_workspace_name = QLineEdit()
-        self.input_workspace_name.setPlaceholderText("try_wrk")
+        self.input_workspace_name.setPlaceholderText(DEFAULT_WORKSPACE_NAME)
         self.input_workspace_name.setFixedWidth(200)
         self.input_workspace_name.setMaxLength(20)
 
@@ -207,8 +214,8 @@ class MainWindow(QMainWindow):
     def setup_left_panel(self):
         self.layout_left_total.setContentsMargins(0, 0, 0, 0) # Quitar márgenes internos
 
-        # Sub-bloque COM (Superior)
-        self.bloque_bvd = QGroupBox("COM Parameters")
+        # Sub-bloque BVD (Superior)
+        self.bloque_bvd = QGroupBox("BVD Parameters")
         self.bloque_bvd.setMaximumWidth(500)
         self.bloque_bvd.setStyleSheet("""
             QGroupBox {
@@ -449,8 +456,8 @@ class MainWindow(QMainWindow):
 
         # Añadimos al layout del formulario consts
         self.form_layout_constCOM = QFormLayout()
-        self.form_layout_constCOM.addRow("k11 (?):", self.input_K11)
-        self.form_layout_constCOM.addRow("k12 (?):", self.input_K12)
+        self.form_layout_constCOM.addRow("k11 (rad/m):", self.input_K11)
+        self.form_layout_constCOM.addRow("k12 (rad/m):", self.input_K12)
         self.form_layout_constCOM.addRow("Vp (m/s):", self.input_VP)
         self.form_layout_constCOM.addRow("ε_r (-):", self.input_EPS_R)
         self.form_layout_constCOM.addRow("ε_0 (-):", self.input_EPS_0)
@@ -1054,7 +1061,7 @@ class MainWindow(QMainWindow):
             if not USE_DEFAULT_WORKSPACE_NAME:
                 QMessageBox.critical(self, "Error", "Error: Input a workspace name first")
                 return
-            workspace_name = "try_wrk"
+            workspace_name = DEFAULT_WORKSPACE_NAME
 
         # Crear la ruta completa del workspace
         full_workspace_path = self.workspace_path + "/" + workspace_name
@@ -1066,7 +1073,7 @@ class MainWindow(QMainWindow):
             if workspace is None: 
                 QMessageBox.critical(self, "Error", "Error: A workspace with that name already exists")
                 return
-            lib = ads.create_a_library_and_add_it_to_the_workspace(workspace, library_name)
+            library = ads.create_a_library_and_add_it_to_the_workspace(workspace, library_name)
         except Exception as e:
             error_detallado = traceback.format_exc()
             QMessageBox.critical(self, "Error", 
@@ -1079,19 +1086,28 @@ class MainWindow(QMainWindow):
         # Crear los esquemáticos y los símbolos correspondientes
         try:
             inicio = time.time()       
-            # =============================================== 1) Generate BVD and COM symbols ===============================================
-            ads.create_SchematicAndSymbol_lossyBVD(lib, library_name)
-            ads.create_SchematicAndSymbol_lossyCOM(lib, library_name)
+            # =============================================== 0) Generate BVD and COM symbols ===============================================
+            ads.create_SchematicAndSymbol_lossyBVD(library, library_name)
+            ads.create_SchematicAndSymbol_lossyCOM(library, library_name)
             log_tiempo(f"Paso 1 completado en: {time.time() - inicio:.2f} segundos")
 
-            # ========================================== 2) Debugging and tunning schematic and DDS ==========================================
-            # Dependiendo del checkbox "duplicar resonadores"
+            # =============================================== 1) Duplicate resonnators if necessary ===============================================
             if self.check_duplicate.isChecked():
                 list_COM_ADS = mat_bvd_com.duplicar_resonadores(self.list_BVD, self.list_COM, self.network_parameters)
                 log_tiempo(f"Paso 1.5 completado en: {time.time() - inicio:.2f} segundos")
             else:
                 list_COM_ADS = self.list_COM
 
+            # =============================================== 2.0) Genearate BUSBAR layout and simulation ===============================================
+            library.setup_schematic_tech()
+            library.create_layout_tech_std_ads("micron", 10000, False)
+
+            for com in list_COM_ADS:
+                ads.create_busbars_layout(library, library_name, com)
+            
+            ads.create_smos_substrate(library, DEFAULT_SUBSTRATE_NAME)
+
+            # ========================================== 2.1) Debugging and tunning schematic and DDS ==========================================
             if self.check_debug.isChecked():
                 ads.create_Schematic_debugging(full_workspace_path, library_name, self.network_parameters, self.list_BVD, list_COM_ADS)
                 log_tiempo(f"Paso 2 completado en: {time.time() - inicio:.2f} segundos")
@@ -1099,8 +1115,7 @@ class MainWindow(QMainWindow):
                 log_tiempo(f"Paso 3 completado en: {time.time() - inicio:.2f} segundos")
 
             # ============================================ 3) Generate BVD and COM LADDER FILTERS ============================================
-            ads.create_Schematic_ladderFilter_BVD(full_workspace_path, library_name, self.dataset_s2p_file_path, self.network_parameters, self.list_BVD)
-            ads.create_Schematic_ladderFilter_COM(full_workspace_path, library_name, self.dataset_s2p_file_path, self.network_parameters, list_COM_ADS)
+            ads.create_Schematic_ladder_filters(full_workspace_path, library_name, self.dataset_s2p_file_path, self.network_parameters, self.list_BVD, list_COM_ADS)
             log_tiempo(f"Paso 4 completado en: {time.time() - inicio:.2f} segundos")
 
             # ========================================== 4) Generate BVD and COM filters' DDS pages ==========================================
