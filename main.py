@@ -1119,7 +1119,7 @@ class MainWindow(QMainWindow):
             log_tiempo(f"Paso 4 completado en: {time.time() - inicio:.2f} segundos")
 
             # ========================================== 4) Generate BVD and COM filters' DDS pages ==========================================
-            ads.create_DDS_ladderFilter_COM(full_workspace_path)
+            ads.create_DDS_filters_schematic(full_workspace_path)
             log_tiempo(f"Paso 5 completado en: {time.time() - inicio:.2f} segundos")
 
             # ========================================== 5) Extract data from COM FILTER and plot ==========================================

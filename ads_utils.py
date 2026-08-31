@@ -27,6 +27,9 @@ CELL_FILTER = "Filters"                 # celda jerárquica (schematic)
 CELL_DEBUG = "Debugging"
 CELL_BUSBAR_LAYOUT = "Busbar_layout"
 
+BVD_FILTER_STARTING_PIN = 1
+COM_FILTER_STARTING_PIN = 3
+
 def test_import_keysight_ads_de_example() -> None:
     try:
         from keysight.ads import de
@@ -630,8 +633,8 @@ def create_Schematic_ladder_filters(workspace_path: str, library_name: str, data
 
         # =========================================== Sparameters Data Item for Comparison ===========================================
         if dataset_s2p_path is not None:
-            inst = design.add_instance("ads_simulation:TermG", name="TermG1", origin=(6.0, 3.0), angle=-90.0)
-            inst.parameters["Num"].value = "1"
+            inst = design.add_instance("ads_simulation:TermG", name="TermG5", origin=(6.0, 3.0), angle=-90.0)
+            inst.parameters["Num"].value = "5"
             inst.update_item_annotation()
             design.add_wire([PointF(6.0, 3.0), PointF(7.0, 3.0)])
 
@@ -646,8 +649,8 @@ def create_Schematic_ladder_filters(workspace_path: str, library_name: str, data
             inst.update_item_annotation()
 
             design.add_wire([PointF(7.75, 3.0), PointF(9.0, 3.0)])
-            inst = design.add_instance("ads_simulation:TermG", name="TermG2", origin=(9.0, 3.0), angle=-90.0)
-            inst.parameters["Num"].value = "2"
+            inst = design.add_instance("ads_simulation:TermG", name="TermG6", origin=(9.0, 3.0), angle=-90.0)
+            inst.parameters["Num"].value = "6"
             inst.update_item_annotation()
 
 
@@ -672,13 +675,13 @@ def create_Schematic_ladder_filters(workspace_path: str, library_name: str, data
         # =========================================== BVD ladder filter build ===========================================
         initial_xpos_BVD = 0
         initial_ypos_BVD = 0
-        initial_TermG_BVD = 3
+        initial_TermG_BVD = BVD_FILTER_STARTING_PIN
         build_ladder_filter_circuit_BVD(design, initial_xpos_BVD, initial_ypos_BVD, initial_TermG_BVD, parameters, list_BVD, library_name)
 
         # =========================================== COM ladder filter build ===========================================
         initial_xpos_COM = 0
         initial_ypos_COM = -4
-        initial_TermG_COM = 5
+        initial_TermG_COM = COM_FILTER_STARTING_PIN
         build_ladder_filter_circuit_COM(design, initial_xpos_COM, initial_ypos_COM, initial_TermG_COM, parameters, list_COM, library_name)
 
 
@@ -1132,7 +1135,7 @@ def create_Schematic_debugging(workspace_path: str, library_name: str, parameter
 
 # ===================================== CREATION OF DDS FILES FUNCTIONS =====================================
 
-def create_DDS_ladderFilter_COM(workspace_path: str) -> None:
+def create_DDS_filters_schematic(workspace_path: str) -> None:
     # ========= 1) Crear el documento DDS =========
     dataset_name = CELL_FILTER
     doc = dds.new_dds_file(dataset_name, workspace_path)
@@ -1255,7 +1258,7 @@ def extract_data_filterCOM(workspace_path: str) -> FilterResponse:
     print_data_txt(output_data, output_dir, dataset_name)
     
     f = dataf["freq"]
-    y = dataf["S[6,5]"]
+    y = dataf[f"S[{COM_FILTER_STARTING_PIN+1},{COM_FILTER_STARTING_PIN}]"]
 
     filter_response = FilterResponse(y, f)
 
