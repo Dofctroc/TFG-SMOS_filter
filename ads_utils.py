@@ -730,6 +730,7 @@ def build_ladder_filter_circuit_BVD(design: db.Design, initial_xpos: int, initia
     x_margin = 1.5
     y_margin = 1.5
 
+    # Grid position parameters
     xpos = initial_xpos
     ypos = initial_ypos
 
@@ -756,8 +757,8 @@ def build_ladder_filter_circuit_BVD(design: db.Design, initial_xpos: int, initia
 
     ypos = initial_ypos
 
+    # ÚNICO BUCLE BVD LADDER: Único bucle para toda la escalera
     current_BVD_type = startBVD_type
-    # BVD LADDER: Único bucle para toda la escalera
     while num_BVD < len(list_BVD):
         xpos = advance_x(design, xpos, ypos, x_margin)
 
@@ -780,7 +781,7 @@ def build_ladder_filter_circuit_BVD(design: db.Design, initial_xpos: int, initia
                 xpos = advance_x(design, xpos, ypos, x_margin)
                 angle_BVD = 0.0
             else:
-                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos, y=ypos - y_margin)])
+                design.add_wire([PointF(xpos, ypos), PointF(xpos, ypos - y_margin)])
                 ypos -= y_margin
                 instantiate_ground(design, f"G{ground_count}_BVD", (xpos, ypos - 1.0))
                 ground_count += 1
@@ -790,14 +791,14 @@ def build_ladder_filter_circuit_BVD(design: db.Design, initial_xpos: int, initia
             duplicate = True
             if current_BVD_type == "series":
                 xpos -= 1.0
-                design.add_wire([PointF(x=xpos, y=ypos), PointF(x=xpos, y=ypos - y_margin)])
-                design.add_wire([PointF(x=xpos + 1.0, y=ypos), PointF(x=xpos + 1.0, y=ypos - y_margin)])
-                ypos -= y_margin
+                design.add_wire([PointF(xpos, ypos), PointF(xpos, ypos - y_margin*2)])
+                design.add_wire([PointF(xpos + 1.0, ypos), PointF(xpos + 1.0, ypos - y_margin)])
+                ypos -= y_margin*2
                 angle_BVD = 0.0
             else:
                 ypos += 1.0
-                xpos = advance_x(design, xpos, ypos, x_margin)
-                advance_x(design, xpos - x_margin, ypos - y_margin, x_margin)
+                xpos = advance_x(design, xpos, ypos, x_margin*2)
+                advance_x(design, xpos - x_margin*2, ypos - 1.0, x_margin*2) # Wire inferior
                 angle_BVD = -90.0
 
         if duplicate:
@@ -1049,17 +1050,32 @@ def create_Schematic_debugging(workspace_path: str, library_name: str, parameter
             instantiate_BVD_in_schematic(design, library_name, list_BVD, num_BVD, 0.0, (xpos, ypos))
             xpos += 1
 
+            if list_BVD[num_BVD].name.endswith("_1s"):
+                num_BVD += 1
+                xpos = advance_x(design, xpos, ypos, 1.0)
+                instantiate_BVD_in_schematic(design, library_name, list_BVD, num_BVD, 0.0, (xpos, ypos))    
+                xpos += 1
+
+            elif list_BVD[num_BVD].name.endswith("_1p"):
+                xpos -= 1
+                num_BVD += 1
+                ypos = advance_y(design, xpos, ypos, -2.0)
+                instantiate_BVD_in_schematic(design, library_name, list_BVD, num_BVD, 0.0, (xpos, ypos))
+                xpos += 1
+                ypos = advance_y(design, xpos, ypos, 2.0) - 2.0
+
             # Pongo el terminal ground según index
             instantiate_ground(design, f"G{idx}", (xpos, ypos))
 
             # Recolocamos el pointer más adelante
             xpos += 2
+            ypos = 0.0
             num_BVD += 1
             idx += 1
 
         # =========================================== COMs for debugging ===========================================
         xpos = 0.0
-        ypos = -4.0
+        ypos = -5.0
         while num_COM < len(list_COM):
             # Pongo un TermG según index
             instantiate_term_g(design, f"TermG{idx}", idx, (xpos, ypos))
@@ -1088,7 +1104,7 @@ def create_Schematic_debugging(workspace_path: str, library_name: str, parameter
 
             # Recolocamos el pointer más adelante
             xpos += 2
-            ypos = -4.0
+            ypos = -5.0
             num_COM += 1
             idx += 1
 

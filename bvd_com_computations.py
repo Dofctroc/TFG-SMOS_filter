@@ -471,7 +471,7 @@ def optimizar_pitchR(bvd: BVD, com: COM, parameters: dict) -> COM:
 
 # ============================== DUPLICATE FUNCTION FOR COM PARAMS ==============================
 
-def duplicar_resonadores(list_BVD: list[BVD], list_COM: list[COM], parameters: dict) -> list[COM]:
+def duplicar_resonadores_COM(list_BVD: list[BVD], list_COM: list[COM], parameters: dict) -> list[COM]:
     # Dejaremos la apertura tal cual la teniamos
     # Doblaremos en serie si    Nidt > max
     # Doblaremos en paralelo si Nidt < min
@@ -548,6 +548,78 @@ def duplicar_resonadores(list_BVD: list[BVD], list_COM: list[COM], parameters: d
         idx += 1
 
     return list_COM_duplicados
+
+def duplicar_resonadores_BVD(list_BVD: list[BVD], list_COM: list[COM], parameters: dict) -> list[BVD]:
+    # Dejaremos la apertura tal cual la teniamos
+    # Doblaremos en serie si    Nidt > max
+    # Doblaremos en paralelo si Nidt < min
+    list_BVD_duplicados: list[BVD] = []
+
+    idx = 0
+    for com in list_COM:
+        bvd_base = list_BVD[idx]
+        if com.digitsN < DIGITS_NIDT_MIN:
+            # Duplicamos en serie
+            # Duplicamos o dividimos los parametros del BVD
+            bvd_1 = copy.copy(bvd_base)
+            bvd_1.cp = bvd_base.cp*2
+            bvd_1.ca = bvd_base.ca*2
+            bvd_1.la = bvd_base.la/2
+            bvd_1.rs = bvd_base.rs/2
+            bvd_1.rp = bvd_base.rp/2
+            bvd_1.c0 = bvd_1.cp + bvd_1.ca
+            bvd_1.fs = 1/(2 * np.pi * np.sqrt(bvd_1.la * bvd_1.ca))
+            bvd_1.fp = 1/(2 * np.pi)*np.sqrt((bvd_1.cp+bvd_1.ca)/(bvd_1.cp*bvd_1.ca*bvd_1.la))
+
+            bvd_1.cadd_ser = bvd_base.cadd_ser*2
+            bvd_1.cadd_shu = bvd_base.cadd_shu*2
+            bvd_1.ladd_ser = bvd_base.ladd_ser/2
+            bvd_1.ladd_shu = bvd_base.ladd_shu/2
+            bvd_1.ladd_ground = bvd_base.ladd_ground/2
+
+            bvd_2 = copy.copy(bvd_1)
+
+            bvd_1.name = bvd_base.name + "_1s"
+            bvd_2.name = bvd_base.name + "_2s"
+
+            bvd_1 = compute_admitance_BVD(bvd_1, parameters)
+            bvd_2 = compute_admitance_BVD(bvd_2, parameters)
+            list_BVD_duplicados.extend([bvd_1, bvd_2])
+
+        elif com.digitsN > DIGITS_NIDT_MAX:
+            # Duplicamos en paralelo
+            # Dividimosc el valor de DigitsActiveIDT del COM
+            bvd_1 = copy.copy(bvd_base)
+            bvd_1.cp = bvd_base.cp/2
+            bvd_1.ca = bvd_base.ca/2
+            bvd_1.la = bvd_base.la*2
+            bvd_1.rs = bvd_base.rs*2
+            bvd_1.rp = bvd_base.rp*2
+            bvd_1.c0 = bvd_1.cp + bvd_1.ca
+            bvd_1.fs = 1/(2 * np.pi * np.sqrt(bvd_1.la * bvd_1.ca))
+            bvd_1.fp = 1/(2 * np.pi)*np.sqrt((bvd_1.cp+bvd_1.ca)/(bvd_1.cp*bvd_1.ca*bvd_1.la))
+
+            bvd_1.cadd_ser = bvd_base.cadd_ser/2
+            bvd_1.cadd_shu = bvd_base.cadd_shu/2
+            bvd_1.ladd_ser = bvd_base.ladd_ser*2
+            bvd_1.ladd_shu = bvd_base.ladd_shu*2
+            bvd_1.ladd_ground = bvd_base.ladd_ground*2
+
+            bvd_2 = copy.copy(bvd_1)
+
+            bvd_1.name = bvd_base.name + "_1p"
+            bvd_2.name = bvd_base.name + "_2p"
+
+            bvd_1 = compute_admitance_BVD(bvd_1, parameters)
+            bvd_2 = compute_admitance_BVD(bvd_2, parameters)
+            list_BVD_duplicados.extend([bvd_1, bvd_2])
+        
+        else:
+            list_BVD_duplicados.append(bvd_base)
+
+        idx += 1
+
+    return list_BVD_duplicados
 
 # ============================== SUPPORT FUNCTIONS FOR ADMITANCE COMPUTATIONS ==============================
 

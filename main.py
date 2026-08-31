@@ -1093,10 +1093,12 @@ class MainWindow(QMainWindow):
 
             # =============================================== 1) Duplicate resonnators if necessary ===============================================
             if self.check_duplicate.isChecked():
-                list_COM_ADS = mat_bvd_com.duplicar_resonadores(self.list_BVD, self.list_COM, self.network_parameters)
+                list_COM_ADS = mat_bvd_com.duplicar_resonadores_COM(self.list_BVD, self.list_COM, self.network_parameters)
+                list_BVD_ADS = mat_bvd_com.duplicar_resonadores_BVD(self.list_BVD, self.list_COM, self.network_parameters)
                 log_tiempo(f"Paso 1.5 completado en: {time.time() - inicio:.2f} segundos")
             else:
                 list_COM_ADS = self.list_COM
+                list_BVD_ADS = self.list_BVD
 
             # =============================================== 2.0) Genearate BUSBAR layout and simulation ===============================================
             library.setup_schematic_tech()
@@ -1109,13 +1111,13 @@ class MainWindow(QMainWindow):
 
             # ========================================== 2.1) Debugging and tunning schematic and DDS ==========================================
             if self.check_debug.isChecked():
-                ads.create_Schematic_debugging(full_workspace_path, library_name, self.network_parameters, self.list_BVD, list_COM_ADS)
+                ads.create_Schematic_debugging(full_workspace_path, library_name, self.network_parameters, list_BVD_ADS, list_COM_ADS)
                 log_tiempo(f"Paso 2 completado en: {time.time() - inicio:.2f} segundos")
-                ads.create_DDS_debugging(full_workspace_path, len(self.list_BVD), self.network_parameters["typeseriesshunt_ini"])
+                ads.create_DDS_debugging(full_workspace_path, int(self.network_parameters["norder_ini"]), self.network_parameters["typeseriesshunt_ini"])
                 log_tiempo(f"Paso 3 completado en: {time.time() - inicio:.2f} segundos")
 
             # ============================================ 3) Generate BVD and COM LADDER FILTERS ============================================
-            ads.create_Schematic_ladder_filters(full_workspace_path, library_name, self.dataset_s2p_file_path, self.network_parameters, self.list_BVD, list_COM_ADS)
+            ads.create_Schematic_ladder_filters(full_workspace_path, library_name, self.dataset_s2p_file_path, self.network_parameters, list_BVD_ADS, list_COM_ADS)
             log_tiempo(f"Paso 4 completado en: {time.time() - inicio:.2f} segundos")
 
             # ========================================== 4) Generate BVD and COM filters' DDS pages ==========================================
