@@ -1443,7 +1443,7 @@ def create_smos_substrate(library: de.Library, subst_name: str = "smos_substrate
     # ---------------------------------------------------------------------
     s.insert_material_and_interface_below(material_index=0)
     silicio_layer = s.materials[1]
-    silicio_layer.material_name = "Silicio"
+    silicio_layer.material_name = "Si"
     silicio_layer.thickness_expr = '100'
     silicio_layer.thickness_unit = subst.Unit.MICRON
 
