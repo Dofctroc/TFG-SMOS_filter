@@ -1330,49 +1330,51 @@ def create_busbars_layout(library: de.Library, library_name: str, com: COM) -> N
     cond = LayerId.create_layer_id_from_library(library, "cond", "drawing")
 
     # --- ESCALADO A MICRAS (um) ---
-    # Convertimos com.d (metros) a micras (* 1e6)
     d_um = com.d * 1e6
-    
-    # Ancho del busbar proporcional al número de dígitos
     dx_um = com.digitsN * d_um                  
-    
-    # Apertura entre busbars en micras
     aperture_um = (com.Ap * d_um) + d_um        
-    
-    # Ancho (dy) y terminales (dy2) escalados proporcionalmente al diseño
-    dy_um = d_um * 10                           # Altura de la barra principal
-    dx2_um = dx_um * 0.1                        # Ancho de la pestaña de contacto
-    dy2_um = d_um * 5                           # Largo de la pestaña de contacto
+    dy_um = d_um * 10                           
+    dx2_um = dx_um * 0.1                        
+    dy2_um = d_um * 5                           
 
-    # --- DIBUJO DE GEOMETRÍAS (Coordenadas en um) ---
-    # Barra superior y su terminal
+    # --- CREACIÓN DE REDES ---
+    # Red 1 para la barra superior (P1 y P3)
+    net_top = design.add_net("NET_TOP")
+    
+    # Red 2 para la barra inferior (P2 y P4)
+    net_bottom = design.add_net("NET_BOTTOM")
+
+    # --- DIBUJO DE GEOMETRÍAS Y ASIGNACIÓN DE NETS ---
+    # Barra superior
     r1 = design.add_rectangle(cond, PointF(0, 0), PointF(dx_um, dy_um))
+    r1.net = net_top
     r2 = design.add_rectangle(cond, PointF(dx_um/2 - dx2_um/2, dy_um), 
                                     PointF(dx_um/2 + dx2_um/2, dy_um + dy2_um))
+    r2.net = net_top
 
-    # Barra inferior y su terminal (desplazada por la apertura)
+    # Barra inferior
     r3 = design.add_rectangle(cond, PointF(0, -aperture_um), PointF(dx_um, -aperture_um - dy_um))
+    r3.net = net_bottom
     r4 = design.add_rectangle(cond, PointF(dx_um/2 - dx2_um/2, -aperture_um - dy_um), 
                                     PointF(dx_um/2 + dx2_um/2, -aperture_um - dy_um - dy2_um))
+    r4.net = net_bottom
 
     # --- PUERTOS Y PINES ---
-    net1 = design.add_net("P1")
-    term1 = design.add_term(net1, "P1")
+    # Barra superior (comparten net_top)
+    term1 = design.add_term(net_top, "P1")
     shape1 = design.add_dot(cond, loc=PointF(dx_um/2, dy_um + dy2_um))
     design.add_pin(term1, shape1, angle=90.0, add_annot=False)
 
-    net2 = design.add_net("P2")
-    term2 = design.add_term(net2, "P2")
-    shape2 = design.add_dot(cond, loc=PointF(dx_um/2, -aperture_um - dy_um - dy2_um))
-    design.add_pin(term2, shape2, angle=-90.0, add_annot=False)
-
-    net3 = design.add_net("P3")
-    term3 = design.add_term(net3, "P3")
+    term3 = design.add_term(net_top, "P3")
     shape3 = design.add_dot(cond, loc=PointF(dx_um/2, 0))
     design.add_pin(term3, shape3, angle=-90.0, add_annot=False)
 
-    net4 = design.add_net("P4")
-    term4 = design.add_term(net4, "P4")
+    # Barra inferior (comparten net_bottom)
+    term2 = design.add_term(net_bottom, "P2")
+    shape2 = design.add_dot(cond, loc=PointF(dx_um/2, -aperture_um - dy_um - dy2_um))
+    design.add_pin(term2, shape2, angle=-90.0, add_annot=False)
+
+    term4 = design.add_term(net_bottom, "P4")
     shape4 = design.add_dot(cond, loc=PointF(dx_um/2, -aperture_um))
     design.add_pin(term4, shape4, angle=90.0, add_annot=False)
 
@@ -1380,7 +1382,6 @@ def create_busbars_layout(library: de.Library, library_name: str, com: COM) -> N
     design = None
 
     return
-
 
 def create_smos_substrate(library: de.Library, subst_name: str = "smos_substrate") -> subst.Substrate:
     """
