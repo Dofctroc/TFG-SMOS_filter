@@ -3,7 +3,8 @@ import re
 
 from PySide6.QtWidgets import (QApplication, QFileDialog)
 
-class MASK_LIMIT:
+# ========================== VARIABLES Y CLASES GLOBALES ===========================
+class MASK_LIMIT():
     def __init__(self, fstart: float, fstop: float, value_dB: float, upper_lower: str, loss_type: str):
         self.fstart = fstart
         self.fstop = fstop
@@ -11,10 +12,18 @@ class MASK_LIMIT:
         self.upper_lower = upper_lower
         self.loss_type = loss_type
 
-class MASK:
+class MASK():
     def __init__(self, name: str, limits: list[MASK_LIMIT]):
         self.name = name
         self.limits = limits
+
+class FrequencyPlan():
+    def __init__(self, fstart: float, fstop: float, Nsteps: int):
+        self.fstart = fstart
+        self.fstop = fstop
+        self.Nsteps = Nsteps
+
+# ========================== FUNCIONES ===========================
 
 def select_workspace_path() -> str:
     """Selecciona carpeta usando PySide6 (Evita el WinError 6)"""
@@ -129,8 +138,6 @@ def adapt_parameters_for_ADS(parameters: dict) -> dict:
 def compute_extra_parameters_AND_convert_tofloat(parameters: dict) -> dict:
     # COMPUTE resonant frequencies and Ra RESISTOR
     # List type: list(xx, xx, xx, ...)
-    qa = float(parameters["qa"])
-
     # Convertir las listas de strings a listas de números
     parameters["cp"] = parameters["c0"]
     contenido = parameters["cp"].replace("list(", "").replace(")", "")
@@ -166,6 +173,14 @@ def compute_extra_parameters_AND_convert_tofloat(parameters: dict) -> dict:
     parameters["ladd_ground_vals"] = ladd_ground_vals
 
     return parameters
+
+def create_frequency_plan(parameters: dict) -> FrequencyPlan:
+    fstart = float(parameters["fstart1"])
+    fstop = float(parameters["fstop1"])
+    npoints = int(parameters["npoints1"])
+    freqPlan = FrequencyPlan(fstart, fstop, npoints)
+
+    return freqPlan
 
 def create_mask(ruta_archivo) -> MASK:
     mask = MASK(os.path.basename(ruta_archivo), None)

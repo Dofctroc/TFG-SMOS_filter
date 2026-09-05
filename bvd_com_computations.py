@@ -5,6 +5,9 @@ import csv
 import numpy as np
 from scipy.optimize import least_squares
 
+from fs_utils import FrequencyPlan
+
+# ========================== VARIABLES Y CLASES GLOBALES ===========================
 class BVD():
     def __init__(self, name: str, c0: float, cp: float, ca: float, la: float, fs: float, fp: float, 
                  cadd_shu: float, ladd_shu: float, cadd_ser: float, ladd_ser: float, ladd_ground: float, 
@@ -56,11 +59,6 @@ class COM():
         self.f = f
         self.constants = constants
 
-class FilterResponse():
-    def __init__(self, Y=None, f=None):
-        self.Y = Y
-        self.f = f
-
 # K11_REAL = -82053.9
 # K11 = -82053.9 - 1j*450
 # K12 = 59340.0
@@ -98,7 +96,7 @@ if os.path.exists("optimizacion.log"):
 
 # ============================== BASIC LISTS CREATION BVD & COM ==============================
 
-def create_list_BVD(parametersBVD: dict) -> list[BVD]:
+def create_list_BVD(parametersBVD: dict, frequency_plan: FrequencyPlan) -> list[BVD]:
     list_BVD: list[BVD] = []
 
     startBVD_type = parametersBVD["typeseriesshunt_ini"]
@@ -132,14 +130,14 @@ def create_list_BVD(parametersBVD: dict) -> list[BVD]:
                   ladd_ser=ladd_ser[i], ladd_shu=ladd_shu[i], cadd_ser=cadd_ser[i], 
                   cadd_shu=cadd_shu[i], ladd_ground=ladd_ground[i], 
                   rs=rs, rp=rp, ql=ql, qc=qc, qa=qa)
-        bvd = compute_admitance_BVD(bvd, parametersBVD)
+        bvd = compute_admitance_BVD(bvd, frequency_plan)
         
         currentType = "shunt" if currentType == "series" else "series"
         list_BVD.append(bvd)
 
     return list_BVD
 
-def compute_list_COM(list_BVD: list[BVD], parameters: dict) -> list[COM]:
+def compute_list_COM(list_BVD: list[BVD], frequency_plan: FrequencyPlan) -> list[COM]:
     list_COM: list[COM] = []
 
     for bvd in list_BVD:
@@ -159,35 +157,35 @@ def compute_list_COM(list_BVD: list[BVD], parameters: dict) -> list[COM]:
         com = calcular_alpha_COM(bvd, com) # Primera aproximació
 
         com.name = bvd.name.replace("BVD", "COM")
-        com = compute_admitance_COM(com, parameters)
+        com = compute_admitance_COM(com, frequency_plan)
 
         # Hacemos los reajustes de parámetros necesarios
         if DO_FITTING:
             com = reajuste_pitch(bvd, com)
             com.dR = com.d
-            com = compute_admitance_COM(com, parameters)
+            com = compute_admitance_COM(com, frequency_plan)
             com = reajuste_Ap_Nidt(bvd, com)
             com = calcular_alpha_COM(bvd, com)
 
         # Calculamos las admitancias para optimizar digitsNR
         if OPTIMIZE_NR:
-            com = compute_admitance_COM(com, parameters)
-            com = optimizar_digitsNR(bvd, com, parameters)
+            com = compute_admitance_COM(com, frequency_plan)
+            com = optimizar_digitsNR(bvd, com, frequency_plan)
         if OPTIMIZE_DR:
-            com = compute_admitance_COM(com, parameters)
-            com = optimizar_pitchR(bvd, com, parameters)
+            com = compute_admitance_COM(com, frequency_plan)
+            com = optimizar_pitchR(bvd, com, frequency_plan)
 
         # Volvemos a hacer los reajustes de parámetros necesarios
         # puesto que la optimización de NR rompe la curva de admitancia
         if OPTIMIZE_NR or OPTIMIZE_DR:
-            com = compute_admitance_COM(com, parameters)
+            com = compute_admitance_COM(com, frequency_plan)
             com = reajuste_pitch(bvd, com)
-            com = compute_admitance_COM(com, parameters)
+            com = compute_admitance_COM(com, frequency_plan)
             com = reajuste_Ap_Nidt(bvd, com)
             com = calcular_alpha_COM(bvd, com)
 
         # Calculo final de las admitancia
-        com = compute_admitance_COM(com, parameters)
+        com = compute_admitance_COM(com, frequency_plan)
         
         list_COM.append(com)        
     
@@ -195,11 +193,11 @@ def compute_list_COM(list_BVD: list[BVD], parameters: dict) -> list[COM]:
 
 # ============================== COMPUTE ADMITANCES BVD & COM ==============================
 
-def compute_admitance_BVD(bvd: BVD, parameters: dict) -> BVD:
+def compute_admitance_BVD(bvd: BVD, frequency_plan: FrequencyPlan) -> BVD:
 
-    fstart = float(parameters["fstart1"])
-    fstop = float(parameters["fstop1"])
-    npoints = max(int(parameters["npoints1"]), N_POINTS_GRAPH)
+    fstart = frequency_plan.fstart
+    fstop = frequency_plan.fstop
+    npoints = max(frequency_plan.Nsteps, N_POINTS_GRAPH)
 
     f = np.linspace(fstart, fstop, npoints)
 
@@ -227,15 +225,15 @@ def compute_admitance_BVD(bvd: BVD, parameters: dict) -> BVD:
 
     return bvd
 
-def compute_admitance_COM(com: COM, parameters: dict) -> COM:
+def compute_admitance_COM(com: COM, frequency_plan: FrequencyPlan) -> COM:
     vp = com.constants.vp
     k11 = com.constants.k11
     k12 = com.constants.k12
 
     # Sweep parameters
-    fstart = float(parameters["fstart1"])
-    fstop = float(parameters["fstop1"])
-    npoints = max(int(parameters["npoints1"]), N_POINTS_GRAPH)
+    fstart = frequency_plan.fstart
+    fstop = frequency_plan.fstop
+    npoints = max(frequency_plan.Nsteps, N_POINTS_GRAPH)
 
     f = np.linspace(fstart, fstop, npoints)
 
@@ -391,7 +389,7 @@ def reajuste_Ap_Nidt(bvd: BVD, com: COM) -> COM:
 
     return com
 
-def optimizar_digitsNR(bvd: BVD, com: COM, parameters: dict) -> COM:
+def optimizar_digitsNR(bvd: BVD, com: COM, frequency_plan: FrequencyPlan) -> COM:
     # 1. Definimos la máscara para frecuencias <= fs
     mask = bvd.f <= bvd.fs * 0.996
     f_target = bvd.f[mask]
@@ -404,7 +402,7 @@ def optimizar_digitsNR(bvd: BVD, com: COM, parameters: dict) -> COM:
         
         # Recalculamos la admitancia con el nuevo NR
         # Asumimos que esta función actualiza com.Y internamente
-        com_actualizado = compute_admitance_COM(com, parameters)
+        com_actualizado = compute_admitance_COM(com, frequency_plan)
         
         # El error es la diferencia entre la curva real y la calculada
         # Solo comparamos en el rango de frecuencias definido por la máscara
@@ -428,7 +426,7 @@ def optimizar_digitsNR(bvd: BVD, com: COM, parameters: dict) -> COM:
 
     return com
 
-def optimizar_pitchR(bvd: BVD, com: COM, parameters: dict) -> COM:
+def optimizar_pitchR(bvd: BVD, com: COM, frequency_plan: FrequencyPlan) -> COM:
     # 1. Definimos la máscara para frecuencias <= fs
     # mask = bvd.f <= bvd.fs * 0.995
     mask = (bvd.f >= bvd.fs * 0.95) & (bvd.f <= bvd.fs * 0.995)
@@ -442,7 +440,7 @@ def optimizar_pitchR(bvd: BVD, com: COM, parameters: dict) -> COM:
         
         # Recalculamos la admitancia con el nuevo NR
         # Asumimos que esta función actualiza com.Y internamente
-        com_actualizado = compute_admitance_COM(com, parameters)
+        com_actualizado = compute_admitance_COM(com, frequency_plan)
         
         # El error es la diferencia entre la curva real y la calculada
         # Solo comparamos en el rango de frecuencias definido por la máscara
@@ -471,7 +469,7 @@ def optimizar_pitchR(bvd: BVD, com: COM, parameters: dict) -> COM:
 
 # ============================== DUPLICATE FUNCTION FOR COM PARAMS ==============================
 
-def duplicar_resonadores_COM(list_BVD: list[BVD], list_COM: list[COM], parameters: dict) -> list[COM]:
+def duplicar_resonadores_COM(list_BVD: list[BVD], list_COM: list[COM], frequency_plan: FrequencyPlan) -> list[COM]:
     # Dejaremos la apertura tal cual la teniamos
     # Doblaremos en serie si    Nidt > max
     # Doblaremos en paralelo si Nidt < min
@@ -493,7 +491,7 @@ def duplicar_resonadores_COM(list_BVD: list[BVD], list_COM: list[COM], parameter
             com_1 = ajustar_Ap_Nidt_dentro_rango(com_1)
 
             # Primer calculo del vector admitancia para posteriores correcciones
-            com_1 = compute_admitance_COM(com_1, parameters)
+            com_1 = compute_admitance_COM(com_1, frequency_plan)
 
             # Reajustamos todos los parámetros
             com_1 = reajuste_pitch(bvd_base, com_1)
@@ -503,7 +501,7 @@ def duplicar_resonadores_COM(list_BVD: list[BVD], list_COM: list[COM], parameter
             com_1 = calcular_alpha_COM(bvd_base, com_1)
 
             # Calculamos el vector admitancia final
-            com_1 = compute_admitance_COM(com_1, parameters)
+            com_1 = compute_admitance_COM(com_1, frequency_plan)
             com_2 = copy.copy(com_1)
 
             com_1.name = com_base.name + "_1s"
@@ -524,7 +522,7 @@ def duplicar_resonadores_COM(list_BVD: list[BVD], list_COM: list[COM], parameter
             com_1 = ajustar_Ap_Nidt_dentro_rango(com_1)
 
             # Primer calculo del vector admitancia para posteriores correcciones
-            com_1 = compute_admitance_COM(com_1, parameters)
+            com_1 = compute_admitance_COM(com_1, frequency_plan)
             
             # Reajustamos todos los parámetros
             com_1 = reajuste_pitch(bvd_base, com_1)
@@ -534,7 +532,7 @@ def duplicar_resonadores_COM(list_BVD: list[BVD], list_COM: list[COM], parameter
             com_1 = calcular_alpha_COM(bvd_base, com_1)
 
             # Calculamos el vector admitancia final
-            com_1 = compute_admitance_COM(com_1, parameters)
+            com_1 = compute_admitance_COM(com_1, frequency_plan)
             com_2 = copy.copy(com_1)
 
             com_1.name = com_base.name + "_1p"
@@ -549,7 +547,7 @@ def duplicar_resonadores_COM(list_BVD: list[BVD], list_COM: list[COM], parameter
 
     return list_COM_duplicados
 
-def duplicar_resonadores_BVD(list_BVD: list[BVD], list_COM: list[COM], parameters: dict) -> list[BVD]:
+def duplicar_resonadores_BVD(list_BVD: list[BVD], list_COM: list[COM], frequency_plan: FrequencyPlan) -> list[BVD]:
     # Dejaremos la apertura tal cual la teniamos
     # Doblaremos en serie si    Nidt > max
     # Doblaremos en paralelo si Nidt < min
@@ -582,8 +580,8 @@ def duplicar_resonadores_BVD(list_BVD: list[BVD], list_COM: list[COM], parameter
             bvd_1.name = bvd_base.name + "_1s"
             bvd_2.name = bvd_base.name + "_2s"
 
-            bvd_1 = compute_admitance_BVD(bvd_1, parameters)
-            bvd_2 = compute_admitance_BVD(bvd_2, parameters)
+            bvd_1 = compute_admitance_BVD(bvd_1, frequency_plan)
+            bvd_2 = compute_admitance_BVD(bvd_2, frequency_plan)
             list_BVD_duplicados.extend([bvd_1, bvd_2])
 
         elif com.digitsN > DIGITS_NIDT_MAX:
@@ -610,8 +608,8 @@ def duplicar_resonadores_BVD(list_BVD: list[BVD], list_COM: list[COM], parameter
             bvd_1.name = bvd_base.name + "_1p"
             bvd_2.name = bvd_base.name + "_2p"
 
-            bvd_1 = compute_admitance_BVD(bvd_1, parameters)
-            bvd_2 = compute_admitance_BVD(bvd_2, parameters)
+            bvd_1 = compute_admitance_BVD(bvd_1, frequency_plan)
+            bvd_2 = compute_admitance_BVD(bvd_2, frequency_plan)
             list_BVD_duplicados.extend([bvd_1, bvd_2])
         
         else:
@@ -776,82 +774,5 @@ def assign_COM_constants_from_excel(bvd: BVD) -> COMconstants:
     constants = COMconstants(k11=k11 - 1j * att_cte, k12=k12, vp=vp, eps_r=eps_r_eff)
 
     return constants
-
-# ======================================== DEPRECATED ========================================
-def compute_filter_admitance(list: list, parameters: dict) -> FilterResponse:
-    # General Parameter
-    start_type = parameters["typeseriesshunt_ini"]
-    order = int(parameters["norder_ini"])
-
-    # Matching Network parameters
-    matching_network_type = parameters["matching_network"]
-    mntype1 = parameters["mntype1"]
-    input_l = float(parameters["input_l"])
-    lfini1 = float(parameters["lfini1"])
-    lfini2 = float(parameters["lfini2"])
-    cfini1 = float(parameters["cfini1"])
-    cfini2 = float(parameters["cfini2"])
-
-    # End element type
-    if order % 2 == 0:
-        end_type = "shunt" if start_type == "series" else "series"
-    else:
-        end_type = "series" if start_type == "series" else "shunt"
-
-    # Sweep parameters
-    fstart = float(parameters["fstart1"])
-    fstop = float(parameters["fstop1"])
-    npoints = max(int(parameters["npoints1"]), N_POINTS_GRAPH)
-
-    f = np.linspace(fstart, fstop, npoints)
-    Ytot = np.zeros(len(f), dtype=complex)
-    Ztot = np.zeros(len(f), dtype=complex)
-    Zend = np.zeros(len(f), dtype=complex)
-
-    # Primero el final, depende de si es LC(s-p), CL(p-s) o L(s) o L(p)
-    if matching_network_type == "0.0":
-        # Output matching network is a single inductance
-        if end_type == "series":
-            Zend = 1 / (1/(Zl(f,lfini2)) + 1/(R_TERMG))
-        else:
-            Zend = Zl(f,lfini2) + R_TERMG
-    else:
-        # Output has a LC matching network
-        if mntype1 == "s":
-            # Matching Network LC(s-p)
-            Zend = Zl(f,lfini1) + 1 / (1/(Zc(f,cfini2)) + 1/(R_TERMG))
-        else:
-            # Matching Network CL(p-s)
-            Zend = 1 / (1/(Zc(f,cfini1)) + 1/(Zl(f,lfini2) + R_TERMG))
-
-    Zeq = Zend
-    
-    # A continuación, depende de si el último elemento es shunt o serie (si es serie se suma con Zend, si es shunt se suma en paralelo)
-    element_type = end_type
-    for element in reversed(list):
-        if element_type == "series":
-            # Sumamos en serie Zeq y Zelement
-            Zeq = Zeq + 1/element.Y
-        else:
-            # Sumamos en paralelo Zeq y Zelement
-            Zeq = 1 / (1/Zeq + element.Y)
-
-        element_type = "series" if element_type == "shunt" else "shunt"
-
-    # Finalmente añadimos la impedancia de la bobina en la entrada
-    if input_l < 1e-12: 
-        # Si es casi 0, ignoramos la bobina (asumimos que no hay matching shunt)
-        Ztot = Zeq
-    else:
-        if start_type == "series":
-            # Bobina shunt, sumamos en paralelo
-            Ztot = 1 / (1/Zeq + 1/Zl(f, input_l))
-        else:
-            # Bobina serie, sumamos en serie
-            Ztot = Zeq + Zl(f, input_l)
-
-    Ytot = 1/Ztot
-
-    return FilterResponse(Ytot, f)
     
 

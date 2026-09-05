@@ -4,6 +4,7 @@ import traceback
 import math
 import time
 import os
+
 import ads_utils as ads
 import fs_utils as fs
 import bvd_com_computations as mat_bvd_com
@@ -45,11 +46,11 @@ class MainWindow(QMainWindow):
 
         self.list_BVD = None
         self.list_COM = None
-        self.dataset_s2p_file_path = None
-        self.mask = None
-        self.network_file_path = None
         self.workspace_path = None
-        self.filterResponse = None
+        self.network_file_path = None
+        self.mask = None
+        self.dataset_s2p_file_path = None
+        self.frequencyPlan = None
 
         self.setWindowTitle("TFG-SMOSfilter")
         self.setGeometry(100, 100, 1000, 700)
@@ -886,13 +887,17 @@ class MainWindow(QMainWindow):
         try:
             file_path_network = fs.select_file_to_read("Network files (*.ntw)|*.ntw|Text Files (*.txt)|*.txt|All Files (*.*)|*.*")
             if file_path_network:
+                # Leer el archivo .ntw
+                self.network_parameters = fs.read_and_parse_file(file_path_network)
                 self.network_file_path = file_path_network
                 self.label_network_file.setText(f"Selected: {file_path_network}")
                 self.label_network_file.setStyleSheet("color: green; font-size: 14px;")
-                self.network_parameters = fs.read_and_parse_file(file_path_network)
+
+                # Crear el frequency plan que se usará para todo
+                self.frequencyPlan = fs.create_frequency_plan(self.network_parameters)
 
                 # Crear la lista de BVDs a partir de los parámetros leídos
-                self.list_BVD = mat_bvd_com.create_list_BVD(self.network_parameters)
+                self.list_BVD = mat_bvd_com.create_list_BVD(self.network_parameters, self.frequencyPlan)
                 
                 # Rellenar los campos de Matching Network y Lossy BVD con los parámetros leídos
                 self.combo_bvd.clear() # Borra el "Archivo no leído"
@@ -948,7 +953,7 @@ class MainWindow(QMainWindow):
         # Crear lista de BVD y convertir a lista COM
         try:
             # Creamos la lista de elementos COM con los parámetros iniciales
-            self.list_COM = mat_bvd_com.compute_list_COM(self.list_BVD, self.network_parameters)
+            self.list_COM = mat_bvd_com.compute_list_COM(self.list_BVD, self.frequencyPlan)
 
             # Rellenar los campos de Matching Network y Lossy BVD con los parámetros leídos
             self.combo_com.clear() # Borra el "Archivo no leído"
@@ -1106,10 +1111,10 @@ class MainWindow(QMainWindow):
                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, # Botones disponibles
                     QMessageBox.StandardButton.No # Botón enfocado por defecto
                 )
-                if reply == QMessageBox.StandardButton.Yes: 
-                    workspace = ads.create_and_open_an_empty_workspace(full_workspace_path)
-                else: return
+                if reply == QMessageBox.StandardButton.No: 
+                    return
 
+            workspace = ads.create_and_open_an_empty_workspace(full_workspace_path)
             library = ads.create_a_library_and_add_it_to_the_workspace(workspace, library_name)
         except Exception as e:
             error_detallado = traceback.format_exc()
@@ -1130,8 +1135,8 @@ class MainWindow(QMainWindow):
 
             # =============================================== 1) Duplicate resonnators if necessary ===============================================
             if self.check_duplicate.isChecked():
-                list_COM_ADS = mat_bvd_com.duplicar_resonadores_COM(self.list_BVD, self.list_COM, self.network_parameters)
-                list_BVD_ADS = mat_bvd_com.duplicar_resonadores_BVD(self.list_BVD, self.list_COM, self.network_parameters)
+                list_COM_ADS = mat_bvd_com.duplicar_resonadores_COM(self.list_BVD, self.list_COM, self.frequencyPlan)
+                list_BVD_ADS = mat_bvd_com.duplicar_resonadores_BVD(self.list_BVD, self.list_COM, self.frequencyPlan)
                 # log_tiempo(f"Paso 1.5 completado en: {time.time() - inicio:.2f} segundos")
             else:
                 list_COM_ADS = self.list_COM
@@ -1149,13 +1154,14 @@ class MainWindow(QMainWindow):
 
             # ========================================== 2.1) Debugging and tunning schematic and DDS ==========================================
             if self.check_debug.isChecked():
-                ads.create_Schematic_debugging(full_workspace_path, library_name, self.network_parameters, list_BVD_ADS, list_COM_ADS)
+                ads.create_Schematic_debugging(full_workspace_path, library_name, self.frequencyPlan, list_BVD_ADS, list_COM_ADS)
                 # log_tiempo(f"Paso 2 completado en: {time.time() - inicio:.2f} segundos")
                 ads.create_DDS_debugging(full_workspace_path, int(self.network_parameters["norder_ini"]), self.network_parameters["typeseriesshunt_ini"])
                 # log_tiempo(f"Paso 3 completado en: {time.time() - inicio:.2f} segundos")
 
             # ============================================ 3) Generate BVD and COM LADDER FILTERS ============================================
-            ads.create_Schematic_ladder_filters(full_workspace_path, library_name, self.dataset_s2p_file_path, self.network_parameters, list_BVD_ADS, list_COM_ADS)
+            ads.create_Schematic_ladder_filters(full_workspace_path, library_name, self.dataset_s2p_file_path, 
+                                                self.network_parameters, self.frequencyPlan, list_BVD_ADS, list_COM_ADS)
             # log_tiempo(f"Paso 4 completado en: {time.time() - inicio:.2f} segundos")
 
             # ========================================== 4) Generate BVD and COM filters' DDS pages ==========================================

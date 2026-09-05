@@ -15,9 +15,13 @@ import keysight.ads.dataset as dataset
 
 from bvd_com_computations import BVD
 from bvd_com_computations import COM
-from bvd_com_computations import FilterResponse
+from fs_utils import FrequencyPlan
 
-FORCE_RECREATE = False
+# ========================== VARIABLES Y CLASES GLOBALES ===========================
+class FilterResponse():
+    def __init__(self, Y=None, f=None):
+        self.Y = Y
+        self.f = f
 
 CELL_BVD_LOSSY = "BVD_Lossy_symb"       # celda jerárquica (schematic+symbol)
 CELL_COM_LOSSY = "COM_Lossy_symb"       # celda jerárquica (schematic+symbol)
@@ -29,6 +33,8 @@ CELL_BUSBAR_LAYOUT = "Busbar_layout"
 
 BVD_FILTER_STARTING_PIN = 1
 COM_FILTER_STARTING_PIN = 3
+
+# ========================== FUNCIONES ===========================
 
 def test_import_keysight_ads_de_example() -> None:
     try:
@@ -43,17 +49,15 @@ def test_import_keysight_ads_de_example() -> None:
     assert version >= 630, "Version of keysight.ads.de is not as expected."
     print(f"Import of keysight.ads.de successful in ADS version {de.version()}.")
 
-def check_for_workspace_with_name(workspace_path: str) -> int:
-    # Cannot create a workspace if the directory already exists
-    if os.path.exists(workspace_path):
-        return 0
-
 def create_and_open_an_empty_workspace(workspace_path: str) -> de.Workspace:
     # Ensure there isn't already a workspace open
     if de.workspace_is_open():
         de.close_workspace()
 
-    shutil.rmtree(workspace_path)
+    # If the workspace exists, delete it before creating the new one
+    if os.path.exists(workspace_path):
+        shutil.rmtree(workspace_path)
+
     # Create the workspace
     workspace = de.create_workspace(workspace_path)
     # Open the workspace
@@ -617,16 +621,18 @@ def create_SchematicAndSymbol_lossyCOM(library: de.Library, library_name: str) -
     design.save_design()
     design = None
 
-def create_Schematic_ladder_filters(workspace_path: str, library_name: str, dataset_s2p_path: str, parameters: dict, list_BVD: list[BVD], list_COM: list[COM]) -> None:
+def create_Schematic_ladder_filters(
+        workspace_path: str, library_name: str, dataset_s2p_path: str, 
+        parameters: dict, frequency_plan: FrequencyPlan, list_BVD: list[BVD], list_COM: list[COM]) -> None:
     assert de.version() >= 630
 
     design = db.create_schematic(f"{library_name}:{CELL_FILTER}:schematic")
     design = db.open_design(f"{library_name}:{CELL_FILTER}:schematic")
     
     # Sweep parameters
-    fstart = parameters["fstart1"]
-    fstop = parameters["fstop1"]
-    npoints = parameters["npoints1"]
+    fstart = frequency_plan.fstart
+    fstop = frequency_plan.fstop
+    npoints = frequency_plan.Nsteps
 
     with Transaction(design) as transaction:
 
@@ -657,7 +663,7 @@ def create_Schematic_ladder_filters(workspace_path: str, library_name: str, data
         inst = design.add_instance("ads_simulation:S_Param", name="SP1", origin=(0.0, 3.0))
         inst.parameters["Start"].value = "fstart Hz"
         inst.parameters["Stop"].value = "fstop Hz"
-        inst.parameters["Step"].value = "(fstop-fstart)/1000 Hz"
+        inst.parameters["Step"].value = "(fstop-fstart)/npoints Hz"
         inst.parameters["Sort"].value = "LINEAR START STEP "
         inst.parameters["CalcY"].value = "yes"
         inst.parameters["Freq"].value = " "
@@ -665,7 +671,7 @@ def create_Schematic_ladder_filters(workspace_path: str, library_name: str, data
 
         # Variables 
         inst = design.add_var_instance(name="VAR_Sweep", origin=(3.0, 3.0))
-        inst.vars.update({'fstart': fstart, 'fstop': fstop, 'npoints': npoints})
+        inst.vars.update({'fstart': str(fstart), 'fstop': str(fstop), 'npoints': str(npoints)})
         # Since inst.vars does not contain 'X', we need to remove the first repeat.
         assert isinstance(inst.parameters[0], db.ParamRepeated)
         del(inst.parameters[0].repeats[0])
@@ -1020,16 +1026,18 @@ def build_ladder_filter_circuit_COM(design: db.Design, initial_xpos: int, initia
 
     return
 
-def create_Schematic_debugging(workspace_path: str, library_name: str, parameters: dict, list_BVD: list[BVD], list_COM: list[COM]) -> None:
+def create_Schematic_debugging(
+        workspace_path: str, library_name: str, frequency_plan: FrequencyPlan, 
+        list_BVD: list[BVD], list_COM: list[COM]) -> None:
     assert de.version() >= 630
 
     design = db.create_schematic(f"{library_name}:{CELL_DEBUG}:schematic")
     design = db.open_design(f"{library_name}:{CELL_DEBUG}:schematic")
     
     # Sweep parameters
-    fstart = parameters["fstart1"]
-    fstop = parameters["fstop1"]
-    npoints = parameters["npoints1"]
+    fstart = frequency_plan.fstart
+    fstop = frequency_plan.fstop
+    npoints = frequency_plan.Nsteps
     
     # Grid positon parameters
     xpos = 0.0
@@ -1109,7 +1117,7 @@ def create_Schematic_debugging(workspace_path: str, library_name: str, parameter
 
         # Variables 
         inst = design.add_var_instance(name="VAR_Sweep", origin=(3.0, 3.0))
-        inst.vars.update({'fstart': fstart, 'fstop': fstop, 'npoints': npoints})
+        inst.vars.update({'fstart': str(fstart), 'fstop': str(fstop), 'npoints': str(npoints)})
         # Since inst.vars does not contain 'X', we need to remove the first repeat.
         assert isinstance(inst.parameters[0], db.ParamRepeated)
         del(inst.parameters[0].repeats[0])
@@ -1119,7 +1127,7 @@ def create_Schematic_debugging(workspace_path: str, library_name: str, parameter
         inst = design.add_instance("ads_simulation:S_Param", name="SP1", origin=(0.0, 3.0))
         inst.parameters["Start"].value = "fstart Hz"
         inst.parameters["Stop"].value = "fstop Hz"
-        inst.parameters["Step"].value = "(fstop-fstart)/1000 Hz"
+        inst.parameters["Step"].value = "(fstop-fstart)/npoints Hz"
         inst.parameters["Sort"].value = "LINEAR START STEP "
         inst.parameters["CalcY"].value = "yes"
         inst.parameters["Freq"].value = " "
@@ -1397,6 +1405,56 @@ def create_busbars_layout(library: de.Library, library_name: str, com: COM) -> N
     design.save_design()
     design = None
 
+    # ========= 2) Symbol view =========
+    assert de.version() >= 630
+
+    design = db.create_symbol(f"{library_name}:{CELL_BUSBAR_LAYOUT}_{com.name}:symbol")
+    design = db.open_design(f"{library_name}:{CELL_BUSBAR_LAYOUT}_{com.name}:symbol")
+
+    with Transaction(design) as transaction:
+        # Properties
+        db.StringProp.create(design, "SymbolGenSettings", '0,2,"layout",0,0,"1","dot",0')
+
+        # Terms
+        net = design.add_net("P1")
+        term = design.add_term(net, "P1")
+        shape = design.add_dot(db.LayerId(229), loc=PointF(0.0, 0.5))
+        pin = design.add_pin(term, shape, angle=90.0, add_annot=False)
+
+        net = design.add_net("P2")
+        term = design.add_term(net, "P2")
+        shape = design.add_dot(db.LayerId(229), loc=PointF(0.0, -1.5))
+        pin = design.add_pin(term, shape, angle=-90.0, add_annot=False)
+
+        net = design.add_net("P3")
+        term = design.add_term(net, "P3")
+        shape = design.add_dot(db.LayerId(229), loc=PointF(0.0, 0.0))
+        pin = design.add_pin(term, shape, angle=-90.0, add_annot=False)
+
+        net = design.add_net("P4")
+        term = design.add_term(net, "P4")
+        shape = design.add_dot(db.LayerId(229), loc=PointF(0.0, -1.0))
+        pin = design.add_pin(term, shape, angle=90.0, add_annot=False)
+
+        # Shapes
+        points = [PointF(x=1.375, y=-1.0), PointF(x=-1.375, y=-1.0), PointF(x=-1.375, y=-1.25), PointF(x=1.375, y=-1.25)]
+        shape = design.add_polygon(db.LayerId(1), polygon=points)
+
+        points = [PointF(x=0.375, y=-1.25), PointF(x=-0.375, y=-1.25), PointF(x=-0.375, y=-1.5), PointF(x=0.375, y=-1.5)]
+        shape = design.add_polygon(db.LayerId(1), polygon=points)
+
+        points = [PointF(x=-0.375, y=0.25), PointF(x=0.375, y=0.25), PointF(x=0.375, y=0.5), PointF(x=-0.375, y=0.5)]
+        shape = design.add_polygon(db.LayerId(1), polygon=points)
+
+        points = [PointF(x=-1.375, y=0.0), PointF(x=1.375, y=0.0), PointF(x=1.375, y=0.25), PointF(x=-1.375, y=0.25)]
+        shape = design.add_polygon(db.LayerId(1), polygon=points)
+
+        transaction.commit()
+
+    design.save_design()
+    design = None
+
+
     return
 
 def create_smos_substrate(library: de.Library, subst_name: str = "smos_substrate") -> subst.Substrate:
@@ -1441,7 +1499,7 @@ def create_smos_substrate(library: de.Library, subst_name: str = "smos_substrate
     # ---------------------------------------------------------------------
     s.insert_material_and_interface_below(material_index=0)
     linbo3_layer = s.materials[1]
-    linbo3_layer.material_name = "Subst_1"
+    linbo3_layer.material_name = "LiNbO3"
     linbo3_layer.thickness_expr = '500'
     linbo3_layer.thickness_unit = subst.Unit.NANOMETER
 
