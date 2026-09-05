@@ -17,7 +17,7 @@ from bvd_com_computations import BVD
 from bvd_com_computations import COM
 from bvd_com_computations import FilterResponse
 
-FORCE_RECREATE = True
+FORCE_RECREATE = False
 
 CELL_BVD_LOSSY = "BVD_Lossy_symb"       # celda jerárquica (schematic+symbol)
 CELL_COM_LOSSY = "COM_Lossy_symb"       # celda jerárquica (schematic+symbol)
@@ -43,18 +43,17 @@ def test_import_keysight_ads_de_example() -> None:
     assert version >= 630, "Version of keysight.ads.de is not as expected."
     print(f"Import of keysight.ads.de successful in ADS version {de.version()}.")
 
-def create_and_open_an_empty_workspace(workspace_path: str):
+def check_for_workspace_with_name(workspace_path: str) -> int:
+    # Cannot create a workspace if the directory already exists
+    if os.path.exists(workspace_path):
+        return 0
+
+def create_and_open_an_empty_workspace(workspace_path: str) -> de.Workspace:
     # Ensure there isn't already a workspace open
     if de.workspace_is_open():
         de.close_workspace()
 
-    # Cannot create a workspace if the directory already exists
-    if os.path.exists(workspace_path):
-        if FORCE_RECREATE:
-            shutil.rmtree(workspace_path)
-        else:
-            return None
-
+    shutil.rmtree(workspace_path)
     # Create the workspace
     workspace = de.create_workspace(workspace_path)
     # Open the workspace

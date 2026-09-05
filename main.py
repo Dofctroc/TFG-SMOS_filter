@@ -3,6 +3,7 @@ import pathlib
 import traceback
 import math
 import time
+import os
 import ads_utils as ads
 import fs_utils as fs
 import bvd_com_computations as mat_bvd_com
@@ -180,13 +181,13 @@ class MainWindow(QMainWindow):
     def setup_sub_header(self):
         self.sub_barra_superior = QVBoxLayout()
 
-        self.label_network_file = QLabel("No file selected")
+        self.label_network_file = QLabel("No NETWORK file selected")
         self.label_network_file.setStyleSheet("color: red; font-size: 14px;")
 
-        self.label_mask_file = QLabel("No file selected")
+        self.label_mask_file = QLabel("No MASK file selected")
         self.label_mask_file.setStyleSheet("color: red; font-size: 14px;")
 
-        self.label_workspace_path = QLabel("No directory selected")
+        self.label_workspace_path = QLabel("No DIRECTORY selected")
         self.label_workspace_path.setStyleSheet("color: red; font-size: 14px;")
 
         self.sub_barra_superior.addWidget(self.label_network_file)
@@ -197,6 +198,7 @@ class MainWindow(QMainWindow):
         self.barra_inferior = QHBoxLayout()
 
         self.label_workspace_name = QLabel("Workspace Name:")
+        self.label_workspace_name.setStyleSheet("color: black; font-weight: bold")
         self.input_workspace_name = QLineEdit()
         self.input_workspace_name.setPlaceholderText(DEFAULT_WORKSPACE_NAME)
         self.input_workspace_name.setFixedWidth(200)
@@ -204,7 +206,9 @@ class MainWindow(QMainWindow):
 
         self.btn_create_workspace = QPushButton("Create ADS Workspace")
         self.btn_create_workspace.clicked.connect(self.btn_createFullWorkspace_clicked)
-        self.btn_create_workspace.setStyleSheet("background-color: #fffce6; color: black; font-weight: bold;")
+        self.btn_create_workspace.setStyleSheet("background-color: green; color: white; font-weight: bold; border-radius: 2px")
+        self.btn_create_workspace.setFixedWidth(180)
+        self.btn_create_workspace.setFixedHeight(25)
 
         self.barra_inferior.addWidget(self.label_workspace_name)
         self.barra_inferior.addWidget(self.input_workspace_name)
@@ -1080,7 +1084,14 @@ class MainWindow(QMainWindow):
             if not USE_DEFAULT_WORKSPACE_NAME:
                 QMessageBox.critical(self, "Error", "Error: Input a workspace name first")
                 return
-            workspace_name = DEFAULT_WORKSPACE_NAME
+            # Preguntar si quiere seguir con el default workspace name
+            reply = QMessageBox.question(self, "Default Workspace Name", 
+                                         "No workspace name introduced.\nDo you wish to continue with the default workspace name?", # Mensaje
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, # Botones disponibles
+                QMessageBox.StandardButton.No # Botón enfocado por defecto
+            )
+            if reply == QMessageBox.StandardButton.Yes: workspace_name = DEFAULT_WORKSPACE_NAME
+            else: return
 
         # Crear la ruta completa del workspace
         full_workspace_path = self.workspace_path + "/" + workspace_name
@@ -1088,10 +1099,17 @@ class MainWindow(QMainWindow):
 
         # ====================================================== Crear el workspace y la librería ======================================================
         try:
-            workspace = ads.create_and_open_an_empty_workspace(full_workspace_path)
-            if workspace is None: 
-                QMessageBox.critical(self, "Error", "Error: A workspace with that name already exists")
-                return
+            if os.path.exists(full_workspace_path):
+                reply = QMessageBox.question(self, "Overwrite workspace?", 
+                                            "A workspace with the same name already exists at the specified path."+
+                                            "\nDo you wish to overwrite it?", # Mensaje
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, # Botones disponibles
+                    QMessageBox.StandardButton.No # Botón enfocado por defecto
+                )
+                if reply == QMessageBox.StandardButton.Yes: 
+                    workspace = ads.create_and_open_an_empty_workspace(full_workspace_path)
+                else: return
+
             library = ads.create_a_library_and_add_it_to_the_workspace(workspace, library_name)
         except Exception as e:
             error_detallado = traceback.format_exc()
