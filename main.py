@@ -667,147 +667,166 @@ class MainWindow(QMainWindow):
         self.radio_com.toggled.connect(self.plot_admitancia)
         self.radio_both.toggled.connect(self.plot_admitancia)
         self.checkb_mask.toggled.connect(self.plot_admitancia)
-
+        
     def plot_admitancia(self):
+        """
+        Plots the admittance magnitude (in dB) vs. frequency on a Matplotlib canvas.
+        Supports plotting individual BVD/COM circuit elements as well as the complete filter response with design mask limits.
+        """
+        # 1. Determine element selection and plot labels
         order = len(self.list_BVD)
         idx = self.combo_elemento_graf.currentIndex()
         
         color_dataBVD = "green"
         color_dataCOM = "goldenrod"
-        color_dataFilter = "goldenrod"
-        label_dataBVD = f"BVD - Element {idx+1}"
-        label_dataCOM = f"COM - Element {idx+1}"
-        label_dataFilter = "COM - Filter"
+        color_dataFilterBVD = "green"
+        color_dataFilterCOM = "goldenrod"
 
-        # Decidir qué fuente usar
+        label_dataBVD = f"BVD - Element {idx + 1}"
+        label_dataCOM = f"COM - Element {idx + 1}"
+        label_dataFilterBVD = "BVD - Filter"
+        label_dataFilterCOM = "COM - Filter"
+
+        # 2. Select data sources based on current combo box selection and radio button states
         if idx < order:
+            # Individual resonator element selected
             dataBVD = self.list_BVD[idx] if (self.radio_bvd.isChecked() or self.radio_both.isChecked()) else None
             dataCOM = self.list_COM[idx] if (self.radio_com.isChecked() or self.radio_both.isChecked()) else None
-            dataFilter = None
+            dataFilterCOM = None
+            dataFilterBVD = None
         else:
+            # Whole filter response selected
             dataBVD = None
             dataCOM = None
-            dataFilter = self.filterCOM_ADS_Response
+            dataFilterBVD = self.filterBVD_ADS_Response if (self.radio_bvd.isChecked() or self.radio_both.isChecked()) else None
+            dataFilterCOM = self.filterCOM_ADS_Response if (self.radio_com.isChecked() or self.radio_both.isChecked()) else None
             
+        # Clear previous plot axes
         self.canvas.axes.cla()
 
-        # Verificamos que el objeto seleccionado tenga los datos
+        # 3. Process and plot BVD element data
         if dataBVD is not None and (hasattr(dataBVD, 'Y') or dataBVD.Y is not None):
-            # CONVERSIÓN A dB
+            # Convert magnitude to dB (adding 1e-20 offset to prevent log(0))
             magnitud_Y_dB = 20 * np.log10(np.abs(dataBVD.Y) + 1e-20)
-            # Ploteamos f (log) vs Y (dB lineal)
             self.canvas.axes.plot(dataBVD.f, magnitud_Y_dB, label=label_dataBVD, color=color_dataBVD)
 
+            # Mark resonance (fs) and anti-resonance (fp) frequencies if BVD is plotted alone
             if dataCOM is None and hasattr(dataBVD, "fs"):
                 frecuencias_interes = [dataBVD.fs, dataBVD.fp]
                 frecuencias_interes_names = ["fs_BVD", "fp_BVD"]
+                
                 for f_marcar, f_marcar_name in zip(frecuencias_interes, frecuencias_interes_names):
-                    # Solo marcamos si está dentro del rango de los datos actuales
+                    # Ensure target frequency falls within current data range
                     if dataBVD.f.min() <= f_marcar <= dataBVD.f.max():
-                        idx = np.abs(dataBVD.f - f_marcar).argmin()
-                        self.canvas.axes.plot(dataBVD.f[idx], magnitud_Y_dB[idx], 'kx')
+                        idx_f = np.abs(dataBVD.f - f_marcar).argmin()
+                        # Mark point with a black 'x'
+                        self.canvas.axes.plot(dataBVD.f[idx_f], magnitud_Y_dB[idx_f], 'kx')
 
+                        # Position annotation label dynamically to avoid overlapping the curve
                         ha_val = 'left'
-                        x_pos = dataBVD.f[idx] + (dataBVD.f.max() - dataBVD.f.min()) * 0.03
-                        # Ajuste específico para "fp"
+                        x_pos = dataBVD.f[idx_f] + (dataBVD.f.max() - dataBVD.f.min()) * 0.03
                         if "fp" in f_marcar_name.lower():
                             ha_val = 'right'
-                            x_pos = dataBVD.f[idx] - (dataBVD.f.max() - dataBVD.f.min()) * 0.03
+                            x_pos = dataBVD.f[idx_f] - (dataBVD.f.max() - dataBVD.f.min()) * 0.03
 
                         self.canvas.axes.text(
                             x_pos, 
-                            magnitud_Y_dB[idx],
+                            magnitud_Y_dB[idx_f],
                             f"{f_marcar_name}: {f_marcar:.4e}",
                             verticalalignment='center',
-                            horizontalalignment=ha_val,  # Dinámico: 'right' para fp, 'left' para los demás
+                            horizontalalignment=ha_val,
                             fontsize=9,
                             clip_on=True
                         )
 
+        # 4. Process and plot COM element data
         if dataCOM is not None and (hasattr(dataCOM, 'Y') or dataCOM.Y is not None):
-            # CONVERSIÓN A dB
+            # Convert magnitude to dB
             magnitud_Y_dB = 20 * np.log10(np.abs(dataCOM.Y) + 1e-20)
-            # Ploteamos f (log) vs Y (dB lineal)
             self.canvas.axes.plot(dataCOM.f, magnitud_Y_dB, label=label_dataCOM, color=color_dataCOM)
 
+            # Mark resonance frequencies if COM is plotted alone
             if dataBVD is None and hasattr(dataCOM, "fs"):
                 frecuencias_interes = [dataCOM.fs, dataCOM.fp]
                 frecuencias_interes_names = ["fs_COM", "fp_COM"]
+                
                 for f_marcar, f_marcar_name in zip(frecuencias_interes, frecuencias_interes_names):
-                    # Solo marcamos si está dentro del rango de los datos actuales
                     if dataCOM.f.min() <= f_marcar <= dataCOM.f.max():
-                        idx = np.abs(dataCOM.f - f_marcar).argmin()
-                        self.canvas.axes.plot(dataCOM.f[idx], magnitud_Y_dB[idx], 'kx')
+                        idx_f = np.abs(dataCOM.f - f_marcar).argmin()
+                        self.canvas.axes.plot(dataCOM.f[idx_f], magnitud_Y_dB[idx_f], 'kx')
                         
                         ha_val = 'left'
-                        x_pos = dataCOM.f[idx] + (dataCOM.f.max() - dataCOM.f.min()) * 0.03
-                        # Ajuste específico para "fp"
+                        x_pos = dataCOM.f[idx_f] + (dataCOM.f.max() - dataCOM.f.min()) * 0.03
                         if "fp" in f_marcar_name.lower():
                             ha_val = 'right'
-                            x_pos = dataCOM.f[idx] - (dataCOM.f.max() - dataCOM.f.min()) * 0.03
+                            x_pos = dataCOM.f[idx_f] - (dataCOM.f.max() - dataCOM.f.min()) * 0.03
 
                         self.canvas.axes.text(
                             x_pos, 
-                            magnitud_Y_dB[idx],              # Coordenada Y
+                            magnitud_Y_dB[idx_f],
                             f"{f_marcar_name}: {f_marcar:.4e}",
                             verticalalignment='center',
-                            horizontalalignment=ha_val,      # Empieza a la derecha del punto
+                            horizontalalignment=ha_val,
                             fontsize=9,
                             clip_on=True
                         )
 
-        if dataFilter is not None:
-            # CONVERSIÓN A dB
-            magnitud_Y_dB = 20 * np.log10(np.abs(dataFilter.Y) + 1e-20)
-            # Ploteamos f (log) vs Y (dB lineal)
-            self.canvas.axes.plot(dataFilter.f, magnitud_Y_dB, label=label_dataFilter, color=color_dataFilter)
+        # 5. Process and plot total BVD filter response
+        if dataFilterBVD is not None:
+            magnitud_Y_dB = 20 * np.log10(np.abs(dataFilterBVD.Y) + 1e-20)
+            self.canvas.axes.plot(dataFilterCOM.f, magnitud_Y_dB, label=label_dataFilterBVD, color=color_dataFilterBVD)
 
-            # Only when the filter is plotted, we plot the mask if wanted
-            if self.mask is not None and self.checkb_mask.isChecked():
-                try:
-                    if self.list_BVD is not None:
-                        f_min = self.list_BVD[0].f.min()
-                        f_max = self.list_BVD[0].f.max()
+        # 6. Process and plot total COM filter response
+        if dataFilterCOM is not None:
+            magnitud_Y_dB = 20 * np.log10(np.abs(dataFilterCOM.Y) + 1e-20)
+            self.canvas.axes.plot(dataFilterBVD.f, magnitud_Y_dB, label=label_dataFilterCOM, color=color_dataFilterCOM)
 
-                        for limit in self.mask.limits:
-                            if limit.loss_type != "S11":
-                                # Recortar límite al rango visible
-                                x_start = max(limit.fstart, f_min)
-                                x_stop = min(limit.fstop, f_max)
+        # 7. Process and plot Mask specifications
+        if (dataFilterBVD is not None or dataFilterCOM is not None) and (self.mask is not None and self.checkb_mask.isChecked()):
+            try:
+                if self.list_BVD is not None:
+                    f_min = self.list_BVD[0].f.min()
+                    f_max = self.list_BVD[0].f.max()
 
-                                # Si el límite queda fuera del rango visible, ignorarlo
-                                if x_start >= x_stop:
-                                    continue
+                    for limit in self.mask.limits:
+                        if limit.loss_type != "S11":
+                            # Crop limit range to current visible window
+                            x_start = max(limit.fstart, f_min)
+                            x_stop = min(limit.fstop, f_max)
 
-                                # Color según tipo
-                                if limit.upper_lower.lower() == "upper":
-                                    color = "darkblue"
-                                else:
-                                    color = "darkred"
+                            if x_start >= x_stop:
+                                continue
 
-                                # Dibujar línea horizontal del límite
-                                self.canvas.axes.plot(
-                                    [x_start, x_stop],
-                                    [limit.value_dB, limit.value_dB],
-                                    color=color,
-                                    linewidth=1.2,   # ligeramente menor que plots principales
-                                    linestyle='--'
-                                )
+                            # Assign line color based on upper/lower bound
+                            color = "darkblue" if limit.upper_lower.lower() == "upper" else "darkred"
 
-                except Exception:
-                    QMessageBox.critical(self, "Error", "Error drawing mask.\n""The read mask format might be incorrect or broken.")
-                    pass
+                            # Plot limit boundary as a dashed line
+                            self.canvas.axes.plot(
+                                [x_start, x_stop],
+                                [limit.value_dB, limit.value_dB],
+                                color=color,
+                                linewidth=1.2,
+                                linestyle='--'
+                            )
+            except Exception:
+                QMessageBox.critical(
+                    self, 
+                    "Error", 
+                    "Error drawing mask.\nThe read mask format might be incorrect or broken."
+                )
 
+        # 6. Final chart formatting and rendering
         self.canvas.axes.set_xlabel("Frequency (Hz)")
-        self.canvas.axes.set_ylabel("Admitance (dB)")
+        self.canvas.axes.set_ylabel("Admittance (dB)")
         
-        # La escala Y ahora es lineal porque los datos YA están en dB
+        # Y-axis is kept linear because data is pre-converted to dB logarithmic scale
         self.canvas.axes.set_yscale('linear') 
-        
         self.canvas.axes.grid(True, which="both", linestyle='--', alpha=0.5)
         self.canvas.axes.legend()
         
+        # Redraw canvas
         self.canvas.draw()
+
 
     # ============================================================== FUNCIONES AUXILIARES ==============================================================
 
@@ -909,7 +928,7 @@ class MainWindow(QMainWindow):
                 self.label_mask_file.setText(f"Selected: {file_path_mask}")
                 self.label_mask_file.setStyleSheet("color: green; font-size: 14px;")
                 self.mask = fs.create_mask(file_path_mask)
-                log_mask(self.mask)
+                # log_mask(self.mask)
 
         except Exception as e:
             error_detallado = traceback.format_exc()
@@ -1085,17 +1104,17 @@ class MainWindow(QMainWindow):
             
         # Crear los esquemáticos y los símbolos correspondientes
         try:
-            inicio = time.time()       
+            # inicio = time.time()       
             # =============================================== 0) Generate BVD and COM symbols ===============================================
             ads.create_SchematicAndSymbol_lossyBVD(library, library_name)
             ads.create_SchematicAndSymbol_lossyCOM(library, library_name)
-            log_tiempo(f"Paso 1 completado en: {time.time() - inicio:.2f} segundos")
+            # log_tiempo(f"Paso 1 completado en: {time.time() - inicio:.2f} segundos")
 
             # =============================================== 1) Duplicate resonnators if necessary ===============================================
             if self.check_duplicate.isChecked():
                 list_COM_ADS = mat_bvd_com.duplicar_resonadores_COM(self.list_BVD, self.list_COM, self.network_parameters)
                 list_BVD_ADS = mat_bvd_com.duplicar_resonadores_BVD(self.list_BVD, self.list_COM, self.network_parameters)
-                log_tiempo(f"Paso 1.5 completado en: {time.time() - inicio:.2f} segundos")
+                # log_tiempo(f"Paso 1.5 completado en: {time.time() - inicio:.2f} segundos")
             else:
                 list_COM_ADS = self.list_COM
                 list_BVD_ADS = self.list_BVD
@@ -1105,27 +1124,29 @@ class MainWindow(QMainWindow):
             library.create_layout_tech_std_ads("micron", 10000, False)
 
             for com in list_COM_ADS:
-                ads.create_busbars_layout(library, library_name, com)
+                if not (com.name.endswith("_2s") or com.name.endswith("_2p")):
+                    ads.create_busbars_layout(library, library_name, com)
             
             ads.create_smos_substrate(library, DEFAULT_SUBSTRATE_NAME)
 
             # ========================================== 2.1) Debugging and tunning schematic and DDS ==========================================
             if self.check_debug.isChecked():
                 ads.create_Schematic_debugging(full_workspace_path, library_name, self.network_parameters, list_BVD_ADS, list_COM_ADS)
-                log_tiempo(f"Paso 2 completado en: {time.time() - inicio:.2f} segundos")
+                # log_tiempo(f"Paso 2 completado en: {time.time() - inicio:.2f} segundos")
                 ads.create_DDS_debugging(full_workspace_path, int(self.network_parameters["norder_ini"]), self.network_parameters["typeseriesshunt_ini"])
-                log_tiempo(f"Paso 3 completado en: {time.time() - inicio:.2f} segundos")
+                # log_tiempo(f"Paso 3 completado en: {time.time() - inicio:.2f} segundos")
 
             # ============================================ 3) Generate BVD and COM LADDER FILTERS ============================================
             ads.create_Schematic_ladder_filters(full_workspace_path, library_name, self.dataset_s2p_file_path, self.network_parameters, list_BVD_ADS, list_COM_ADS)
-            log_tiempo(f"Paso 4 completado en: {time.time() - inicio:.2f} segundos")
+            # log_tiempo(f"Paso 4 completado en: {time.time() - inicio:.2f} segundos")
 
             # ========================================== 4) Generate BVD and COM filters' DDS pages ==========================================
             ads.create_DDS_filters_schematic(full_workspace_path)
-            log_tiempo(f"Paso 5 completado en: {time.time() - inicio:.2f} segundos")
+            # log_tiempo(f"Paso 5 completado en: {time.time() - inicio:.2f} segundos")
 
             # ========================================== 5) Extract data from COM FILTER and plot ==========================================
-            self.filterCOM_ADS_Response = ads.extract_data_filterCOM(full_workspace_path)
+            self.filterCOM_ADS_Response = ads.extract_data_filter_COM(full_workspace_path)
+            self.filterBVD_ADS_Response = ads.extract_data_filter_BVD(full_workspace_path)
             if not self.combo_elemento_graf.count() > len(self.list_BVD):
                 self.combo_elemento_graf.addItem("Full COM filter")
             self.combo_elemento_graf.setCurrentIndex(len(self.list_BVD))
@@ -1168,7 +1189,7 @@ def log_mask(mask):
         f.write(f"MASK: {mask.name}\n")
 
         for i, limit in enumerate(mask.limits):
-            f.write(
+            f.writeLines(
                 f"  LIMIT {i}: "
                 f"fstart={limit.fstart}, "
                 f"fstop={limit.fstop}, "

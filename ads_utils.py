@@ -1263,7 +1263,7 @@ def extract_data_debugging(workspace_path: str, order: int,list_BVD: list[BVD], 
 
     return list_BVD, list_COM
 
-def extract_data_filterCOM(workspace_path: str) -> FilterResponse:
+def extract_data_filter_COM(workspace_path: str) -> FilterResponse:
     dataset_name = CELL_FILTER
 
     # Extract data
@@ -1275,6 +1275,23 @@ def extract_data_filterCOM(workspace_path: str) -> FilterResponse:
     
     f = dataf["freq"]
     y = dataf[f"S[{COM_FILTER_STARTING_PIN+1},{COM_FILTER_STARTING_PIN}]"]
+
+    filter_response = FilterResponse(y, f)
+
+    return filter_response
+
+def extract_data_filter_BVD(workspace_path: str) -> FilterResponse:
+    dataset_name = CELL_FILTER
+
+    # Extract data
+    output_dir = os.path.join(workspace_path, "data")
+    output_data = dataset.open(Path(os.path.join(output_dir, f"{dataset_name}.ds")))
+    dataf = output_data["SP1.SP"].to_dataframe().reset_index()
+
+    print_data_txt(output_data, output_dir, dataset_name)
+    
+    f = dataf["freq"]
+    y = dataf[f"S[{BVD_FILTER_STARTING_PIN+1},{BVD_FILTER_STARTING_PIN}]"]
 
     filter_response = FilterResponse(y, f)
 
