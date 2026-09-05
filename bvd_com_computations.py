@@ -191,6 +191,13 @@ def compute_list_COM(list_BVD: list[BVD], frequency_plan: FrequencyPlan) -> list
     
     return list_COM
 
+def update_frequency_plan(list_BVD: list[BVD], list_COM: list[COM], frequency_plan: FrequencyPlan) -> tuple[list[BVD],list[COM]]:
+    for bvd in list_BVD:
+        bvd = compute_admitance_BVD(bvd,frequency_plan)
+    for com in list_COM:
+        com = compute_admitance_COM(com,frequency_plan)
+    return (list_BVD,list_COM)
+    
 # ============================== COMPUTE ADMITANCES BVD & COM ==============================
 
 def compute_admitance_BVD(bvd: BVD, frequency_plan: FrequencyPlan) -> BVD:

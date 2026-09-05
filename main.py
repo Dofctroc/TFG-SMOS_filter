@@ -9,9 +9,11 @@ import ads_utils as ads
 import fs_utils as fs
 import bvd_com_computations as mat_bvd_com
 
+from fs_utils import FrequencyPlan
+
 from PySide6.QtWidgets import (QApplication, QMainWindow, QPushButton, QWidget, QVBoxLayout, QHBoxLayout, 
                                QLabel, QLineEdit, QMessageBox, QGroupBox, QSizePolicy, QRadioButton, QButtonGroup,
-                               QComboBox, QFormLayout, QCheckBox, QMenu)
+                               QComboBox, QFormLayout, QCheckBox, QMenu, QDialog)
 from PySide6.QtCore import Qt, QSize
 from PySide6.QtGui import QAction
 
@@ -151,6 +153,12 @@ class MainWindow(QMainWindow):
         # 3) MENÚ OPTIONS (Checkboxes)
         # ==========================================
         options_menu = bar.addMenu("&Options")
+
+        self.action_configure_frequency_plan = QAction("Configure Frequency Plan", self)
+        self.action_configure_frequency_plan.triggered.connect(self.open_freqPlan_config_dialog)
+        options_menu.addAction(self.action_configure_frequency_plan)
+
+        options_menu.addSeparator() # Línea divisoria
 
         self.check_duplicate = QAction("Duplicate Resonators when necessary", self)
         self.check_duplicate.setCheckable(True)
@@ -667,13 +675,13 @@ class MainWindow(QMainWindow):
 
         # --- CONEXIONES ---
         self.combo_elemento_graf.currentIndexChanged.connect(self.unificar_grafico_admitancia)
-        self.combo_elemento_graf.currentIndexChanged.connect(self.plot_admitancia)
-        self.radio_bvd.toggled.connect(self.plot_admitancia)
-        self.radio_com.toggled.connect(self.plot_admitancia)
-        self.radio_both.toggled.connect(self.plot_admitancia)
-        self.checkb_mask.toggled.connect(self.plot_admitancia)
+        self.combo_elemento_graf.currentIndexChanged.connect(self.plot_admitance)
+        self.radio_bvd.toggled.connect(self.plot_admitance)
+        self.radio_com.toggled.connect(self.plot_admitance)
+        self.radio_both.toggled.connect(self.plot_admitance)
+        self.checkb_mask.toggled.connect(self.plot_admitance)
         
-    def plot_admitancia(self):
+    def plot_admitance(self):
         """
         Plots the admittance magnitude (in dB) vs. frequency on a Matplotlib canvas.
         Supports plotting individual BVD/COM circuit elements as well as the complete filter response with design mask limits.
@@ -779,19 +787,19 @@ class MainWindow(QMainWindow):
         # 5. Process and plot total BVD filter response
         if dataFilterBVD is not None:
             magnitud_Y_dB = 20 * np.log10(np.abs(dataFilterBVD.Y) + 1e-20)
-            self.canvas.axes.plot(dataFilterCOM.f, magnitud_Y_dB, label=label_dataFilterBVD, color=color_dataFilterBVD)
+            self.canvas.axes.plot(dataFilterBVD.f, magnitud_Y_dB, label=label_dataFilterBVD, color=color_dataFilterBVD)
 
         # 6. Process and plot total COM filter response
         if dataFilterCOM is not None:
             magnitud_Y_dB = 20 * np.log10(np.abs(dataFilterCOM.Y) + 1e-20)
-            self.canvas.axes.plot(dataFilterBVD.f, magnitud_Y_dB, label=label_dataFilterCOM, color=color_dataFilterCOM)
+            self.canvas.axes.plot(dataFilterCOM.f, magnitud_Y_dB, label=label_dataFilterCOM, color=color_dataFilterCOM)
 
         # 7. Process and plot Mask specifications
         if (dataFilterBVD is not None or dataFilterCOM is not None) and (self.mask is not None and self.checkb_mask.isChecked()):
             try:
-                if self.list_BVD is not None:
-                    f_min = self.list_BVD[0].f.min()
-                    f_max = self.list_BVD[0].f.max()
+                if dataFilterBVD is not None:
+                    f_min = dataFilterBVD.f.min()
+                    f_max = dataFilterBVD.f.max()
 
                     for limit in self.mask.limits:
                         if limit.loss_type != "S11":
@@ -882,6 +890,24 @@ class MainWindow(QMainWindow):
         # 1. Visibilidad de los bloques internos
         show_mn = self.check_matching.isChecked()
         self.bloque_matchnetw.setVisible(show_mn)
+
+    def open_freqPlan_config_dialog(self):
+        # Comrpobamos si ya se ha leido un archivo ntw 
+        if self.frequencyPlan is None:
+            QMessageBox.critical(self, "Error", "Error: No frequency plan data. \n Select a network file first")
+            return
+        
+        # Instanciamos la ventana pasando los datos actuales
+        dialog = ConfigWindow(self.frequencyPlan, parent=self)
+        
+        # exec() abre la ventana de forma modal
+        if dialog.exec() == QDialog.Accepted:
+            # Si el usuario presiona "Update Values"
+            self.frequencyPlan = dialog.get_frequency_plan()
+
+            # Volvemos a calcular las respuestas de los resonadores y volvemos a graficar
+            self.list_BVD, self.list_COM = mat_bvd_com.update_frequency_plan(self.list_BVD, self.list_COM, self.frequencyPlan)
+            self.plot_admitance()
         
     def btn_readNetworkFile_clicked(self):
         try:
@@ -919,7 +945,7 @@ class MainWindow(QMainWindow):
                 self.radio_com.setEnabled(True)
                 self.radio_both.setEnabled(True)
 
-                self.plot_admitancia()
+                self.plot_admitance()
 
         except Exception as e:
             error_detallado = traceback.format_exc()
@@ -937,6 +963,7 @@ class MainWindow(QMainWindow):
                 self.label_mask_file.setText(f"Selected: {file_path_mask}")
                 self.label_mask_file.setStyleSheet("color: green; font-size: 14px;")
                 self.mask = fs.create_mask(file_path_mask)
+                self.plot_admitance()
                 # log_mask(self.mask)
 
         except Exception as e:
@@ -961,7 +988,7 @@ class MainWindow(QMainWindow):
                 self.combo_com.addItem(com.name)
             
             self.actualizar_formulario_com()
-            self.plot_admitancia()
+            self.plot_admitance()
 
         except Exception as e:
             error_detallado = traceback.format_exc()
@@ -1172,7 +1199,7 @@ class MainWindow(QMainWindow):
             self.filterCOM_ADS_Response = ads.extract_data_filter_COM(full_workspace_path)
             self.filterBVD_ADS_Response = ads.extract_data_filter_BVD(full_workspace_path)
             if not self.combo_elemento_graf.count() > len(self.list_BVD):
-                self.combo_elemento_graf.addItem("Full COM filter")
+                self.combo_elemento_graf.addItem("ADS filter simulation data")
             self.combo_elemento_graf.setCurrentIndex(len(self.list_BVD))
 
         except Exception as e:
@@ -1186,6 +1213,99 @@ class MainWindow(QMainWindow):
         
         QMessageBox.information(self, "Success", f"Workspace '{workspace_name}' created successfully in:\n{full_workspace_path}")
 
+class ConfigWindow(QDialog):
+    def __init__(self, frequency_plan: FrequencyPlan, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Frequency Settings")
+        self.setFixedWidth(240)
+        
+        # Guardar valores por defecto para la opción "Reset Default"
+        self.default_values = frequency_plan
+        
+        # Guardar valores actuales recibidos
+        self.current_values = frequency_plan
+
+        # 1. Crear campos (QLineEdit) editables
+        self.input_fstart = QLineEdit(formato_ingenieria(self.current_values.fstart, 3))
+        self.input_fstop = QLineEdit(formato_ingenieria(self.current_values.fstop, 3))
+        self.input_nsteps = QLineEdit(str(self.current_values.Nsteps))
+
+        # Aplicar formato/estilo básico
+        self.inputs = [self.input_fstart, self.input_fstop, self.input_nsteps]
+        for inp in self.inputs:
+            inp.setStyleSheet("padding: 4px; border: 1px solid #ccc; border-radius: 3px;")
+
+        # 2. Formulario principal dentro de un QGroupBox
+        self.form_layout = QFormLayout()
+        self.form_layout.addRow("fstart (Hz):", self.input_fstart)
+        self.form_layout.addRow("fstop (Hz):", self.input_fstop)
+        self.form_layout.addRow("Nsteps:", self.input_nsteps)
+
+        self.group_box = QGroupBox("Frequency Plan")
+        self.group_box.setLayout(self.form_layout)
+        self.group_box.setStyleSheet("""
+            QGroupBox {
+                border: 1px solid black;
+                border-radius: 5px;
+                margin-top: 10px;
+                padding-top: 10px;
+                color: black;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 3px 0 3px;
+            }
+        """)
+
+        # 3. Botones de acción
+        self.btn_update = QPushButton("Update")
+        self.btn_reset = QPushButton("Reset")
+        self.btn_cancel = QPushButton("Cancel")
+        
+        # Conectar señales de los botones
+        self.btn_update.clicked.connect(self.accept)       # Cierra y devuelve QDialog.Accepted
+        self.btn_reset.clicked.connect(self.reset_defaults)
+        self.btn_cancel.clicked.connect(self.reject)       # Cierra y devuelve QDialog.Rejected
+
+        # Layout horizontal para los botones
+        layout_botones = QHBoxLayout()
+        layout_botones.addWidget(self.btn_update)
+        layout_botones.addWidget(self.btn_reset)
+        layout_botones.addWidget(self.btn_cancel)
+
+        # Layout principal de la ventana modal
+        main_layout = QVBoxLayout(self)
+        main_layout.addWidget(self.group_box)  # Se agrega el QGroupBox en lugar de form_layout directamente
+        main_layout.addSpacing(15)
+        main_layout.addLayout(layout_botones)
+
+        # Centrar la ventana en la pantalla
+        self.center_on_screen()
+        self.aplicar_cursor_pointer()
+
+    def center_on_screen(self):
+        screen_geometry = QApplication.primaryScreen().geometry()
+        x = (screen_geometry.width() - self.width()) // 2
+        y = (screen_geometry.height() - self.height()) // 2
+        self.move(x, y)
+
+    def reset_defaults(self):
+        """Restablece los campos a los valores predeterminados."""
+        self.input_fstart.setText(formato_ingenieria(self.default_values.fstart, 3))
+        self.input_fstop.setText(formato_ingenieria(self.default_values.fstop, 3))
+        self.input_nsteps.setText(str(self.default_values.Nsteps))
+
+    def get_frequency_plan(self):
+        """Retorna un diccionario con los valores editados en el formulario."""
+        self.current_values = FrequencyPlan(float(self.input_fstart.text()),float(self.input_fstop.text()),int(self.input_nsteps.text()))
+        return self.current_values
+
+    def aplicar_cursor_pointer(self):
+            # 1. Buscamos todos los botones
+            botones = self.findChildren(QPushButton)
+            for boton in botones:
+                boton.setCursor(Qt.PointingHandCursor)
 
 def formato_ingenieria(valor, precision=8):
     if valor == 0:
