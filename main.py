@@ -14,7 +14,7 @@ from fs_utils import FrequencyPlan
 from PySide6.QtWidgets import (QApplication, QMainWindow, QPushButton, QWidget, QVBoxLayout, QHBoxLayout, 
                                QLabel, QLineEdit, QMessageBox, QGroupBox, QSizePolicy, QRadioButton, QButtonGroup,
                                QComboBox, QFormLayout, QCheckBox, QMenu, QDialog)
-from PySide6.QtCore import Qt, QSize
+from PySide6.QtCore import (Qt, QSize, QStandardPaths)
 from PySide6.QtGui import QAction
 
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
@@ -34,7 +34,6 @@ class MplCanvas(FigureCanvas):
         self.axes = self.fig.add_subplot(111)
         super().__init__(self.fig)
 
-USE_DEFAULT_WORKSPACE_NAME = True
 CREATE_DEBUGGING_SCHEMATIC = False
 
 DEFAULT_WORKSPACE_NAME = "unnamed_wrk"
@@ -45,6 +44,8 @@ DEFAULT_SUBSTRATE_NAME = "substrate_SAW"
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
+
+        self.workspace_name = None
 
         self.list_BVD = None
         self.list_COM = None
@@ -884,7 +885,18 @@ class MainWindow(QMainWindow):
     
     # ============================================================== FUNCIONES DE LOS BOTONES ==============================================================
     def on_save_data(self):
-        print("Guardando datos...")
+        self.workspace_name = self.input_workspace_name.text().strip()
+        if not self.workspace_name:
+            self.workspace_name = DEFAULT_WORKSPACE_NAME
+        if self.workspace_path is None:
+            export_path = QStandardPaths.writableLocation(QStandardPaths.DownloadLocation)
+        else:
+            export_path = self.workspace_path
+
+        if self.list_BVD is not None and self.list_COM is not None:
+            fs.export_project_to_ini(export_path, self.workspace_name, self.network_parameters, self.frequencyPlan, self.list_BVD, self.list_COM)
+        else:
+            QMessageBox.critical(self, "No data", "Error: No BVD or COM data. \n Select a network file first")
 
     def update_view(self):
         # 1. Visibilidad de los bloques internos
@@ -1111,23 +1123,20 @@ class MainWindow(QMainWindow):
             return
 
         # ====================================================== Obtener el nombre del workspace ======================================================
-        workspace_name = self.input_workspace_name.text().strip()
-        if not workspace_name:
-            if not USE_DEFAULT_WORKSPACE_NAME:
-                QMessageBox.critical(self, "Error", "Error: Input a workspace name first")
-                return
+        self.workspace_name = self.input_workspace_name.text().strip()
+        if not self.workspace_name:
             # Preguntar si quiere seguir con el default workspace name
             reply = QMessageBox.question(self, "Default Workspace Name", 
                                          "No workspace name introduced.\nDo you wish to continue with the default workspace name?", # Mensaje
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, # Botones disponibles
                 QMessageBox.StandardButton.No # Botón enfocado por defecto
             )
-            if reply == QMessageBox.StandardButton.Yes: workspace_name = DEFAULT_WORKSPACE_NAME
+            if reply == QMessageBox.StandardButton.Yes: self.workspace_name = DEFAULT_WORKSPACE_NAME
             else: return
 
         # Crear la ruta completa del workspace
-        full_workspace_path = self.workspace_path + "/" + workspace_name
-        library_name = workspace_name + "_lib"
+        full_workspace_path = self.workspace_path + "/" + self.workspace_name
+        library_name = self.workspace_name + "_lib"
 
         # ====================================================== Crear el workspace y la librería ======================================================
         try:
@@ -1211,7 +1220,7 @@ class MainWindow(QMainWindow):
                 error_detallado)
             return
         
-        QMessageBox.information(self, "Success", f"Workspace '{workspace_name}' created successfully in:\n{full_workspace_path}")
+        QMessageBox.information(self, "Success", f"Workspace '{self.workspace_name}' created successfully in:\n{full_workspace_path}")
 
 class ConfigWindow(QDialog):
     def __init__(self, frequency_plan: FrequencyPlan, parent=None):

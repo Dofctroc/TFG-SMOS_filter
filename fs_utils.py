@@ -1,7 +1,9 @@
 import os
 import re
-
+from pathlib import Path
 from PySide6.QtWidgets import (QApplication, QFileDialog)
+
+from bvd_com_computations import (BVD, COM, COMconstants)
 
 # ========================== VARIABLES Y CLASES GLOBALES ===========================
 class MASK_LIMIT():
@@ -212,3 +214,139 @@ def read_mask_limits(ruta_archivo):
             limites.append(limite)
     
     return limites
+
+def get_save_filepath(default_path: str) -> str:
+    """
+    Abre el diálogo 'Guardar como...' apuntando a una ruta por defecto 
+    (directorio + nombre de archivo sugerido).
+    """
+    app = QApplication.instance() or QApplication([])
+    
+    # Muestra el diálogo estándar de guardado preseleccionando el directorio y nombre
+    filepath, _ = QFileDialog.getSaveFileName(
+        None,
+        "Guardar configuración del filtro",
+        default_path,
+        "Archivos de texto (*.txt);;Archivos INI (*.ini);;Todos los archivos (*.*)"
+    )
+    return filepath
+
+
+def format_val(val: object) -> str:
+    """Convierte tipos de datos de NumPy/Python a representaciones limpias en texto."""
+    if val is None:
+        return "None"
+    
+    if hasattr(val, "item"):
+        val = val.item()
+        
+    if isinstance(val, complex):
+        sign = "+" if val.imag >= 0 else ""
+        return f"{val.real}{sign}{val.imag}j"
+        
+    return str(val)
+
+
+def format_array(values: list) -> str:
+    """Genera la cadena array([v1, v2, ...]) con valores limpios."""
+    formatted_elements = [format_val(v) for v in values]
+    items_str = ", ".join(
+        f"'{v}'" if isinstance(v, str) else str(v) 
+        for v in formatted_elements
+    )
+    return f"array([{items_str}])"
+
+
+def export_project_to_ini(
+    workspace_path: str,
+    workspace_name: str,
+    parameters: dict, 
+    freq_plan: FrequencyPlan, 
+    bvd_list: list[BVD], 
+    com_list: list[COM]
+) -> None:
+    # 1. Definir la ruta inicial predeterminada (workspace_path + nombre de archivo sugerido)
+    default_filename = f"{workspace_name}_filter_config.txt"
+    initial_full_path = os.path.join(workspace_path, default_filename)
+    
+    # 2. Abrir la interfaz de "Guardar como..." iniciando en workspace_path
+    filepath = get_save_filepath(initial_full_path)
+    
+    # Si el usuario cancela la ventana de diálogo (botón Cancelar o 'X')
+    if not filepath:
+        print("Operación de guardado cancelada por el usuario.")
+        return
+
+    lines = []
+
+    # 0. PARAMETROS GENERALES
+    lines.append("[BASIC_SETTINGS]")
+    lines.append(f"norder_ini = {format_val(parameters['norder_ini'])}")
+    lines.append(f"typeseriesshunt_ini = {parameters['typeseriesshunt_ini']}")
+    lines.append(f"matching_network = {format_val(parameters['matching_network'])}")
+    lines.append(f"mntype1 = {parameters['mntype1']}")
+    lines.append(f"input_l = {format_val(parameters['input_l'])}")
+    lines.append(f"lfini1 = {format_val(parameters['lfini1'])}")
+    lines.append(f"lfini2 = {format_val(parameters['lfini2'])}")
+    lines.append(f"cfini1 = {format_val(parameters['cfini1'])}")
+    lines.append(f"cfini2 = {format_val(parameters['cfini2'])}")
+    lines.append("")
+
+    # 1. FREQUENCY PLAN
+    lines.append("[FREQ_PLANS]")
+    lines.append(f"fstart1 = {format_val(freq_plan.fstart)}")
+    lines.append(f"fstop1 = {format_val(freq_plan.fstop)}")
+    lines.append(f"npoints1 = {format_val(freq_plan.Nsteps)}")
+    lines.append("")
+
+    # 2. BVD ELEMENTS
+    lines.append("[BVD_ELEMENTS]")
+    lines.append(f"count = {len(bvd_list)}")
+    if bvd_list:
+        lines.append(f"names = {[bvd.name for bvd in bvd_list]}")
+        lines.append(f"c0 = {format_array([bvd.c0 for bvd in bvd_list])}")
+        lines.append(f"cp = {format_array([bvd.cp for bvd in bvd_list])}")
+        lines.append(f"ca = {format_array([bvd.ca for bvd in bvd_list])}")
+        lines.append(f"la = {format_array([bvd.la for bvd in bvd_list])}")
+        lines.append(f"fs = {format_array([bvd.fs for bvd in bvd_list])}")
+        lines.append(f"fp = {format_array([bvd.fp for bvd in bvd_list])}")
+        lines.append(f"cadd_shu = {format_array([bvd.cadd_shu for bvd in bvd_list])}")
+        lines.append(f"ladd_shu = {format_array([bvd.ladd_shu for bvd in bvd_list])}")
+        lines.append(f"cadd_ser = {format_array([bvd.cadd_ser for bvd in bvd_list])}")
+        lines.append(f"ladd_ser = {format_array([bvd.ladd_ser for bvd in bvd_list])}")
+        lines.append(f"ladd_ground = {format_array([bvd.ladd_ground for bvd in bvd_list])}")
+        lines.append(f"rs = {format_array([bvd.rs for bvd in bvd_list])}")
+        lines.append(f"rp = {format_array([bvd.rp for bvd in bvd_list])}")
+        lines.append(f"ql = {format_array([bvd.ql for bvd in bvd_list])}")
+        lines.append(f"qc = {format_array([bvd.qc for bvd in bvd_list])}")
+        lines.append(f"qa = {format_array([bvd.qa for bvd in bvd_list])}")
+    lines.append("")
+
+    # 3. COM ELEMENTS
+    lines.append("[COM_ELEMENTS]")
+    lines.append(f"count = {len(com_list)}")
+    if com_list:
+        lines.append(f"names = {[com.name for com in com_list]}")
+        lines.append(f"d = {format_array([com.d for com in com_list])}")
+        lines.append(f"dR = {format_array([com.dR for com in com_list])}")
+        lines.append(f"Ap = {format_array([com.Ap for com in com_list])}")
+        lines.append(f"digitsN = {format_array([com.digitsN for com in com_list])}")
+        lines.append(f"digitsNR = {format_array([com.digitsNR for com in com_list])}")
+        lines.append(f"alpha = {format_array([com.alpha for com in com_list])}")
+        lines.append(f"alpha_n = {format_array([com.alpha_n for com in com_list])}")
+        lines.append(f"Ct = {format_array([com.Ct for com in com_list])}")
+        lines.append(f"fs = {format_array([com.fs for com in com_list])}")
+        lines.append(f"fp = {format_array([com.fp for com in com_list])}")
+        
+        # Atributos dentro del sub-objeto COMconstants
+        lines.append(f"k11 = {format_array([com.constants.k11 if com.constants else None for com in com_list])}")
+        lines.append(f"k12 = {format_array([com.constants.k12 if com.constants else None for com in com_list])}")
+        lines.append(f"vp = {format_array([com.constants.vp if com.constants else None for com in com_list])}")
+        lines.append(f"eps_r = {format_array([com.constants.eps_r if com.constants else None for com in com_list])}")
+        lines.append("")
+
+    # Guardar en el archivo dentro de la ruta especificada por el usuario
+    with open(filepath, "w", encoding="utf-8") as f:
+        f.write("\n".join(lines))
+        
+    print(f"Archivo guardado exitosamente en: {filepath}")
