@@ -5,26 +5,7 @@ from PySide6.QtWidgets import (QApplication, QFileDialog)
 
 from bvd_com_computations import (BVD, COM, COMconstants)
 
-# ========================== VARIABLES Y CLASES GLOBALES ===========================
-class MASK_LIMIT():
-    def __init__(self, fstart: float, fstop: float, value_dB: float, upper_lower: str, loss_type: str):
-        self.fstart = fstart
-        self.fstop = fstop
-        self.value_dB = value_dB
-        self.upper_lower = upper_lower
-        self.loss_type = loss_type
-
-class MASK():
-    def __init__(self, name: str, limits: list[MASK_LIMIT]):
-        self.name = name
-        self.limits = limits
-
-class FrequencyPlan():
-    def __init__(self, fstart: float, fstop: float, Nsteps: int):
-        self.fstart = fstart
-        self.fstop = fstop
-        self.Nsteps = Nsteps
-
+from models import *
 # ========================== FUNCIONES ===========================
 
 def select_workspace_path() -> str:
@@ -231,7 +212,6 @@ def get_save_filepath(default_path: str) -> str:
     )
     return filepath
 
-
 def format_val(val: object) -> str:
     """Convierte tipos de datos de NumPy/Python a representaciones limpias en texto."""
     if val is None:
@@ -246,7 +226,6 @@ def format_val(val: object) -> str:
         
     return str(val)
 
-
 def format_array(values: list) -> str:
     """Genera la cadena array([v1, v2, ...]) con valores limpios."""
     formatted_elements = [format_val(v) for v in values]
@@ -255,7 +234,6 @@ def format_array(values: list) -> str:
         for v in formatted_elements
     )
     return f"array([{items_str}])"
-
 
 def export_project_to_ini(
     workspace_path: str,

@@ -13,16 +13,9 @@ from keysight.ads import subst
 import keysight.ads.dds as dds
 import keysight.ads.dataset as dataset
 
-from bvd_com_computations import BVD
-from bvd_com_computations import COM
-from fs_utils import FrequencyPlan
+from models import *
 
-# ========================== VARIABLES Y CLASES GLOBALES ===========================
-class FilterResponse():
-    def __init__(self, Y=None, f=None):
-        self.Y = Y
-        self.f = f
-
+# ========================== VARIABLES GLOBALES ===========================
 CELL_BVD_LOSSY = "BVD_Lossy_symb"       # celda jerárquica (schematic+symbol)
 CELL_COM_LOSSY = "COM_Lossy_symb"       # celda jerárquica (schematic+symbol)
 CELL_FILTER_BVD = "Ladder_Filter_BVD"   # celda jerárquica (schematic)

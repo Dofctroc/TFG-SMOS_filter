@@ -1,9 +1,6 @@
 layout.prf
 saved.wrkstate
 schematic.prf
-__pycache__/ads_utils.cpython-313.pyc
-__pycache__/bvd_com_computations.cpython-313.pyc
-__pycache__/fs_utils.cpython-313.pyc
 navigator.opt
 search_history.log
 netlist.log
@@ -13,3 +10,7 @@ dds.cfg
 optimizacion.log
 mask.log
 COMSET_CRF.csv
+__pycache__/ads_utils.cpython-313.pyc
+__pycache__/bvd_com_computations.cpython-313.pyc
+__pycache__/fs_utils.cpython-313.pyc
+__pycache__/models.cpython-313.pyc

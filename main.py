@@ -9,7 +9,7 @@ import ads_utils as ads
 import fs_utils as fs
 import bvd_com_computations as mat_bvd_com
 
-from fs_utils import FrequencyPlan
+from models import *
 
 from PySide6.QtWidgets import (QApplication, QMainWindow, QPushButton, QWidget, QVBoxLayout, QHBoxLayout, 
                                QLabel, QLineEdit, QMessageBox, QGroupBox, QSizePolicy, QRadioButton, QButtonGroup,
@@ -46,6 +46,8 @@ class MainWindow(QMainWindow):
         super().__init__()
 
         self.workspace_name = None
+        self.full_workspace_path = None
+        self.library_name = None
 
         self.list_BVD = None
         self.list_COM = None
@@ -132,6 +134,12 @@ class MainWindow(QMainWindow):
         self.action_workspace = QAction("Select Workspace Directory", self)
         self.action_workspace.triggered.connect(self.btn_readDirectoy_clicked)
         file_menu.addAction(self.action_workspace)
+
+        file_menu.addSeparator() # Línea divisoria
+
+        self.action_update_plot_data = QAction("Update Visualization Data", self)
+        self.action_update_plot_data.triggered.connect(self.btn_update_plot_data)
+        file_menu.addAction(self.action_update_plot_data)
 
         file_menu.addSeparator() # Línea divisoria
 
@@ -508,28 +516,26 @@ class MainWindow(QMainWindow):
         self.form_layout_MN = QFormLayout()
         
         # Creamos los campos (QLineEdit)
-        self.input_inputL = QLineEdit()
         self.input_inputL_type = QLineEdit()
+        self.input_inputL = QLineEdit()
+        self.output_matchnetw_type = QLineEdit()
         self.input_Lfini = QLineEdit()
-        self.input_matchnetw_type = QLineEdit()
         self.input_Cfini = QLineEdit()
-        self.input_Cfini_type = QLineEdit()
         
         # Configuramos como "Solo lectura" y ponemos placeholders
-        self.campos_form_MN = [self.input_inputL, self.input_inputL_type, self.input_Lfini, self.input_matchnetw_type, 
-                    self.input_Cfini, self.input_Cfini_type]
+        self.campos_form_MN = [self.input_inputL, self.input_inputL_type, self.input_Lfini, self.output_matchnetw_type, 
+                    self.input_Cfini]
         for inp in self.campos_form_MN:
             inp.setReadOnly(True)
             inp.setPlaceholderText("---")
             inp.setStyleSheet("background-color: #f0f0f0; color: #555;")
 
         # Añadimos al layout del formulario
-        self.form_layout_MN.addRow("L_input (nH):", self.input_inputL)
         self.form_layout_MN.addRow("L_input type:", self.input_inputL_type)
+        self.form_layout_MN.addRow("L_input (nH):", self.input_inputL)
+        self.form_layout_MN.addRow("MN_output type:", self.output_matchnetw_type)
         self.form_layout_MN.addRow("L_output (nH):", self.input_Lfini)
-        self.form_layout_MN.addRow("L_output type:", self.input_matchnetw_type)
         self.form_layout_MN.addRow("C_output (pF):", self.input_Cfini)
-        self.form_layout_MN.addRow("C_output type:", self.input_Cfini_type)
 
         # 3. Montaje en el panel derecho
         # Limpiamos el layout_com por si acaso y añadimos
@@ -699,7 +705,6 @@ class MainWindow(QMainWindow):
         label_dataBVD = f"BVD - Element {idx + 1}"
         label_dataCOM = f"COM - Element {idx + 1}"
         label_dataFilterBVD = "BVD - Filter"
-        label_dataFilterCOM = "COM - Filter"
 
         # 2. Select data sources based on current combo box selection and radio button states
         if idx < order:
@@ -793,7 +798,7 @@ class MainWindow(QMainWindow):
         # 6. Process and plot total COM filter response
         if dataFilterCOM is not None:
             magnitud_Y_dB = 20 * np.log10(np.abs(dataFilterCOM.Y) + 1e-20)
-            self.canvas.axes.plot(dataFilterCOM.f, magnitud_Y_dB, label=label_dataFilterCOM, color=color_dataFilterCOM)
+            self.canvas.axes.plot(dataFilterCOM.f, magnitud_Y_dB, label=self.label_dataFilterCOM, color=color_dataFilterCOM)
 
         # 7. Process and plot Mask specifications
         if (dataFilterBVD is not None or dataFilterCOM is not None) and (self.mask is not None and self.checkb_mask.isChecked()):
@@ -801,27 +806,30 @@ class MainWindow(QMainWindow):
                 if dataFilterBVD is not None:
                     f_min = dataFilterBVD.f.min()
                     f_max = dataFilterBVD.f.max()
+                if dataFilterCOM is not None:
+                    f_min = dataFilterCOM.f.min()
+                    f_max = dataFilterCOM.f.max()
 
-                    for limit in self.mask.limits:
-                        if limit.loss_type != "S11":
-                            # Crop limit range to current visible window
-                            x_start = max(limit.fstart, f_min)
-                            x_stop = min(limit.fstop, f_max)
+                for limit in self.mask.limits:
+                    if limit.loss_type != "S11":
+                        # Crop limit range to current visible window
+                        x_start = max(limit.fstart, f_min)
+                        x_stop = min(limit.fstop, f_max)
 
-                            if x_start >= x_stop:
-                                continue
+                        if x_start >= x_stop:
+                            continue
 
-                            # Assign line color based on upper/lower bound
-                            color = "darkblue" if limit.upper_lower.lower() == "upper" else "darkred"
+                        # Assign line color based on upper/lower bound
+                        color = "darkblue" if limit.upper_lower.lower() == "upper" else "darkred"
 
-                            # Plot limit boundary as a dashed line
-                            self.canvas.axes.plot(
-                                [x_start, x_stop],
-                                [limit.value_dB, limit.value_dB],
-                                color=color,
-                                linewidth=1.2,
-                                linestyle='--'
-                            )
+                        # Plot limit boundary as a dashed line
+                        self.canvas.axes.plot(
+                            [x_start, x_stop],
+                            [limit.value_dB, limit.value_dB],
+                            color=color,
+                            linewidth=1.2,
+                            linestyle='--'
+                        )
             except Exception:
                 QMessageBox.critical(
                     self, 
@@ -896,7 +904,7 @@ class MainWindow(QMainWindow):
         if self.list_BVD is not None and self.list_COM is not None:
             fs.export_project_to_ini(export_path, self.workspace_name, self.network_parameters, self.frequencyPlan, self.list_BVD, self.list_COM)
         else:
-            QMessageBox.critical(self, "No data", "Error: No BVD or COM data. \n Select a network file first")
+            QMessageBox.critical(self, "No data", "Error: No BVD or COM data. \nSelect a network file first")
 
     def update_view(self):
         # 1. Visibilidad de los bloques internos
@@ -988,6 +996,35 @@ class MainWindow(QMainWindow):
             return
         return
 
+    def btn_readDirectoy_clicked(self):
+        try:
+            selected_path = fs.select_workspace_path()
+            if selected_path:
+                self.workspace_path = selected_path
+                self.label_workspace_path.setText(f"Selected: {self.workspace_path}")
+                self.label_workspace_path.setStyleSheet("color: green; font-size: 14px;")
+
+        except Exception as e:
+            error_detallado = traceback.format_exc()
+            QMessageBox.critical(self, "Error", 
+                f"Error importing Keysight ADS DE.\n\n"
+                f"Type: {type(e).__name__}\n"
+                f"Message: {str(e)}\n\n"+
+                error_detallado)
+            return
+
+    def btn_update_plot_data(self):
+        if self.combo_elemento_graf.count() > len(self.list_BVD):
+            self.filterCOM_ADS_Response = ads.extract_data_filter_COM(self.full_workspace_path)  
+            self.filterBVD_ADS_Response = ads.extract_data_filter_BVD(self.full_workspace_path)
+            self.label_dataFilterCOM = "COM - Filter (MODIFIED)"
+        else:
+            QMessageBox.critical(self, "No previous data", "Error: There is no previous workspace data. \nCreate a workspace for the first data extraction")
+            return
+        
+        self.combo_elemento_graf.setCurrentIndex(len(self.list_BVD))
+        self.plot_admitance()
+
     def convertBVD2COM(self):
         # Crear lista de BVD y convertir a lista COM
         try:
@@ -1032,41 +1069,24 @@ class MainWindow(QMainWindow):
         else:
             endBVD_type = "series" if startBVD_type == "series" else "shunt"
 
-        self.input_inputL.setText(str(self.network_parameters["input_l"]))
-        self.input_inputL_type.setText("series" if startBVD_type == "shunt" else "shunt")
+        self.input_inputL.setText(formato_ingenieria(float(self.network_parameters["input_l"])))
+        self.input_inputL_type.setText("Linput series" if startBVD_type == "shunt" else "Linput shunt")
 
         if matching_network_type == "0.0":
             # Output matching network is a single inductance
-            self.input_Lfini.setText(str(self.network_parameters["lfini2"]))
+            self.input_Lfini.setText(formato_ingenieria(float(self.network_parameters["lfini2"])))
             self.input_Cfini.setText("N/A")
-            self.input_matchnetw_type.setText("Single inductance in: " + "series" if endBVD_type == "shunt" else "shunt")
+            self.output_matchnetw_type.setText("Single inductance in: " + ("series" if endBVD_type == "shunt" else "shunt"))
         else:
             # Output has a LC matching network
             if mntype1 == "s":
-                self.input_Lfini.setText(str(self.network_parameters["lfini1"]))
-                self.input_Cfini.setText(str(self.network_parameters["cfini2"]))
-                self.input_matchnetw_type.setText("Lfini series + Cfini shunt")
+                self.output_matchnetw_type.setText("Lfini series + Cfini shunt")
+                self.input_Lfini.setText(formato_ingenieria(float(self.network_parameters["lfini1"])))
+                self.input_Cfini.setText(formato_ingenieria(float(self.network_parameters["cfini2"])))
             else:
-                self.input_Lfini.setText(str(self.network_parameters["lfini2"]))
-                self.input_Cfini.setText(str(self.network_parameters["cfini1"]))
-                self.input_matchnetw_type.setText("Cfini shunt + Lfini series")
-
-    def btn_readDirectoy_clicked(self):
-        try:
-            selected_path = fs.select_workspace_path()
-            if selected_path:
-                self.workspace_path = selected_path
-                self.label_workspace_path.setText(f"Selected: {self.workspace_path}")
-                self.label_workspace_path.setStyleSheet("color: green; font-size: 14px;")
-
-        except Exception as e:
-            error_detallado = traceback.format_exc()
-            QMessageBox.critical(self, "Error", 
-                f"Error importing Keysight ADS DE.\n\n"
-                f"Type: {type(e).__name__}\n"
-                f"Message: {str(e)}\n\n"+
-                error_detallado)
-            return
+                self.output_matchnetw_type.setText("Cfini shunt + Lfini series")
+                self.input_Lfini.setText(formato_ingenieria(float(self.network_parameters["lfini2"])))
+                self.input_Cfini.setText(formato_ingenieria(float(self.network_parameters["cfini1"])))
 
     def btn_createFullWorkspace_clicked(self):
         # ============================================= Verificaciones iniciales del flujo de trabajo =============================================
@@ -1135,12 +1155,12 @@ class MainWindow(QMainWindow):
             else: return
 
         # Crear la ruta completa del workspace
-        full_workspace_path = self.workspace_path + "/" + self.workspace_name
-        library_name = self.workspace_name + "_lib"
+        self.full_workspace_path = self.workspace_path + "/" + self.workspace_name
+        self.library_name = self.workspace_name + "_lib"
 
         # ====================================================== Crear el workspace y la librería ======================================================
         try:
-            if os.path.exists(full_workspace_path):
+            if os.path.exists(self.full_workspace_path):
                 reply = QMessageBox.question(self, "Overwrite workspace?", 
                                             "A workspace with the same name already exists at the specified path."+
                                             "\nDo you wish to overwrite it?", # Mensaje
@@ -1150,8 +1170,8 @@ class MainWindow(QMainWindow):
                 if reply == QMessageBox.StandardButton.No: 
                     return
 
-            workspace = ads.create_and_open_an_empty_workspace(full_workspace_path)
-            library = ads.create_a_library_and_add_it_to_the_workspace(workspace, library_name)
+            workspace = ads.create_and_open_an_empty_workspace(self.full_workspace_path)
+            library = ads.create_a_library_and_add_it_to_the_workspace(workspace, self.library_name)
         except Exception as e:
             error_detallado = traceback.format_exc()
             QMessageBox.critical(self, "Error", 
@@ -1165,8 +1185,8 @@ class MainWindow(QMainWindow):
         try:
             # inicio = time.time()       
             # =============================================== 0) Generate BVD and COM symbols ===============================================
-            ads.create_SchematicAndSymbol_lossyBVD(library, library_name)
-            ads.create_SchematicAndSymbol_lossyCOM(library, library_name)
+            ads.create_SchematicAndSymbol_lossyBVD(library, self.library_name)
+            ads.create_SchematicAndSymbol_lossyCOM(library, self.library_name)
             # log_tiempo(f"Paso 1 completado en: {time.time() - inicio:.2f} segundos")
 
             # =============================================== 1) Duplicate resonnators if necessary ===============================================
@@ -1184,32 +1204,34 @@ class MainWindow(QMainWindow):
 
             for com in list_COM_ADS:
                 if not (com.name.endswith("_2s") or com.name.endswith("_2p")):
-                    ads.create_busbars_layout(library, library_name, com)
+                    ads.create_busbars_layout(library, self.library_name, com)
             
             ads.create_smos_substrate(library, DEFAULT_SUBSTRATE_NAME)
 
             # ========================================== 2.1) Debugging and tunning schematic and DDS ==========================================
             if self.check_debug.isChecked():
-                ads.create_Schematic_debugging(full_workspace_path, library_name, self.frequencyPlan, list_BVD_ADS, list_COM_ADS)
+                ads.create_Schematic_debugging(self.full_workspace_path, self.library_name, self.frequencyPlan, list_BVD_ADS, list_COM_ADS)
                 # log_tiempo(f"Paso 2 completado en: {time.time() - inicio:.2f} segundos")
-                ads.create_DDS_debugging(full_workspace_path, int(self.network_parameters["norder_ini"]), self.network_parameters["typeseriesshunt_ini"])
+                ads.create_DDS_debugging(self.full_workspace_path, int(self.network_parameters["norder_ini"]), self.network_parameters["typeseriesshunt_ini"])
                 # log_tiempo(f"Paso 3 completado en: {time.time() - inicio:.2f} segundos")
 
             # ============================================ 3) Generate BVD and COM LADDER FILTERS ============================================
-            ads.create_Schematic_ladder_filters(full_workspace_path, library_name, self.dataset_s2p_file_path, 
+            ads.create_Schematic_ladder_filters(self.full_workspace_path, self.library_name, self.dataset_s2p_file_path, 
                                                 self.network_parameters, self.frequencyPlan, list_BVD_ADS, list_COM_ADS)
             # log_tiempo(f"Paso 4 completado en: {time.time() - inicio:.2f} segundos")
 
             # ========================================== 4) Generate BVD and COM filters' DDS pages ==========================================
-            ads.create_DDS_filters_schematic(full_workspace_path)
+            ads.create_DDS_filters_schematic(self.full_workspace_path)
             # log_tiempo(f"Paso 5 completado en: {time.time() - inicio:.2f} segundos")
 
             # ========================================== 5) Extract data from COM FILTER and plot ==========================================
-            self.filterCOM_ADS_Response = ads.extract_data_filter_COM(full_workspace_path)
-            self.filterBVD_ADS_Response = ads.extract_data_filter_BVD(full_workspace_path)
+            self.filterCOM_ADS_Response = ads.extract_data_filter_COM(self.full_workspace_path)
+            self.filterBVD_ADS_Response = ads.extract_data_filter_BVD(self.full_workspace_path)
             if not self.combo_elemento_graf.count() > len(self.list_BVD):
                 self.combo_elemento_graf.addItem("ADS filter simulation data")
+            self.label_dataFilterCOM = "COM - Filter"
             self.combo_elemento_graf.setCurrentIndex(len(self.list_BVD))
+            self.plot_admitance()
 
         except Exception as e:
             error_detallado = traceback.format_exc()
@@ -1220,7 +1242,7 @@ class MainWindow(QMainWindow):
                 error_detallado)
             return
         
-        QMessageBox.information(self, "Success", f"Workspace '{self.workspace_name}' created successfully in:\n{full_workspace_path}")
+        QMessageBox.information(self, "Success", f"Workspace '{self.workspace_name}' created successfully in:\n{self.full_workspace_path}")
 
 class ConfigWindow(QDialog):
     def __init__(self, frequency_plan: FrequencyPlan, parent=None):
