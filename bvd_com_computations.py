@@ -8,9 +8,6 @@ from scipy.optimize import least_squares
 from models import *
 
 # ========================== VARIABLES GLOBALES ===========================
-# K11_REAL = -82053.9
-# K11 = -82053.9 - 1j*450
-# K12 = 59340.0
 
 DIGITS_NR = 40
 NR = DIGITS_NR/2
@@ -21,10 +18,15 @@ DIGITS_NR_MAX = 80
 AP_MIN = 10
 AP_MAX = 30
 
-# VP = 3741.8
-# EPS_R = 39.56
+K11_REAL = -222995.2
+K11_ATT_CONSTANT = 1000
+K11 = -222995.2 - 1j*1000
+K12 = 104783.6
+
+VP = 3765.708
+EPS_R = 45.62
 EPS_0 = 8.854e-12
-DUTY = 0.55
+DUTY = 0.5
 
 # CONST = EPS_R * EPS_0 * np.exp(0.71866 * np.tan(1.966*(DUTY - 0.5)))
 
@@ -34,6 +36,8 @@ R_SERIE = 0.1
 
 N_POINTS_GRAPH = int(1e4)
 R_TERMG = 50
+
+READ_COMSET = False
 
 DO_FITTING = True
 
@@ -91,7 +95,15 @@ def compute_list_COM(list_BVD: list[BVD], frequency_plan: FrequencyPlan) -> list
 
     for bvd in list_BVD:
         com = COM()
-        com.constants = assign_COM_constants_from_excel(bvd)
+
+        # 0) ============= PARAMETROS GENERALES =============
+        if READ_COMSET:
+            com.constants = assign_COM_constants_from_excel(bvd)
+        else:
+            com.constants = assign_default_COM_constants()
+
+        com.rs = R_SERIE
+        com.rp = R_SHUNT
 
         # 1) ============= CÁLCULO DEL PITCH =============
         com = compute_pitch_COM(bvd, com)
@@ -235,13 +247,15 @@ def compute_pitch_COM(bvd: BVD, com: COM) -> COM:
 
 def compute_Nidt_Aperture_COM(com: COM) -> COM:
     eps_r = com.constants.eps_r
+    eps_0 = com.constants.eps_0
+    duty = com.constants.duty
 
     # Primer cálculo de Aperture
     Ct = com.Ct
     lambda0 = 2*com.d
     Nidt = 150
 
-    const = eps_r * EPS_0 * np.exp(0.71866 * np.tan(1.966*(DUTY - 0.5)))
+    const = eps_r * eps_0 * np.exp(0.71866 * np.tan(1.966*(duty - 0.5)))
 
     Ap = Ct / (Nidt * const) / lambda0
     
@@ -322,6 +336,8 @@ def reajuste_pitch(bvd: BVD, com: COM) -> COM:
 
 def reajuste_Ap_Nidt(bvd: BVD, com: COM) -> COM:
     eps_r = com.constants.eps_r
+    eps_0 = com.constants.eps_0
+    duty = com.constants.duty
 
     # Tomamos los primeros valores de la admitancia (fuera banda)
     nivel_bvd = np.mean(np.abs(bvd.Y[:max(1, int(len(bvd.Y) * 0.01))]))
@@ -336,7 +352,7 @@ def reajuste_Ap_Nidt(bvd: BVD, com: COM) -> COM:
     lambda0 = 2 * com.d
     Nidt = com.digitsN / 2
     
-    const = eps_r * EPS_0 * np.exp(0.71866 * np.tan(1.966*(DUTY - 0.5)))
+    const = eps_r * eps_0 * np.exp(0.71866 * np.tan(1.966*(duty - 0.5)))
 
     Ct = Ap_temp * lambda0 * Nidt * const
     com.Ct = Ct
@@ -634,8 +650,10 @@ def calcular_ZinR_reflector(com: COM, f: list[float]) -> list[float]:
 
 def ajustar_Ap_Nidt_dentro_rango(com: COM) -> COM:
     eps_r = com.constants.eps_r
+    eps_0 = com.constants.eps_0
+    duty = com.constants.duty
 
-    const = eps_r * EPS_0 * np.exp(0.71866 * np.tan(1.966*(DUTY - 0.5)))
+    const = eps_r * eps_0 * np.exp(0.71866 * np.tan(1.966*(duty - 0.5)))
 
     # Calculamos la nueva Ap y Nidt 
     # Hace falta valores de Nidt y de Ct predefinidos !!
@@ -731,4 +749,18 @@ def assign_COM_constants_from_excel(bvd: BVD) -> COMconstants:
 
     return constants
     
+def assign_default_COM_constants() -> None:
 
+    k11 = K11
+    k11_real = K11_REAL
+    k11_att_cte = K11_ATT_CONSTANT
+    k12 = K12
+    vp = VP
+    eps_r_eff = EPS_R
+    eps_0 = EPS_0
+    duty = DUTY
+
+    constants = COMconstants(k11=k11, k11_real=k11_real, k11_att_cnst=k11_att_cte, k12=k12, 
+                             vp=vp, eps_r=eps_r_eff, eps_0 = eps_0, duty=duty)
+
+    return constants

@@ -47,17 +47,21 @@ class BVD():
         self.f = f
 
 class COMconstants():
-    def __init__(self, k11, k12, vp, eps_r):
+    def __init__(self, k11, k11_real, k11_att_cnst, k12, vp, eps_r, eps_0, duty):
         self.k11 = k11
+        self.k11_real = k11_real
+        self.k11_att_cnst = k11_att_cnst
         self.k12 = k12
         self.vp = vp
         self.eps_r = eps_r
+        self.eps_0 = eps_0
+        self.duty = duty
 
 class COM():
     def __init__(self, name: str = None, d: float = None, dR: float = None, Ap: float = None, 
         digitsN: int = None, digitsNR: int = None, fs: float = None, fp: float = None, 
-        alpha: float = None, alpha_n: float = None, Ct: float = None, Y = None, f = None,
-        constants: COMconstants = None):
+        alpha: float = None, alpha_n: float = None, Ct: float = None, rs: float = None, rp: 
+        float = None,Y = None, f = None, constants: COMconstants = None):
         self.name = name
         self.d = d
         self.dR = dR
@@ -69,6 +73,8 @@ class COM():
         self.Ct = Ct
         self.fs = fs
         self.fp = fp
+        self.rs = rs
+        self.rp = rp
         self.Y = Y
         self.f = f
         self.constants = constants

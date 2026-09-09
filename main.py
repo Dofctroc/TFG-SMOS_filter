@@ -8,6 +8,7 @@ import os
 import ads_utils as ads
 import fs_utils as fs
 import bvd_com_computations as mat_bvd_com
+import models as mod
 
 from models import *
 
@@ -25,6 +26,7 @@ import numpy as np
 importlib.reload(ads)
 importlib.reload(fs)
 importlib.reload(mat_bvd_com)
+importlib.reload(mod)
 
 # ========================== VARIABLES GLOBALES ===========================
 class MplCanvas(FigureCanvas):
@@ -399,18 +401,6 @@ class MainWindow(QMainWindow):
         self.layout_central_total.addStretch(1)
 
     def setup_com_formLayout(self):
-        K11 = -82053.9 - 1j*450
-        K12 = 59340.0
-
-        VP = 3741.8
-        EPS_R = 39.56
-        EPS_0 = 8.854e-12
-        DUTY = 0.55
-
-        Z0_PRIMA = 1
-        R_SHUNT = 4e5
-        R_SERIE = 0.1
-
         # 1. El Desplegable (Selector)
         self.combo_com = QComboBox()
         self.combo_com.setFixedWidth(200)
@@ -487,16 +477,6 @@ class MainWindow(QMainWindow):
         # self.form_layout_constCOM.addRow("Z0' (Ω):", self.input_Z0_PRIMA)
         self.form_layout_constCOM.addRow("Rp (Ω):", self.input_R_SHUNT)
         self.form_layout_constCOM.addRow("Rs (Ω):", self.input_R_SERIE)
-        
-        self.input_K11.setText(str(K11))
-        self.input_K12.setText(str(K12))
-        self.input_VP.setText(str(VP))
-        self.input_EPS_R.setText(str(EPS_R))
-        self.input_EPS_0.setText(str(EPS_0))
-        self.input_DUTY.setText(str(DUTY))
-        self.input_Z0_PRIMA.setText(str(Z0_PRIMA))
-        self.input_R_SHUNT.setText(str(R_SHUNT))
-        self.input_R_SERIE.setText(str(R_SERIE))
 
         # 3. Montaje en el panel derecho
         # Limpiamos el layout_com por si acaso y añadimos
@@ -616,10 +596,15 @@ class MainWindow(QMainWindow):
         self.input_fs_COM.setText(formato_ingenieria(com_seleccionado.fs))
         self.input_fp_COM.setText(formato_ingenieria(com_seleccionado.fp))
 
-        self.input_VP.setText(str(com_seleccionado.constants.vp))
         self.input_K11.setText(str(com_seleccionado.constants.k11))
         self.input_K12.setText(str(com_seleccionado.constants.k12))
+        self.input_VP.setText(str(com_seleccionado.constants.vp))
         self.input_EPS_R.setText(str(com_seleccionado.constants.eps_r))
+        self.input_EPS_0.setText(str(com_seleccionado.constants.eps_0))
+        self.input_DUTY.setText(str(com_seleccionado.constants.duty))
+        self.input_Z0_PRIMA.setText(str(1))
+        self.input_R_SERIE.setText(str(com_seleccionado.rs))
+        self.input_R_SHUNT.setText(str(com_seleccionado.rp))
 
     def setup_graph_panel(self):
         # Usamos el layout que ya definiste en el __init__
@@ -1186,7 +1171,7 @@ class MainWindow(QMainWindow):
             # inicio = time.time()       
             # =============================================== 0) Generate BVD and COM symbols ===============================================
             ads.create_SchematicAndSymbol_lossyBVD(library, self.library_name)
-            ads.create_SchematicAndSymbol_lossyCOM(library, self.library_name)
+            ads.create_SchematicAndSymbol_lossyCOM(library, self.library_name, self.list_COM[0])
             # log_tiempo(f"Paso 1 completado en: {time.time() - inicio:.2f} segundos")
 
             # =============================================== 1) Duplicate resonnators if necessary ===============================================

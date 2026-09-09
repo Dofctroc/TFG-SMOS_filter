@@ -294,7 +294,7 @@ def create_SchematicAndSymbol_lossyBVD(library: de.Library, library_name: str) -
     design.save_design()
     design = None
 
-def create_SchematicAndSymbol_lossyCOM(library: de.Library, library_name: str) -> None:
+def create_SchematicAndSymbol_lossyCOM(library: de.Library, library_name: str, com: COM) -> None:
     # ============================================= 1) Schematic interno losstCOM =============================================
     assert de.version() >= 630
 
@@ -354,14 +354,14 @@ def create_SchematicAndSymbol_lossyCOM(library: de.Library, library_name: str) -
 
         # Instances
         inst = design.add_var_instance(name="Consts1", origin=(-9.0, 1.75))
-        inst.vars.update({'duty': '0.55', 'eps0': '8.8541878176e-12', 'Z0_prima': '1'})
+        inst.vars.update({'duty': str(com.constants.duty), 'eps0': str(com.constants.eps_0), 'Z0_prima': '1'})
         # Since inst.vars does not contain 'X', we need to remove the first repeat.
         param = inst.parameters[0]
         assert isinstance(param, db.ParamRepeated)
         del(param.repeats[0])
 
         inst = design.add_var_instance(name="Consts2", origin=(-9.0, -0.25))
-        inst.vars.update({'Rseries': '0.1', 'Rshunt': '400000', 'alphaC': '450'})
+        inst.vars.update({'Rseries': str(com.rs), 'Rshunt': str(com.rp), 'alphaC': str(com.constants.k11_att_cnst)})
         # Since inst.vars does not contain 'X', we need to remove the first repeat.
         param = inst.parameters[0]
         assert isinstance(param, db.ParamRepeated)
