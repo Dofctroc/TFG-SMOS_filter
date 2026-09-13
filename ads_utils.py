@@ -26,6 +26,8 @@ CELL_BUSBAR_LAYOUT = "Busbar_layout"
 
 BVD_FILTER_STARTING_PIN = 1
 COM_FILTER_STARTING_PIN = 3
+BUSBAR_COM_STARTING_PIN = 5
+TOUCHSTONE_STARTING_PIN = 7
 
 # ========================== FUNCIONES ===========================
 
@@ -614,9 +616,8 @@ def create_SchematicAndSymbol_lossyCOM(library: de.Library, library_name: str, c
     design.save_design()
     design = None
 
-def create_Schematic_ladder_filters(
-        workspace_path: str, library_name: str, dataset_s2p_path: str, 
-        parameters: dict, frequency_plan: FrequencyPlan, list_BVD: list[BVD], list_COM: list[COM]) -> None:
+def create_Schematic_ladder_filters(workspace_path: str, library_name: str, dataset_s2p_path: str, 
+                                    parameters: dict, frequency_plan: FrequencyPlan, list_BVD: list[BVD], list_COM: list[COM]) -> None:
     assert de.version() >= 630
 
     design = db.create_schematic(f"{library_name}:{CELL_FILTER}:schematic")
@@ -631,8 +632,8 @@ def create_Schematic_ladder_filters(
 
         # =========================================== Sparameters Data Item for Comparison ===========================================
         if dataset_s2p_path is not None:
-            inst = design.add_instance("ads_simulation:TermG", name="TermG5", origin=(6.0, 3.0), angle=-90.0)
-            inst.parameters["Num"].value = "5"
+            inst = design.add_instance("ads_simulation:TermG", name=f"TermG{TOUCHSTONE_STARTING_PIN}", origin=(6.0, 3.0), angle=-90.0)
+            inst.parameters["Num"].value = f"{TOUCHSTONE_STARTING_PIN}"
             inst.update_item_annotation()
             design.add_wire([PointF(6.0, 3.0), PointF(7.0, 3.0)])
 
@@ -647,8 +648,8 @@ def create_Schematic_ladder_filters(
             inst.update_item_annotation()
 
             design.add_wire([PointF(7.75, 3.0), PointF(9.0, 3.0)])
-            inst = design.add_instance("ads_simulation:TermG", name="TermG6", origin=(9.0, 3.0), angle=-90.0)
-            inst.parameters["Num"].value = "6"
+            inst = design.add_instance("ads_simulation:TermG", name=f"TermG{TOUCHSTONE_STARTING_PIN+1}", origin=(9.0, 3.0), angle=-90.0)
+            inst.parameters["Num"].value = f"{TOUCHSTONE_STARTING_PIN+1}"
             inst.update_item_annotation()
 
 
@@ -681,6 +682,12 @@ def create_Schematic_ladder_filters(
         initial_ypos_COM = -4
         initial_TermG_COM = COM_FILTER_STARTING_PIN
         build_ladder_filter_circuit_COM(design, initial_xpos_COM, initial_ypos_COM, initial_TermG_COM, parameters, list_COM, library_name)
+
+        # =========================================== busbar+COM ladder filter build ===========================================
+        initial_xpos_busbarCOM = 0
+        initial_ypos_busbarCOM = -9
+        initial_TermG_busbarCOM = BUSBAR_COM_STARTING_PIN
+        build_ladder_filter_circuit_busbar_COM(design, initial_xpos_busbarCOM, initial_ypos_busbarCOM, initial_TermG_busbarCOM, parameters, list_COM, library_name)
 
 
         # FINISH
@@ -1019,9 +1026,165 @@ def build_ladder_filter_circuit_COM(design: db.Design, initial_xpos: int, initia
 
     return
 
-def create_Schematic_debugging(
-        workspace_path: str, library_name: str, frequency_plan: FrequencyPlan, 
-        list_BVD: list[BVD], list_COM: list[COM]) -> None:
+def build_ladder_filter_circuit_busbar_COM(design: db.Design, initial_xpos: int, initial_ypos: int, initial_TermG: int, parameters: dict, list_COM: list[COM], library_name: str) -> None:
+    # READ Basic Ladder parameters
+    order = int(parameters["norder_ini"])
+    startCOM_type = parameters["typeseriesshunt_ini"]
+    endCOM_type = ""
+
+    # Determine the type of the last COM based on the order and the type of the first COM
+    if order % 2 == 0:
+        endCOM_type = "shunt" if startCOM_type == "series" else "series"
+    else:
+        endCOM_type = "series" if startCOM_type == "series" else "shunt"
+
+    # READ Matching network parameters
+    matching_network = parameters["matching_network"]
+    mntype1 = parameters["mntype1"]
+    input_l = parameters["input_l"]
+    lfini1 = parameters["lfini1"]
+    lfini2 = parameters["lfini2"]
+    cfini1 = parameters["cfini1"]
+    cfini2 = parameters["cfini2"]
+    
+    # Grid position parameters
+    xpos = initial_xpos
+    ypos = initial_ypos
+
+    x_margin = 1.5
+    y_margin = 1.5
+
+    num_COM = 0
+    ground_count = 1  # Contador dedicado para tierras únicas (G1, G2, G3...)
+
+    # =========================================== Ladder Filter of Lossy COMs ===========================================
+    instantiate_term_g(design, f"TermG{initial_TermG}", initial_TermG, (xpos, ypos))
+
+    # INPUT MATCHING NETWORK (Renombrados con _busbarCOM)
+    if startCOM_type == "series":
+        d = Decimal(input_l)
+        if d.adjusted() > -10:
+            xpos = advance_x(design, xpos, ypos, x_margin)
+            instantiate_rflib_element(design, "L", "L_input_busbarCOM", (xpos, ypos), input_l + "H", -90.0)
+            instantiate_ground(design, f"G{ground_count}_busbarCOM", (xpos, ypos - 1.0))
+            ground_count += 1
+        xpos = advance_x(design, xpos, ypos, x_margin)
+    else:
+        xpos = advance_x(design, xpos, ypos, x_margin)
+        instantiate_rflib_element(design, "L", "L_input_busbarCOM", (xpos, ypos), input_l + "H", 0.0)
+        xpos += 1
+        xpos = advance_x(design, xpos, ypos, x_margin) # Sumamos 1.0 por el tamaño del inductor
+
+    ypos = initial_ypos
+
+    # ÚNICO BUCLE COM LADDER (Maneja el primero y todos los demás)
+    current_COM_type = startCOM_type
+    while num_COM < len(list_COM):
+        xpos = advance_x(design, xpos, ypos, x_margin)
+
+        angle_COM = 0.0 if current_COM_type == "series" else -90.0
+
+        xpos, ypos = instantiate_busbar_and_COM_in_schematic(design, library_name, list_COM, num_COM, angle_COM, (xpos, ypos))
+        
+        if current_COM_type == "shunt" and not list_COM[num_COM].name.endswith("_1s"):
+            instantiate_ground(design, f"G{ground_count}_busbarCOM", (xpos, ypos))
+            ground_count += 1
+
+        duplicate = False
+
+        if list_COM[num_COM].name.endswith("_1s"):
+            duplicate = True
+            if current_COM_type == "series":
+                xpos = advance_x(design, xpos, ypos, x_margin)
+                angle_COM = 0.0
+            else:
+                design.add_wire([PointF(xpos, ypos), PointF(xpos, ypos - y_margin)])
+                ypos -= y_margin
+                ground_count += 1
+                angle_COM = -90.0
+
+        elif list_COM[num_COM].name.endswith("_1p"):
+            duplicate = True
+            if current_COM_type == "series":
+                xpos -= 1.0
+                design.add_wire([PointF(xpos, ypos), PointF(xpos, ypos - y_margin*2)])
+                design.add_wire([PointF(xpos + 1.0, ypos), PointF(xpos + 1.0, ypos - y_margin)])
+                ypos -= y_margin*2
+                angle_COM = 0.0
+            else:
+                ypos += 2.0
+                xpos = advance_x(design, xpos, ypos, x_margin*2)
+                advance_x(design, xpos - x_margin*2, ypos - 2.0, x_margin*2) # Wire inferior
+                angle_COM = -90.0
+
+        # Instanciamos el resonador duplicado
+        if duplicate:
+            num_COM += 1
+            xpos, ypos = instantiate_busbar_and_COM_in_schematic(design, library_name, list_COM, num_COM, angle_COM, (xpos, ypos))
+
+            if list_COM[num_COM].name.endswith("_1s") and current_COM_type == "shunt":
+                    instantiate_ground(design, f"G{ground_count}_busbarCOM", (xpos, ypos))
+
+        ypos = initial_ypos
+        xpos = advance_x(design, xpos, ypos, x_margin)
+        num_COM += 1
+        current_COM_type = "shunt" if current_COM_type == "series" else "series"
+
+    # OUTPUT MATCHING NETWORK (Renombrados con _COM)
+    xpos = advance_x(design, xpos, ypos, x_margin)
+
+    if matching_network == "0.0":
+        # INDUCTANCE TERMINATION - Add inductor
+        if endCOM_type == "series":
+            # Bobina en shunt (lfini2)
+            if float(lfini2) > 0.0:
+                instantiate_rflib_element(design, "L", "L_output_busbarCOM", (xpos, ypos), lfini2 + "H", -90.0)
+                instantiate_ground(design, f"G{ground_count}_busbarCOM", (xpos, ypos - 1.0))
+                ground_count += 1
+            xpos = advance_x(design, xpos, ypos, x_margin*2)
+
+        else:
+            # Bobina en serie (lfini2)
+            if float(lfini2) > 0.0:
+                instantiate_rflib_element(design, "L", "L_output_busbarCOM", (xpos, ypos), lfini2 + "H", 0.0)
+                xpos += 1.0 # Sumamos 1.0 por el tamaño del componente
+            xpos = advance_x(design, xpos, ypos, x_margin)
+
+    else:
+        # CL/LC MATCHING NETWORK - Add the matching network for the output
+        if mntype1 == "s":
+            # Bobina Serie (lfini1) seguida de Condensador Shunt (Cfini2)
+            if float(lfini1) > 0.0:
+                instantiate_rflib_element(design, "L", "L_output1_busbarCOM", (xpos, ypos), lfini1 + "H", 0.0)
+                xpos += 1.0
+            xpos = advance_x(design, xpos, ypos, x_margin)
+
+            if float(cfini2) > 0.0:
+                instantiate_rflib_element(design, "C", "C_output2_busbarCOM", (xpos, ypos), cfini2 + "F", -90.0)
+                instantiate_ground(design, f"G{ground_count}_busbarCOM", (xpos, ypos - 1.0))
+                ground_count += 1
+            xpos = advance_x(design, xpos, ypos, x_margin*2)
+
+        else:
+            # Condensador Shunt (Cfini1) seguido de Bobina Serie (lfini2)
+            if float(cfini1) > 0.0:
+                instantiate_rflib_element(design, "C", "C_output1_busbarCOM", (xpos, ypos), cfini1 + "F", -90.0)
+                instantiate_ground(design, f"G{ground_count}_busbarCOM", (xpos, ypos - 1.0))
+                ground_count += 1
+            xpos = advance_x(design, xpos, ypos, x_margin*2)
+
+            if float(lfini2) > 0.0:
+                instantiate_rflib_element(design, "L", "L_output2_busbarCOM", (xpos, ypos), lfini2 + "H", 0.0)
+                xpos += 1.0
+            xpos = advance_x(design, xpos, ypos, x_margin)
+
+    # TermG2
+    instantiate_term_g(design, f"TermG{initial_TermG+1}", initial_TermG+1, (xpos, ypos))
+
+    return
+
+def create_Schematic_debugging(workspace_path: str, library_name: str, frequency_plan: FrequencyPlan, 
+                               list_BVD: list[BVD], list_COM: list[COM]) -> None:
     assert de.version() >= 630
 
     design = db.create_schematic(f"{library_name}:{CELL_DEBUG}:schematic")
@@ -1169,7 +1332,8 @@ def create_DDS_filters_schematic(workspace_path: str) -> None:
     traces_plot1 = [
         f"dB({dataset_name}..S(1,1))", 
         f"dB({dataset_name}..S(3,3))", 
-        f"dB({dataset_name}..S(5,5))"
+        f"dB({dataset_name}..S(5,5))", 
+        f"dB({dataset_name}..S(7,7))"
     ]
     plot1 = page.add_plot((plot_width, plot_height), traces_plot1, "Return Loss")
     # Lo movemos explícitamente al origen (opcional, suele ser el default)
@@ -1179,7 +1343,8 @@ def create_DDS_filters_schematic(workspace_path: str) -> None:
     traces_plot2 = [
         f"dB({dataset_name}..S(2,1))",  
         f"dB({dataset_name}..S(4,3))",
-        f"dB({dataset_name}..S(6,5))"
+        f"dB({dataset_name}..S(6,5))",
+        f"dB({dataset_name}..S(8,7))"
     ]
     plot2 = page.add_plot((plot_width, plot_height), traces_plot2, "Insertion Loss")
 
@@ -1337,7 +1502,7 @@ def print_data_txt(output_data: any, output_dir: any, dataset_name: any) -> None
     return
 
 # ===================================== CREATION OF LAYOUT FUNCTIONS =====================================
-def create_busbars_layout(library: de.Library, library_name: str, com: COM) -> None:
+def create_busbars_layout_and_symbol(library: de.Library, library_name: str, com: COM) -> None:
     assert de.version() >= 630
 
     design = db.create_layout(f"{library_name}:{CELL_BUSBAR_LAYOUT}_{com.name}:layout")
@@ -1411,36 +1576,38 @@ def create_busbars_layout(library: de.Library, library_name: str, com: COM) -> N
         # Terms
         net = design.add_net("P1")
         term = design.add_term(net, "P1")
-        shape = design.add_dot(db.LayerId(229), loc=PointF(0.0, 0.5))
-        pin = design.add_pin(term, shape, angle=90.0, add_annot=False)
+        shape = design.add_dot(db.LayerId(229), loc=PointF(0.0, 0.0))
+        pin = design.add_pin(term, shape, angle=-180.0, add_annot=False)
 
         net = design.add_net("P2")
         term = design.add_term(net, "P2")
-        shape = design.add_dot(db.LayerId(229), loc=PointF(0.0, -1.5))
-        pin = design.add_pin(term, shape, angle=-90.0, add_annot=False)
+        shape = design.add_dot(db.LayerId(229), loc=PointF(2.0, 0.0))
+        pin = design.add_pin(term, shape, add_annot=False)
 
         net = design.add_net("P3")
         term = design.add_term(net, "P3")
-        shape = design.add_dot(db.LayerId(229), loc=PointF(0.0, 0.0))
-        pin = design.add_pin(term, shape, angle=-90.0, add_annot=False)
+        shape = design.add_dot(db.LayerId(229), loc=PointF(0.5, 0.0))
+        pin = design.add_pin(term, shape, add_annot=False)
 
         net = design.add_net("P4")
         term = design.add_term(net, "P4")
-        shape = design.add_dot(db.LayerId(229), loc=PointF(0.0, -1.0))
-        pin = design.add_pin(term, shape, angle=90.0, add_annot=False)
+        shape = design.add_dot(db.LayerId(229), loc=PointF(1.5, 0.0))
+        pin = design.add_pin(term, shape, angle=-180.0, add_annot=False)
 
         # Shapes
-        points = [PointF(x=1.375, y=-1.0), PointF(x=-1.375, y=-1.0), PointF(x=-1.375, y=-1.25), PointF(x=1.375, y=-1.25)]
-        shape = design.add_polygon(db.LayerId(1), polygon=points)
+        points = [PointF(x=0.5, y=-1.375), PointF(x=0.5, y=1.375), PointF(x=0.25, y=1.375), PointF(x=0.25, y=-1.375)]
+        shape = design.add_polygon(db.LayerId(1), polygon=points, arc_resolution=5.0)
+        points = [PointF(x=0.25, y=-0.375), PointF(x=0.25, y=0.375), PointF(x=0.0, y=0.375), PointF(x=0.0, y=-0.375)]
+        shape = design.add_polygon(db.LayerId(1), polygon=points, arc_resolution=5.0)
+        points = [PointF(x=1.75, y=0.375), PointF(x=1.75, y=-0.375), PointF(x=2.0, y=-0.375), PointF(x=2.0, y=0.375)]
+        shape = design.add_polygon(db.LayerId(1), polygon=points, arc_resolution=5.0)
+        points = [PointF(x=1.5, y=1.375), PointF(x=1.5, y=-1.375), PointF(x=1.75, y=-1.375), PointF(x=1.75, y=1.375)]
+        shape = design.add_polygon(db.LayerId(1), polygon=points, arc_resolution=5.0)
 
-        points = [PointF(x=0.375, y=-1.25), PointF(x=-0.375, y=-1.25), PointF(x=-0.375, y=-1.5), PointF(x=0.375, y=-1.5)]
-        shape = design.add_polygon(db.LayerId(1), polygon=points)
-
-        points = [PointF(x=-0.375, y=0.25), PointF(x=0.375, y=0.25), PointF(x=0.375, y=0.5), PointF(x=-0.375, y=0.5)]
-        shape = design.add_polygon(db.LayerId(1), polygon=points)
-
-        points = [PointF(x=-1.375, y=0.0), PointF(x=1.375, y=0.0), PointF(x=1.375, y=0.25), PointF(x=-1.375, y=0.25)]
-        shape = design.add_polygon(db.LayerId(1), polygon=points)
+        shape = design.add_text(db.LayerId(237, 244), "P1", PointF(0.0375, -0.00625), "Arial For CAE", 0.06875, is_drafting=False)
+        shape = design.add_text(db.LayerId(237, 244), "P2", PointF(1.875, -0.00625), "Arial For CAE", 0.06875, is_drafting=False)
+        shape = design.add_text(db.LayerId(237, 244), "P4", PointF(1.5375, -0.00625), "Arial For CAE", 0.06875, is_drafting=False)
+        shape = design.add_text(db.LayerId(237, 244), "P3", PointF(0.38125, -0.00625), "Arial For CAE", 0.06875, is_drafting=False)
 
         transaction.commit()
 
@@ -1532,38 +1699,77 @@ def instantiate_rflib_element(design: object, element_type: str, name: str, orig
 
 def instantiate_BVD_in_schematic(design: object, library_name: str, list_BVD: list[BVD], 
                                  num_BVD: int, angle_BVD: float, origin: tuple[float, float]) -> None:
-    inst = design.add_instance((library_name, CELL_BVD_LOSSY, "symbol"), origin=origin, name=list_BVD[num_BVD].name, angle=angle_BVD)
-    inst.parameters["Cp"].value = str(list_BVD[num_BVD].cp)
-    inst.parameters["Ca"].value = str(list_BVD[num_BVD].ca)
-    inst.parameters["La"].value = str(list_BVD[num_BVD].la)
-    inst.parameters["Ladd_ser"].value = str(list_BVD[num_BVD].ladd_ser if list_BVD[num_BVD].ladd_ser != 0.0 else 1e-20)
-    inst.parameters["Ladd_shu"].value = str(list_BVD[num_BVD].ladd_shu if list_BVD[num_BVD].ladd_shu != 0.0 else 1e-20)
-    inst.parameters["Cadd_ser"].value = str(list_BVD[num_BVD].cadd_ser if list_BVD[num_BVD].cadd_ser != 0.0 else 1e-20)
-    inst.parameters["Cadd_shu"].value = str(list_BVD[num_BVD].cadd_shu if list_BVD[num_BVD].cadd_shu != 0.0 else 1e-20)
-    inst.parameters["Ladd_ground"].value = str(list_BVD[num_BVD].ladd_ground if list_BVD[num_BVD].ladd_ground != 0.0 else 1e-20)
-    inst.parameters["Rs"].value = str(list_BVD[num_BVD].rs)
-    inst.parameters["Rp"].value = str(list_BVD[num_BVD].rp)
-    inst.parameters["Ql"].value = str(list_BVD[num_BVD].ql)
-    inst.parameters["Qc"].value = str(list_BVD[num_BVD].qc)
-    inst.parameters["Qa"].value = str(list_BVD[num_BVD].qa)
+    bvd = list_BVD[num_BVD]
+    inst = design.add_instance((library_name, CELL_BVD_LOSSY, "symbol"), origin=origin, name=bvd.name, angle=angle_BVD)
+    inst.parameters["Cp"].value = str(bvd.cp)
+    inst.parameters["Ca"].value = str(bvd.ca)
+    inst.parameters["La"].value = str(bvd.la)
+    inst.parameters["Ladd_ser"].value = str(bvd.ladd_ser if bvd.ladd_ser != 0.0 else 1e-20)
+    inst.parameters["Ladd_shu"].value = str(bvd.ladd_shu if bvd.ladd_shu != 0.0 else 1e-20)
+    inst.parameters["Cadd_ser"].value = str(bvd.cadd_ser if bvd.cadd_ser != 0.0 else 1e-20)
+    inst.parameters["Cadd_shu"].value = str(bvd.cadd_shu if bvd.cadd_shu != 0.0 else 1e-20)
+    inst.parameters["Ladd_ground"].value = str(bvd.ladd_ground if bvd.ladd_ground != 0.0 else 1e-20)
+    inst.parameters["Rs"].value = str(bvd.rs)
+    inst.parameters["Rp"].value = str(bvd.rp)
+    inst.parameters["Ql"].value = str(bvd.ql)
+    inst.parameters["Qc"].value = str(bvd.qc)
+    inst.parameters["Qa"].value = str(bvd.qa)
     inst.update_item_annotation()
     return
 
 def instantiate_COM_in_schematic(design: object, library_name: str, list_COM: list[COM], 
                                  num_COM: int, angle_COM: float, origin: tuple[float, float]) -> None:
-    inst = design.add_instance((library_name, CELL_COM_LOSSY, "symbol"), origin=origin, name=list_COM[num_COM].name, angle=angle_COM)
-    inst.parameters["d"].value = str(list_COM[num_COM].d)
-    inst.parameters["d_refl"].value = str(list_COM[num_COM].dR)
-    inst.parameters["Ap"].value = str(list_COM[num_COM].Ap)
-    inst.parameters["DigitsActiveIDT"].value = str(list_COM[num_COM].digitsN)
-    inst.parameters["DigitsReflector"].value = str(list_COM[num_COM].digitsNR)
-    inst.parameters["alpha"].value = str(list_COM[num_COM].alpha)
-    inst.parameters["vp"].value = str(list_COM[num_COM].constants.vp)
-    inst.parameters["k11"].value = str(list_COM[num_COM].constants.k11)
-    inst.parameters["k12"].value = str(list_COM[num_COM].constants.k12)
-    inst.parameters["eps_r"].value = str(list_COM[num_COM].constants.eps_r)
+    com = list_COM[num_COM]
+    inst = design.add_instance((library_name, CELL_COM_LOSSY, "symbol"), origin=origin, name=com.name, angle=angle_COM)
+    inst.parameters["d"].value = str(com.d)
+    inst.parameters["d_refl"].value = str(com.dR)
+    inst.parameters["Ap"].value = str(com.Ap)
+    inst.parameters["DigitsActiveIDT"].value = str(com.digitsN)
+    inst.parameters["DigitsReflector"].value = str(com.digitsNR)
+    inst.parameters["alpha"].value = str(com.alpha)
+    inst.parameters["vp"].value = str(com.constants.vp)
+    inst.parameters["k11"].value = str(com.constants.k11)
+    inst.parameters["k12"].value = str(com.constants.k12)
+    inst.parameters["eps_r"].value = str(com.constants.eps_r)
     inst.update_item_annotation()
     return
+
+def instantiate_busbar_and_COM_in_schematic(design: object, library_name: str, list_COM: list[COM], 
+                                 num_COM: int, angle_COM: float, origin: tuple[float, float]) -> tuple[float, float]:
+    com = list_COM[num_COM]
+
+    # Los layouts de los duplicados son del nombre del primer COM
+    if (com.name.endswith("_2s") or com.name.endswith("_2p")):
+        busbar_name = list_COM[num_COM-1].name
+    else:
+        busbar_name = list_COM[num_COM].name
+        
+    # 1. Instanciar la barra colectora
+    design.add_instance((library_name, f"{CELL_BUSBAR_LAYOUT}_{busbar_name}", "symbol"), origin=origin, name=f"{com.name}_busbar", angle=angle_COM)
+    
+    # 2. Sumar coordenadas X e Y correctamente según el ángulo
+    if angle_COM == 0.0:
+        com_position = (origin[0] + 0.5, origin[1])
+        final_position = (origin[0] + 2.0, origin[1])
+    else:
+        com_position = (origin[0], origin[1] - 0.5)
+        final_position = (origin[0], origin[1] - 2.0)
+
+    # 3. Instanciar COM
+    inst = design.add_instance((library_name, CELL_COM_LOSSY, "symbol"), origin=com_position, name=f"internal_{com.name}", angle=angle_COM)
+    inst.parameters["d"].value = str(com.d)
+    inst.parameters["d_refl"].value = str(com.dR)
+    inst.parameters["Ap"].value = str(com.Ap)
+    inst.parameters["DigitsActiveIDT"].value = str(com.digitsN)
+    inst.parameters["DigitsReflector"].value = str(com.digitsNR)
+    inst.parameters["alpha"].value = str(com.alpha)
+    inst.parameters["vp"].value = str(com.constants.vp)
+    inst.parameters["k11"].value = str(com.constants.k11)
+    inst.parameters["k12"].value = str(com.constants.k12)
+    inst.parameters["eps_r"].value = str(com.constants.eps_r)
+    inst.update_item_annotation()
+
+    return final_position
 
 def advance_x(design, xpos: float, ypos: float, dx: float) -> float:
     design.add_wire([PointF(xpos, ypos), PointF(xpos + dx, ypos)])

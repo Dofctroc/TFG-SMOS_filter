@@ -1189,7 +1189,7 @@ class MainWindow(QMainWindow):
 
             for com in list_COM_ADS:
                 if not (com.name.endswith("_2s") or com.name.endswith("_2p")):
-                    ads.create_busbars_layout(library, self.library_name, com)
+                    ads.create_busbars_layout_and_symbol(library, self.library_name, com)
             
             ads.create_smos_substrate(library, DEFAULT_SUBSTRATE_NAME)
 
