@@ -355,50 +355,47 @@ def create_SchematicAndSymbol_lossyCOM(library: de.Library, library_name: str, c
         shape = design.add_wire([PointF(x=6.0, y=-6.0), PointF(x=9.5, y=-6.0)])
 
         # Instances
-        inst = design.add_var_instance(name="Consts1", origin=(-9.0, 1.75))
-        inst.vars.update({'duty': str(com.constants.duty), 'eps0': str(com.constants.eps_0), 'Z0_prima': '1'})
-        # Since inst.vars does not contain 'X', we need to remove the first repeat.
-        param = inst.parameters[0]
-        assert isinstance(param, db.ParamRepeated)
-        del(param.repeats[0])
-
-        inst = design.add_var_instance(name="Consts2", origin=(-9.0, -0.25))
-        inst.vars.update({'Rseries': str(com.rs), 'Rshunt': str(com.rp), 'alphaC': str(com.constants.k11_att_cnst)})
+        inst = design.add_var_instance(name="Constants", origin=(-9.0, -0.25))
+        inst.vars.update({'k11': "k11_real-j*alphaC", 'Rseries': str(com.rs), 'Rshunt': str(com.rp), 'Z0_prima': '1'})
         # Since inst.vars does not contain 'X', we need to remove the first repeat.
         param = inst.parameters[0]
         assert isinstance(param, db.ParamRepeated)
         del(param.repeats[0])
 
         inst = design.add_var_instance(name="Impedance_IDT", origin=(-6.125, 3.75))
-        inst.vars.update({'delta': 'k-k0', 'beta': 'sqrt((delta+k11)^2-k12^2)', 'p': '(beta-delta-k11)/k12', 'Z0': '(1-p)/(1+p)*Z0_prima', 'Z0R': '(1+p)/(1-p)*Z0_prima'})
+        inst.vars.update({'delta': 'k-k0', 'beta': 'sqrt((delta+k11)^2-k12^2)', 'p': '(beta-delta-k11)/k12', 
+                          'Z0': '(1-p)/(1+p)*Z0_prima', 'Z0R': '(1+p)/(1-p)*Z0_prima'})
         # Since inst.vars does not contain 'X', we need to remove the first repeat.
         param = inst.parameters[0]
         assert isinstance(param, db.ParamRepeated)
         del(param.repeats[0])
 
         inst = design.add_var_instance(name="Impedance_Refl", origin=(-6.125, 2.125))
-        inst.vars.update({'delta_refl': 'k-k0_refl', 'beta_refl': 'sqrt((delta_refl+k11)^2-k12^2)', 'p_refl': '(beta_refl-delta_refl-k11)/k12', 'Z0_refl': '(1-p_refl)/(1+p_refl)*Z0_prima', 'Z0R_refl': '(1+p_refl)/(1-p_refl)*Z0_prima'})
+        inst.vars.update({'delta_refl': 'k-k0_refl', 'beta_refl': 'sqrt((delta_refl+k11)^2-k12^2)', 'p_refl': '(beta_refl-delta_refl-k11)/k12', 
+                          'Z0_refl': '(1-p_refl)/(1+p_refl)*Z0_prima', 'Z0R_refl': '(1+p_refl)/(1-p_refl)*Z0_prima'})
         # Since inst.vars does not contain 'X', we need to remove the first repeat.
         param = inst.parameters[0]
         assert isinstance(param, db.ParamRepeated)
         del(param.repeats[0])
 
         inst = design.add_var_instance(name="Inputs", origin=(-9.0, 3.75))
-        inst.vars.update({'L': '2*d', 'L_refl': '2*d_refl', 'k0': 'pi/d', 'k0_refl': 'pi/d_refl', 'k': '2*pi*freq/vp', 'N': 'DigitsActiveIDT/2', 'NR': 'DigitsReflector/2'})
+        inst.vars.update({'L': '2*d', 'L_refl': '2*d_refl', 'k0': 'pi/d', 'k0_refl': 'pi/d_refl', 'k': '2*pi*freq/vp', 
+                          'N': 'DigitsActiveIDT/2', 'NR': 'DigitsReflector/2'})
         # Since inst.vars does not contain 'X', we need to remove the first repeat.
         param = inst.parameters[0]
         assert isinstance(param, db.ParamRepeated)
         del(param.repeats[0])
 
         inst = design.add_var_instance(name="Vars_IDT", origin=(-6.125, 0.5))
-        inst.vars.update({'theta': '(beta*N*L)/2', 'phi': '2*alpha*L*N*sqrt(Z0_prima)', 'CT': 'Ap*N*L*eps_r*eps0*exp(0.71866*tan(1.966*(duty-0.5)))'})
+        inst.vars.update({'theta': '(beta*N*L)/2', 'phi': '2*alpha*L*N*sqrt(Z0_prima)', 'CT': 'Ap*N*L*eps_r*eps_0*exp(0.71866*tan(1.966*(duty-0.5)))'})
         # Since inst.vars does not contain 'X', we need to remove the first repeat.
         param = inst.parameters[0]
         assert isinstance(param, db.ParamRepeated)
         del(param.repeats[0])
 
         inst = design.add_var_instance(name="Vars_Refl", origin=(-6.125, -0.625))
-        inst.vars.update({'theta_refl': '(beta_refl*NR*L_refl)/2', 'phi_refl': '2*alpha*L_refl*NR*sqrt(Z0_prima)', 'CT_refl': 'Ap*NR*L_refl*eps_r*eps0*exp(0.71866*tan(1.966*(duty-0.5)))'})
+        inst.vars.update({'theta_refl': '(beta_refl*NR*L_refl)/2', 'phi_refl': '2*alpha*L_refl*NR*sqrt(Z0_prima)', 
+                          'CT_refl': 'Ap*NR*L_refl*eps_r*eps_0*exp(0.71866*tan(1.966*(duty-0.5)))'})
         # Since inst.vars does not contain 'X', we need to remove the first repeat.
         param = inst.parameters[0]
         assert isinstance(param, db.ParamRepeated)
@@ -527,49 +524,61 @@ def create_SchematicAndSymbol_lossyCOM(library: de.Library, library_name: str, c
     formset = de.db_uu.model_lib.formsets["StdFormSet"]
 
     varD = de.db_uu.ModelParam("d", "Unitless", formset, de.db_uu.ModelUnitType.NO_UNIT)
-    varD.default_value = de.db_uu.ParamItemString("d", "StdForm", str("0.1"))
+    varD.default_value = de.db_uu.ParamItemString("d", "StdForm", "1")
     varD.is_displayed_by_default = True
 
     varDR = de.db_uu.ModelParam("d_refl", "Unitless", formset, de.db_uu.ModelUnitType.NO_UNIT)
-    varDR.default_value = de.db_uu.ParamItemString("d_refl", "StdForm", str("0.1"))
+    varDR.default_value = de.db_uu.ParamItemString("d_refl", "StdForm", "1")
     varDR.is_displayed_by_default = True
 
     varAp = de.db_uu.ModelParam("Ap", "Unitless", formset, de.db_uu.ModelUnitType.NO_UNIT)
-    varAp.default_value = de.db_uu.ParamItemString("Ap", "StdForm", str("0.01"))
+    varAp.default_value = de.db_uu.ParamItemString("Ap", "StdForm", "1")
     varAp.is_displayed_by_default = True
 
     varDigitsActiveIDT = de.db_uu.ModelParam("DigitsActiveIDT", "Unitless", formset, de.db_uu.ModelUnitType.NO_UNIT)
-    varDigitsActiveIDT.default_value = de.db_uu.ParamItemString("DigitsActiveIDT", "StdForm", str("50"))
+    varDigitsActiveIDT.default_value = de.db_uu.ParamItemString("DigitsActiveIDT", "StdForm", "1")
     varDigitsActiveIDT.is_displayed_by_default = True
 
     varDigitsReflector = de.db_uu.ModelParam("DigitsReflector", "Unitless", formset, de.db_uu.ModelUnitType.NO_UNIT)
-    varDigitsReflector.default_value = de.db_uu.ParamItemString("DigitsReflector", "StdForm", str("50"))
+    varDigitsReflector.default_value = de.db_uu.ParamItemString("DigitsReflector", "StdForm", "1")
     varDigitsReflector.is_displayed_by_default = True
 
     varAlpha = de.db_uu.ModelParam("alpha", "Unitless", formset, de.db_uu.ModelUnitType.NO_UNIT)
-    varAlpha.default_value = de.db_uu.ParamItemString("alpha", "StdForm", str("50"))
+    varAlpha.default_value = de.db_uu.ParamItemString("alpha", "StdForm", "1")
     varAlpha.is_displayed_by_default = True
 
     varVp = de.db_uu.ModelParam("vp", "Unitless", formset, de.db_uu.ModelUnitType.NO_UNIT)
-    varVp.default_value = de.db_uu.ParamItemString("vp", "StdForm", str("50"))
+    varVp.default_value = de.db_uu.ParamItemString("vp", "StdForm", "1")
     varVp.is_displayed_by_default = True
 
-    varK11 = de.db_uu.ModelParam("k11", "Unitless", formset, de.db_uu.ModelUnitType.NO_UNIT)
-    varK11.default_value = de.db_uu.ParamItemString("k11", "StdForm", str("50"))
+    varK11 = de.db_uu.ModelParam("k11_real", "Unitless", formset, de.db_uu.ModelUnitType.NO_UNIT)
+    varK11.default_value = de.db_uu.ParamItemString("k11_real", "StdForm", "1")
     varK11.is_displayed_by_default = True
 
+    varAlphaC = de.db_uu.ModelParam("alphaC", "Unitless", formset, de.db_uu.ModelUnitType.NO_UNIT)
+    varAlphaC.default_value = de.db_uu.ParamItemString("alphaC", "StdForm", "1")
+    varAlphaC.is_displayed_by_default = True
+
     varK12 = de.db_uu.ModelParam("k12", "Unitless", formset, de.db_uu.ModelUnitType.NO_UNIT)
-    varK12.default_value = de.db_uu.ParamItemString("k12", "StdForm", str("50"))
+    varK12.default_value = de.db_uu.ParamItemString("k12", "StdForm", "1")
     varK12.is_displayed_by_default = True
 
     varEpsR = de.db_uu.ModelParam("eps_r", "Unitless", formset, de.db_uu.ModelUnitType.NO_UNIT)
-    varEpsR.default_value = de.db_uu.ParamItemString("eps_r", "StdForm", str("50"))
+    varEpsR.default_value = de.db_uu.ParamItemString("eps_r", "StdForm", "1")
     varEpsR.is_displayed_by_default = True
+
+    varEps0 = de.db_uu.ModelParam("eps_0", "Unitless", formset, de.db_uu.ModelUnitType.NO_UNIT)
+    varEps0.default_value = de.db_uu.ParamItemString("eps_0", "StdForm", "1")
+    varEps0.is_displayed_by_default = True
+
+    varDuty = de.db_uu.ModelParam("duty", "Unitless", formset, de.db_uu.ModelUnitType.NO_UNIT)
+    varDuty.default_value = de.db_uu.ParamItemString("duty", "StdForm", "1")
+    varDuty.is_displayed_by_default = True
 
     model_def = de.db_uu.ModelDef(CELL_COM_LOSSY, CELL_COM_LOSSY)
     model_def.inst_name_prefix = "lossyCOM"
     model_def.is_sub_design = True
-    model_def.parameters = [varD, varDR, varAp, varDigitsActiveIDT, varDigitsReflector, varAlpha, varVp, varK11, varK12, varEpsR]
+    model_def.parameters = [varD, varDR, varAp, varDigitsActiveIDT, varDigitsReflector, varAlpha, varVp, varK11, varAlphaC, varK12, varEpsR, varEps0, varDuty]
 
     de.add_model_definition(library, model_def)
 
@@ -1728,10 +1737,14 @@ def instantiate_COM_in_schematic(design: object, library_name: str, list_COM: li
     inst.parameters["DigitsReflector"].value = str(com.digitsNR)
     inst.parameters["alpha"].value = str(com.alpha)
     inst.parameters["vp"].value = str(com.constants.vp)
-    inst.parameters["k11"].value = str(com.constants.k11)
+    inst.parameters["k11_real"].value = str(com.constants.k11_real)
+    inst.parameters["alphaC"].value = str(com.constants.k11_att_cnst)
     inst.parameters["k12"].value = str(com.constants.k12)
     inst.parameters["eps_r"].value = str(com.constants.eps_r)
+    inst.parameters["eps_0"].value = str(com.constants.eps_0)
+    inst.parameters["duty"].value = str(com.constants.duty)
     inst.update_item_annotation()
+
     return
 
 def instantiate_busbar_and_COM_in_schematic(design: object, library_name: str, list_COM: list[COM], 
@@ -1764,9 +1777,12 @@ def instantiate_busbar_and_COM_in_schematic(design: object, library_name: str, l
     inst.parameters["DigitsReflector"].value = str(com.digitsNR)
     inst.parameters["alpha"].value = str(com.alpha)
     inst.parameters["vp"].value = str(com.constants.vp)
-    inst.parameters["k11"].value = str(com.constants.k11)
+    inst.parameters["k11_real"].value = str(com.constants.k11_real)
+    inst.parameters["alphaC"].value = str(com.constants.k11_att_cnst)
     inst.parameters["k12"].value = str(com.constants.k12)
     inst.parameters["eps_r"].value = str(com.constants.eps_r)
+    inst.parameters["eps_0"].value = str(com.constants.eps_0)
+    inst.parameters["duty"].value = str(com.constants.duty)
     inst.update_item_annotation()
 
     return final_position

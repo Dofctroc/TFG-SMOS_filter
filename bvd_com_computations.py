@@ -42,7 +42,7 @@ READ_COMSET = False
 DO_FITTING = True
 
 OPTIMIZE_NR = True
-OPTIMIZE_DR = True
+OPTIMIZE_DR = False
 
 if os.path.exists("optimizacion.log"):
     os.remove("optimizacion.log")
@@ -141,6 +141,8 @@ def compute_list_COM(list_BVD: list[BVD], frequency_plan: FrequencyPlan) -> list
         if OPTIMIZE_NR or OPTIMIZE_DR:
             com = compute_admitance_COM(com, frequency_plan)
             com = reajuste_pitch(bvd, com)
+            if not OPTIMIZE_DR:
+                com.dR = com.d
             com = compute_admitance_COM(com, frequency_plan)
             com = reajuste_Ap_Nidt(bvd, com)
             com = calcular_alpha_COM(bvd, com)

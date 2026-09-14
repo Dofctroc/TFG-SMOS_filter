@@ -596,7 +596,7 @@ class MainWindow(QMainWindow):
         self.input_fs_COM.setText(formato_ingenieria(com_seleccionado.fs))
         self.input_fp_COM.setText(formato_ingenieria(com_seleccionado.fp))
 
-        self.input_K11.setText(str(com_seleccionado.constants.k11))
+        self.input_K11.setText(str(com_seleccionado.constants.k11).strip("()"))
         self.input_K12.setText(str(com_seleccionado.constants.k12))
         self.input_VP.setText(str(com_seleccionado.constants.vp))
         self.input_EPS_R.setText(str(com_seleccionado.constants.eps_r))
