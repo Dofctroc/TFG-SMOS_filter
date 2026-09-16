@@ -2,6 +2,7 @@ import copy
 import math
 import os
 import csv
+import re
 import numpy as np
 from scipy.optimize import least_squares
 
@@ -31,8 +32,8 @@ DUTY = 0.5
 # CONST = EPS_R * EPS_0 * np.exp(0.71866 * np.tan(1.966*(DUTY - 0.5)))
 
 Z0_PRIMA = 1
-R_SHUNT = 4e6
-R_SERIE = 0.1
+R_SHUNT_COM = 4e6
+R_SERIE_COM = 0.1
 
 N_POINTS_GRAPH = int(1e4)
 R_TERMG = 50
@@ -102,8 +103,12 @@ def compute_list_COM(list_BVD: list[BVD], frequency_plan: FrequencyPlan) -> list
         else:
             com.constants = assign_default_COM_constants()
 
-        com.rs = R_SERIE
-        com.rp = R_SHUNT
+        com.split_info.mode = None
+        com.split_info.index = 1
+        com.split_info.total = 1
+
+        com.rs = R_SERIE_COM
+        com.rp = R_SHUNT_COM
 
         # 1) ============= CÁLCULO DEL PITCH =============
         com = compute_pitch_COM(bvd, com)
@@ -227,7 +232,7 @@ def compute_admitance_COM(com: COM, frequency_plan: FrequencyPlan) -> COM:
     D = (Z0_PRIMA / (2*theta*z_0))**2
     phi = 2*com.alpha*Nidt*lambda0*np.sqrt(Z0_PRIMA)
 
-    Z_com = (R_SERIE + 1 / (1/R_SHUNT + A + B*phi**2 + D/C * phi**2))
+    Z_com = (R_SERIE_COM + 1 / (1/R_SHUNT_COM + A + B*phi**2 + D/C * phi**2))
     Y_com = 1 / Z_com
 
     # Asignar variables
@@ -316,7 +321,7 @@ def calcular_alpha_COM(bvd: BVD, com: COM) -> COM:
 
     # Resolución de la ecuación cuadrática
     # Nos quedamos solo con la solución positiva
-    phi = abs(np.sqrt((-1/R_SHUNT - A) / (B + D/C)))
+    phi = abs(np.sqrt((-1/R_SHUNT_COM - A) / (B + D/C)))
 
     # Cálculo final de alpha
     alpha = phi / (2*Nidt*lambda0*np.sqrt(Z0_PRIMA))
@@ -444,80 +449,82 @@ def optimizar_pitchR(bvd: BVD, com: COM, frequency_plan: FrequencyPlan) -> COM:
 # ============================== DUPLICATE FUNCTION FOR COM PARAMS ==============================
 
 def duplicar_resonadores_COM(list_BVD: list[BVD], list_COM: list[COM], frequency_plan: FrequencyPlan) -> list[COM]:
-    # Dejaremos la apertura tal cual la teniamos
-    # Doblaremos en serie si    Nidt > max
-    # Doblaremos en paralelo si Nidt < min
     list_COM_duplicados: list[COM] = []
 
-    idx = 0
-    for com in list_COM:
+    for idx, com_base in enumerate(list_COM):
         bvd_base = list_BVD[idx]
-        if com.digitsN < DIGITS_NIDT_MIN:
-            # Duplicamos en serie
-            # Duplicamos el valor de DigitsActiveIDT del COM
-            com_base = list_COM[idx]
-            com_1 = copy.copy(com_base)
+        digits_actual = com_base.digitsN
 
-            # Duplicamos los parámetros clave
-            com_1.Ct = com_base.Ct*2
-            com_1.digitsN = round(com_base.digitsN*2)
-
-            com_1 = ajustar_Ap_Nidt_dentro_rango(com_1)
-
-            # Primer calculo del vector admitancia para posteriores correcciones
-            com_1 = compute_admitance_COM(com_1, frequency_plan)
-
-            # Reajustamos todos los parámetros
-            com_1 = reajuste_pitch(bvd_base, com_1)
-            # com_1 = reajuste_Ap_Nidt(bvd_base, com_1)
-
-            # Recalculamos alpha
-            com_1 = calcular_alpha_COM(bvd_base, com_1)
-
-            # Calculamos el vector admitancia final
-            com_1 = compute_admitance_COM(com_1, frequency_plan)
-            com_2 = copy.copy(com_1)
-
-            com_1.name = com_base.name + "_1s"
-            com_2.name = com_base.name + "_2s"
-
-            list_COM_duplicados.extend([com_1, com_2])
-
-        elif com.digitsN > DIGITS_NIDT_MAX:
-            # Duplicamos en paralelo
-            # Dividimosc el valor de DigitsActiveIDT del COM
-            com_base = list_COM[idx]
-            com_1 = copy.copy(com_base)
-
-            # Duplicamos los parámetros clave
-            com_1.Ct = com_base.Ct/2
-            com_1.digitsN = round(com_base.digitsN/2)
-
-            com_1 = ajustar_Ap_Nidt_dentro_rango(com_1)
-
-            # Primer calculo del vector admitancia para posteriores correcciones
-            com_1 = compute_admitance_COM(com_1, frequency_plan)
+        # -----------------------------------------------------------------
+        # CASO 1: Demasiado pocos dedos -> Multiplicar en SERIE (s)
+        # -----------------------------------------------------------------
+        if digits_actual < DIGITS_NIDT_MIN:
+            # Calcular factor N necesario
+            factor_N = math.ceil(DIGITS_NIDT_MIN / digits_actual)
             
-            # Reajustamos todos los parámetros
-            com_1 = reajuste_pitch(bvd_base, com_1)
-            # com_1 = reajuste_Ap_Nidt(bvd_base, com_1)
+            # Plantilla para el sub-resonador (en serie aumentamos Ct y Nidt por N)
+            com_template = copy.copy(com_base)
+            com_template.Ct = com_base.Ct * factor_N
+            com_template.digitsN = round(com_base.digitsN * factor_N)
 
-            # Recalculamos alpha
-            com_1 = calcular_alpha_COM(bvd_base, com_1)
+            # Ajustes y recálculos del modelo COM
+            com_template = ajustar_Ap_Nidt_dentro_rango(com_template)
+            com_template = compute_admitance_COM(com_template, frequency_plan)
+            com_template = reajuste_pitch(bvd_base, com_template)
+            com_template = calcular_alpha_COM(bvd_base, com_template)
+            com_template = compute_admitance_COM(com_template, frequency_plan)
 
-            # Calculamos el vector admitancia final
-            com_1 = compute_admitance_COM(com_1, frequency_plan)
-            com_2 = copy.copy(com_1)
+            # Generar las N copias con la nomenclatura estandarizada
+            for i in range(1, factor_N + 1):
+                sub_com = copy.copy(com_template)
+                sub_com.name = f"{com_base.name}_split_s_{i}of{factor_N}"
+                
+                # Opcional: Metadatos explícitos
+                sub_com.split_info.mode = "s"
+                sub_com.split_info.index = i
+                sub_com.split_info.total = factor_N
 
-            com_1.name = com_base.name + "_1p"
-            com_2.name = com_base.name + "_2p"
+                list_COM_duplicados.append(sub_com)
 
-            list_COM_duplicados.extend([com_1, com_2])
-        
+        # -----------------------------------------------------------------
+        # CASO 2: Demasiados dedos -> Multiplicar en PARALELO (p)
+        # -----------------------------------------------------------------
+        elif digits_actual > DIGITS_NIDT_MAX:
+            # Calcular factor N necesario
+            factor_N = math.ceil(digits_actual / DIGITS_NIDT_MAX)
+            
+            # Plantilla para el sub-resonador (en paralelo dividimos Ct y Nidt entre N)
+            com_template = copy.copy(com_base)
+            com_template.Ct = com_base.Ct / factor_N
+            com_template.digitsN = round(com_base.digitsN / factor_N)
+
+            # Ajustes y recálculos del modelo COM
+            com_template = ajustar_Ap_Nidt_dentro_rango(com_template)
+            com_template = compute_admitance_COM(com_template, frequency_plan)
+            com_template = reajuste_pitch(bvd_base, com_template)
+            com_template = calcular_alpha_COM(bvd_base, com_template)
+            com_template = compute_admitance_COM(com_template, frequency_plan)
+
+            # Generar las N copias con la nomenclatura estandarizada
+            for i in range(1, factor_N + 1):
+                sub_com = copy.copy(com_template)
+                sub_com.name = f"{com_base.name}_split_p_{i}of{factor_N}"
+                
+                # Opcional: Metadatos explícitos
+                sub_com.split_info.mode = "p"
+                sub_com.split_info.index = i
+                sub_com.split_info.total = factor_N
+
+                list_COM_duplicados.append(sub_com)
+
+        # -----------------------------------------------------------------
+        # CASO 3: Dentro del rango -> Mantener tal cual
+        # -----------------------------------------------------------------
         else:
-            list_COM_duplicados.append(com)
-
-        idx += 1
+            com_base.split_info.mode = None
+            com_base.split_info.index = 1
+            com_base.split_info.total = 1
+            list_COM_duplicados.append(com_base)
 
     return list_COM_duplicados
 
@@ -766,3 +773,11 @@ def assign_default_COM_constants() -> None:
                              vp=vp, eps_r=eps_r_eff, eps_0 = eps_0, duty=duty)
 
     return constants
+
+def parse_split_info(name: str):
+    # Devuelve (es_split, modo, indice, total)
+    match = re.search(r"_split_([sp])_(\d+)of(\d+)$", name)
+    if match:
+        modo, idx, total = match.groups()
+        return True, modo, int(idx), int(total)
+    return False, None, 1, 1

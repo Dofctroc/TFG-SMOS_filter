@@ -57,11 +57,17 @@ class COMconstants():
         self.eps_0 = eps_0
         self.duty = duty
 
+class Split_info():
+    def __init__(self, mode, index, total):
+        self.mode = mode
+        self.index = index
+        self.total = total
+
 class COM():
     def __init__(self, name: str = None, d: float = None, dR: float = None, Ap: float = None, 
         digitsN: int = None, digitsNR: int = None, fs: float = None, fp: float = None, 
         alpha: float = None, alpha_n: float = None, Ct: float = None, rs: float = None, rp: 
-        float = None,Y = None, f = None, constants: COMconstants = None):
+        float = None,Y = None, f = None, constants: COMconstants = None, split_info: Split_info = None):
         self.name = name
         self.d = d
         self.dR = dR
@@ -78,3 +84,4 @@ class COM():
         self.Y = Y
         self.f = f
         self.constants = constants
+        self.split_info = split_info
