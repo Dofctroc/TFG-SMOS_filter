@@ -688,13 +688,13 @@ def create_Schematic_ladder_filters(workspace_path: str, library_name: str, data
 
         # =========================================== COM ladder filter build ===========================================
         initial_xpos_COM = 0
-        initial_ypos_COM = -4
+        initial_ypos_COM = -20
         initial_TermG_COM = COM_FILTER_STARTING_PIN
         build_ladder_filter_circuit_COM(design, initial_xpos_COM, initial_ypos_COM, initial_TermG_COM, parameters, list_COM, library_name)
 
         # =========================================== busbar+COM ladder filter build ===========================================
         initial_xpos_busbarCOM = 0
-        initial_ypos_busbarCOM = -9
+        initial_ypos_busbarCOM = -40
         initial_TermG_busbarCOM = BUSBAR_COM_STARTING_PIN
         build_ladder_filter_circuit_busbar_COM(design, initial_xpos_busbarCOM, initial_ypos_busbarCOM, initial_TermG_busbarCOM, parameters, list_COM, library_name)
 
@@ -722,17 +722,16 @@ def create_Schematic_ladder_filters(workspace_path: str, library_name: str, data
     return
 
 def build_ladder_filter_circuit_BVD(design: db.Design, initial_xpos: int, initial_ypos: int, initial_TermG: int, parameters: dict, list_BVD: list[BVD], library_name: str) -> None:
-    # READ Basic Ladder parameters
+    # LECTURA DE PARÁMETROS BÁSICOS
     order = int(parameters["norder_ini"])
     startBVD_type = parameters["typeseriesshunt_ini"]
     
-    # Determine the type of the last BVD based on the order and the type of the first BVD
     if order % 2 == 0:
         endBVD_type = "shunt" if startBVD_type == "series" else "series"
     else:
         endBVD_type = "series" if startBVD_type == "series" else "shunt"
 
-    # READ Matching network parameters
+    # REDES DE ADAPTACIÓN
     matching_network = parameters["matching_network"]
     mntype1 = parameters["mntype1"]
     input_l = parameters["input_l"]
@@ -742,19 +741,18 @@ def build_ladder_filter_circuit_BVD(design: db.Design, initial_xpos: int, initia
     cfini2 = parameters["cfini2"]
 
     x_margin = 1.5
-    y_margin = 1.5
+    y_margin = 2.0
 
-    # Grid position parameters
-    xpos = initial_xpos
-    ypos = initial_ypos
+    xpos = float(initial_xpos)
+    ypos = float(initial_ypos)
 
     ground_count = 1
     num_BVD = 0
 
-    # =========================================== Ladder Filter of Lossy BVDs ===========================================
+    # =========================================== LADDER FILTER BVD ===========================================
     instantiate_term_g(design, f"TermG{initial_TermG}", initial_TermG, (xpos, ypos))
 
-    # INPUT MATCHING NETWORK (Renombrados con _BVD)
+    # RED DE ADAPTACIÓN DE ENTRADA
     if startBVD_type == "series":
         d = Decimal(input_l)
         if d.adjusted() > -10:
@@ -766,66 +764,108 @@ def build_ladder_filter_circuit_BVD(design: db.Design, initial_xpos: int, initia
     else:
         xpos = advance_x(design, xpos, ypos, x_margin)
         instantiate_rflib_element(design, "L", "L_input_BVD", (xpos, ypos), input_l + "H", 0.0)
-        xpos += 1
-        xpos = advance_x(design, xpos, ypos, x_margin) # Sumamos 1.0 por el tamaño del inductor
-
-    ypos = initial_ypos
-
-    # ÚNICO BUCLE BVD LADDER: Único bucle para toda la escalera
-    current_BVD_type = startBVD_type
-    while num_BVD < len(list_BVD):
+        xpos += 1.0
         xpos = advance_x(design, xpos, ypos, x_margin)
 
+    ypos = float(initial_ypos)
+    current_BVD_type = startBVD_type
+
+    # BUCLE PRINCIPAL DE CONSTRUCCIÓN DE LA ESCALERA
+    while num_BVD < len(list_BVD):
+        # Datos del tipo de duplicado si tiene
+        bvd_first = list_BVD[num_BVD]
+        split_mode = bvd_first.split_info.mode
+        split_total = bvd_first.split_info.total if split_mode else 1
+
+        xpos = advance_x(design, xpos, ypos, x_margin)
+
+        # Angulo del resonador según el tipo
         angle_BVD = 0.0 if current_BVD_type == "series" else -90.0
-        
+
+        # Instanciamos directamente el primer resonador
         instantiate_BVD_in_schematic(design, library_name, list_BVD, num_BVD, angle_BVD, (xpos, ypos))
 
-        if current_BVD_type == "shunt" and not list_BVD[num_BVD].name.endswith("_1s"):
-            instantiate_ground(design, f"G{ground_count}_BVD", (xpos, ypos - 1.0))
-            ground_count += 1
-        
+        # Nos movemos al puerto de salida del resonador instanciado
         xpos += 1.0 if current_BVD_type == "series" else 0.0
         ypos -= 1.0 if current_BVD_type == "shunt" else 0.0
 
-        duplicate = False
+        # Caso en que se duplica en paralelo
+        if split_mode == "p":
+            instantiate_rflib_element(design, "L", f"PRUEBA_1_{num_BVD}", (-5, -5), input_l + "H", 0.0)
 
-        if list_BVD[num_BVD].name.endswith("_1s"):
-            duplicate = True
-            if current_BVD_type == "series":
-                xpos = advance_x(design, xpos, ypos, x_margin)
-                angle_BVD = 0.0
-            else:
-                design.add_wire([PointF(xpos, ypos), PointF(xpos, ypos - y_margin)])
-                ypos -= y_margin
-                instantiate_ground(design, f"G{ground_count}_BVD", (xpos, ypos - 1.0))
-                ground_count += 1
-                angle_BVD = -90.0
-
-        elif list_BVD[num_BVD].name.endswith("_1p"):
-            duplicate = True
+            # Si el resonador actual es SERIE
             if current_BVD_type == "series":
                 xpos -= 1.0
-                design.add_wire([PointF(xpos, ypos), PointF(xpos, ypos - y_margin*2)])
-                design.add_wire([PointF(xpos + 1.0, ypos), PointF(xpos + 1.0, ypos - y_margin)])
-                ypos -= y_margin*2
-                angle_BVD = 0.0
+                k = 1
+                while k < split_total:
+                    num_BVD += 1
+                    advance_y(design, xpos+1.0, ypos, -y_margin)
+                    ypos = advance_y(design, xpos, ypos, -y_margin)
+                    instantiate_BVD_in_schematic(design, library_name, list_BVD, num_BVD, angle_BVD, (xpos, ypos))
+                    k += 1
+                ypos = float(initial_ypos)
+                xpos += 1.0
+                xpos = advance_x(design, xpos, ypos, x_margin)
+
+            # Si el resonador actual es SHUNT
             else:
+                instantiate_ground(design, f"G{ground_count}_BVD", (xpos, ypos))
+                ground_count += 1
                 ypos += 1.0
-                xpos = advance_x(design, xpos, ypos, x_margin*2)
-                advance_x(design, xpos - x_margin*2, ypos - 1.0, x_margin*2) # Wire inferior
-                angle_BVD = -90.0
+                k = 1
+                while k < split_total:
+                    num_BVD += 1
+                    advance_x(design, xpos, ypos-1.0, x_margin)
+                    xpos = advance_x(design, xpos, ypos, x_margin)
+                    instantiate_BVD_in_schematic(design, library_name, list_BVD, num_BVD, angle_BVD, (xpos, ypos))
+                    k += 1
+                xpos = advance_x(design, xpos, ypos, x_margin)
 
-        if duplicate:
-            num_BVD += 1
-            instantiate_BVD_in_schematic(design, library_name, list_BVD, num_BVD, angle_BVD, (xpos, ypos))
+        # Caso en que se duplica en serie
+        elif split_mode == "s":
+            instantiate_rflib_element(design, "L", f"PRUEBA_2_{num_BVD}", (-5, -5), input_l + "H", 0.0)
 
-        xpos += 1.0 if current_BVD_type == "series" and list_BVD[num_BVD-1].name.endswith(("_1p", "_1s")) else 0.0
-        ypos += 1.0 if (current_BVD_type == "series" and list_BVD[num_BVD-1].name.endswith("_1p")) or (current_BVD_type == "shunt" and list_BVD[num_BVD-1].name.endswith("_1s")) else 0.0
+            # Si el resonador actual es SERIE
+            if current_BVD_type == "series":
+                k = 1
+                while k < split_total:
+                    num_BVD += 1
+                    xpos = advance_x(design, xpos, ypos, x_margin)
+                    instantiate_BVD_in_schematic(design, library_name, list_BVD, num_BVD, angle_BVD, (xpos, ypos))
+                    xpos += 1.0
+                    k += 1
+                xpos = advance_x(design, xpos, ypos, x_margin)
 
-        ypos = initial_ypos
-        xpos = advance_x(design, xpos, ypos, x_margin)
+            # Si el resonador actual es SHUNT
+            else:
+                k = 1
+                while k < split_total:
+                    num_BVD += 1
+                    ypos = advance_y(design, xpos, ypos, -y_margin)
+                    instantiate_BVD_in_schematic(design, library_name, list_BVD, num_BVD, angle_BVD, (xpos, ypos))
+                    ypos -= 1.0
+                    k += 1
+                instantiate_ground(design, f"G{ground_count}_BVD", (xpos, ypos))
+                ground_count += 1
+                ypos = float(initial_ypos)
+                xpos = advance_x(design, xpos, ypos, x_margin)
+
+        # Caso en que no se duplica        
+        else:
+            instantiate_rflib_element(design, "L", f"PRUEBA_3_{num_BVD}", (-5, -5), input_l + "H", 0.0)
+            # Si el resonador actual es SERIE
+            if current_BVD_type == "series":
+                xpos = advance_x(design, xpos, ypos, x_margin)
+
+            # Si el resonador actual es SHUNT
+            else:
+                instantiate_ground(design, f"G{ground_count}_BVD", (xpos, ypos))
+                ground_count += 1
+                ypos += 1.0
+                xpos = advance_x(design, xpos, ypos, x_margin)
+
+        current_BVD_type = "series" if current_BVD_type == "shunt" else "shunt"
         num_BVD += 1
-        current_BVD_type = "shunt" if current_BVD_type == "series" else "series"
 
     # OUTPUT MATCHING NETWORK (Renombrados con _BVD)
     xpos = advance_x(design, xpos, ypos, x_margin)

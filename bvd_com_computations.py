@@ -80,10 +80,12 @@ def create_list_BVD(parametersBVD: dict, frequency_plan: FrequencyPlan) -> list[
         fs = 1/(2 * np.pi * np.sqrt(la[i] * ca[i]))
         fp = 1/(2 * np.pi)*np.sqrt((cp[i]+ca[i])/(cp[i]*ca[i]*la[i]))
 
+        split_info = Split_info(mode=None, index=1, total=1)
+
         bvd = BVD(name=name, c0=c0, cp=cp[i], ca=ca[i], la=la[i], fs=fs, fp=fp, 
                   ladd_ser=ladd_ser[i], ladd_shu=ladd_shu[i], cadd_ser=cadd_ser[i], 
                   cadd_shu=cadd_shu[i], ladd_ground=ladd_ground[i], 
-                  rs=rs, rp=rp, ql=ql, qc=qc, qa=qa)
+                  rs=rs, rp=rp, ql=ql, qc=qc, qa=qa, split_info=split_info)
         bvd = compute_admitance_BVD(bvd, frequency_plan)
         
         currentType = "shunt" if currentType == "series" else "series"
@@ -103,9 +105,8 @@ def compute_list_COM(list_BVD: list[BVD], frequency_plan: FrequencyPlan) -> list
         else:
             com.constants = assign_default_COM_constants()
 
-        com.split_info.mode = None
-        com.split_info.index = 1
-        com.split_info.total = 1
+        split_info = Split_info(mode=None, index=1, total=1)
+        com.split_info = split_info
 
         com.rs = R_SERIE_COM
         com.rp = R_SHUNT_COM
@@ -570,9 +571,7 @@ def duplicar_resonadores_BVD(list_BVD: list[BVD], list_COM: list[COM], frequency
                 sub_bvd.name = f"{bvd_base.name}_split_s_{i}of{factor_N}"
                 
                 # Metadatos del split
-                sub_bvd.split_info.mode = "s"
-                sub_bvd.split_info.index = i
-                sub_bvd.split_info.total = factor_N
+                sub_bvd.split_info = Split_info(mode="s", index=i, total=factor_N)
 
                 list_BVD_duplicados.append(sub_bvd)
 
@@ -611,9 +610,7 @@ def duplicar_resonadores_BVD(list_BVD: list[BVD], list_COM: list[COM], frequency
                 sub_bvd.name = f"{bvd_base.name}_split_p_{i}of{factor_N}"
                 
                 # Metadatos del split
-                sub_bvd.split_info.mode = "p"
-                sub_bvd.split_info.index = i
-                sub_bvd.split_info.total = factor_N
+                sub_bvd.split_info = Split_info(mode="p", index=i, total=factor_N)
 
                 list_BVD_duplicados.append(sub_bvd)
 
@@ -621,9 +618,7 @@ def duplicar_resonadores_BVD(list_BVD: list[BVD], list_COM: list[COM], frequency
         # CASO 3: Dentro del rango -> Mantener tal cual
         # -----------------------------------------------------------------
         else:
-            bvd_base.split_info.mode = None
-            bvd_base.split_info.index = 1
-            bvd_base.split_info.total = 1
+            bvd_base.split_info = Split_info(mode=None, index=1, total=1)
             list_BVD_duplicados.append(bvd_base)
 
     return list_BVD_duplicados

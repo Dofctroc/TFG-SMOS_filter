@@ -31,7 +31,7 @@ class Split_info():
 class BVD():
     def __init__(self, name: str, c0: float, cp: float, ca: float, la: float, fs: float, fp: float, 
                  cadd_shu: float, ladd_shu: float, cadd_ser: float, ladd_ser: float, ladd_ground: float, 
-                 rs: float, rp: float, ql: float, qc: float, qa: float, Y=None, f=None, split_info: Split_info = None):
+                 rs: float, rp: float, ql: float, qc: float, qa: float, split_info: Split_info, Y=None, f=None, ):
         self.name = name
         self.c0 = c0
         self.cp = cp
@@ -49,9 +49,9 @@ class BVD():
         self.ql = ql
         self.qc = qc
         self.qa = qa
+        self.split_info = split_info
         self.Y = Y
         self.f = f
-        self.split_info = split_info
 
 class COMconstants():
     def __init__(self, k11, k11_real, k11_att_cnst, k12, vp, eps_r, eps_0, duty):
