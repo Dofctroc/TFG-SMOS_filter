@@ -22,10 +22,16 @@ class FilterResponse():
         self.Y = Y
         self.f = f
 
+class Split_info():
+    def __init__(self, mode, index, total):
+        self.mode = mode
+        self.index = index
+        self.total = total
+
 class BVD():
     def __init__(self, name: str, c0: float, cp: float, ca: float, la: float, fs: float, fp: float, 
                  cadd_shu: float, ladd_shu: float, cadd_ser: float, ladd_ser: float, ladd_ground: float, 
-                 rs: float, rp: float, ql: float, qc: float, qa: float, Y=None, f=None):
+                 rs: float, rp: float, ql: float, qc: float, qa: float, Y=None, f=None, split_info: Split_info = None):
         self.name = name
         self.c0 = c0
         self.cp = cp
@@ -45,6 +51,7 @@ class BVD():
         self.qa = qa
         self.Y = Y
         self.f = f
+        self.split_info = split_info
 
 class COMconstants():
     def __init__(self, k11, k11_real, k11_att_cnst, k12, vp, eps_r, eps_0, duty):
@@ -56,12 +63,6 @@ class COMconstants():
         self.eps_r = eps_r
         self.eps_0 = eps_0
         self.duty = duty
-
-class Split_info():
-    def __init__(self, mode, index, total):
-        self.mode = mode
-        self.index = index
-        self.total = total
 
 class COM():
     def __init__(self, name: str = None, d: float = None, dR: float = None, Ap: float = None, 

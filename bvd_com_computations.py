@@ -529,74 +529,102 @@ def duplicar_resonadores_COM(list_BVD: list[BVD], list_COM: list[COM], frequency
     return list_COM_duplicados
 
 def duplicar_resonadores_BVD(list_BVD: list[BVD], list_COM: list[COM], frequency_plan: FrequencyPlan) -> list[BVD]:
-    # Dejaremos la apertura tal cual la teniamos
-    # Doblaremos en serie si    Nidt > max
-    # Doblaremos en paralelo si Nidt < min
     list_BVD_duplicados: list[BVD] = []
 
-    idx = 0
-    for com in list_COM:
+    for idx, com_base in enumerate(list_COM):
         bvd_base = list_BVD[idx]
-        if com.digitsN < DIGITS_NIDT_MIN:
-            # Duplicamos en serie
-            # Duplicamos o dividimos los parametros del BVD
-            bvd_1 = copy.copy(bvd_base)
-            bvd_1.cp = bvd_base.cp*2
-            bvd_1.ca = bvd_base.ca*2
-            bvd_1.la = bvd_base.la/2
-            bvd_1.rs = bvd_base.rs/2
-            bvd_1.rp = bvd_base.rp/2
-            bvd_1.c0 = bvd_1.cp + bvd_1.ca
-            bvd_1.fs = 1/(2 * np.pi * np.sqrt(bvd_1.la * bvd_1.ca))
-            bvd_1.fp = 1/(2 * np.pi)*np.sqrt((bvd_1.cp+bvd_1.ca)/(bvd_1.cp*bvd_1.ca*bvd_1.la))
+        digits_actual = com_base.digitsN
 
-            bvd_1.cadd_ser = bvd_base.cadd_ser*2
-            bvd_1.cadd_shu = bvd_base.cadd_shu*2
-            bvd_1.ladd_ser = bvd_base.ladd_ser/2
-            bvd_1.ladd_shu = bvd_base.ladd_shu/2
-            bvd_1.ladd_ground = bvd_base.ladd_ground/2
+        # -----------------------------------------------------------------
+        # CASO 1: Demasiado pocos dedos -> Multiplicar BVD en SERIE (s)
+        # -----------------------------------------------------------------
+        if digits_actual < DIGITS_NIDT_MIN:
+            factor_N = math.ceil(DIGITS_NIDT_MIN / digits_actual)
+            
+            # Plantilla BVD escalada para conexión en SERIE (xN capacitancias, /N inductancias y resistencias)
+            bvd_template = copy.copy(bvd_base)
+            bvd_template.cp = bvd_base.cp * factor_N
+            bvd_template.ca = bvd_base.ca * factor_N
+            bvd_template.la = bvd_base.la / factor_N
+            bvd_template.rs = bvd_base.rs / factor_N
+            bvd_template.rp = bvd_base.rp / factor_N
+            
+            # Elementos parásitos adicionales
+            bvd_template.cadd_ser = bvd_base.cadd_ser * factor_N
+            bvd_template.cadd_shu = bvd_base.cadd_shu * factor_N
+            bvd_template.ladd_ser = bvd_base.ladd_ser / factor_N
+            bvd_template.ladd_shu = bvd_base.ladd_shu / factor_N
+            bvd_template.ladd_ground = bvd_base.ladd_ground / factor_N
 
-            bvd_2 = copy.copy(bvd_1)
+            # Recálculo de frecuencias y C0
+            bvd_template.c0 = bvd_template.cp + bvd_template.ca
+            bvd_template.fs = 1 / (2 * np.pi * np.sqrt(bvd_template.la * bvd_template.ca))
+            bvd_template.fp = 1 / (2 * np.pi) * np.sqrt((bvd_template.cp + bvd_template.ca) / (bvd_template.cp * bvd_template.ca * bvd_template.la))
 
-            bvd_1.name = bvd_base.name + "_1s"
-            bvd_2.name = bvd_base.name + "_2s"
+            # Calcular admitancia analítica una sola vez para la plantilla
+            bvd_template = compute_admitance_BVD(bvd_template, frequency_plan)
 
-            bvd_1 = compute_admitance_BVD(bvd_1, frequency_plan)
-            bvd_2 = compute_admitance_BVD(bvd_2, frequency_plan)
-            list_BVD_duplicados.extend([bvd_1, bvd_2])
+            # Generar las N copias
+            for i in range(1, factor_N + 1):
+                sub_bvd = copy.copy(bvd_template)
+                sub_bvd.name = f"{bvd_base.name}_split_s_{i}of{factor_N}"
+                
+                # Metadatos del split
+                sub_bvd.split_info.mode = "s"
+                sub_bvd.split_info.index = i
+                sub_bvd.split_info.total = factor_N
 
-        elif com.digitsN > DIGITS_NIDT_MAX:
-            # Duplicamos en paralelo
-            # Dividimosc el valor de DigitsActiveIDT del COM
-            bvd_1 = copy.copy(bvd_base)
-            bvd_1.cp = bvd_base.cp/2
-            bvd_1.ca = bvd_base.ca/2
-            bvd_1.la = bvd_base.la*2
-            bvd_1.rs = bvd_base.rs*2
-            bvd_1.rp = bvd_base.rp*2
-            bvd_1.c0 = bvd_1.cp + bvd_1.ca
-            bvd_1.fs = 1/(2 * np.pi * np.sqrt(bvd_1.la * bvd_1.ca))
-            bvd_1.fp = 1/(2 * np.pi)*np.sqrt((bvd_1.cp+bvd_1.ca)/(bvd_1.cp*bvd_1.ca*bvd_1.la))
+                list_BVD_duplicados.append(sub_bvd)
 
-            bvd_1.cadd_ser = bvd_base.cadd_ser/2
-            bvd_1.cadd_shu = bvd_base.cadd_shu/2
-            bvd_1.ladd_ser = bvd_base.ladd_ser*2
-            bvd_1.ladd_shu = bvd_base.ladd_shu*2
-            bvd_1.ladd_ground = bvd_base.ladd_ground*2
+        # -----------------------------------------------------------------
+        # CASO 2: Demasiados dedos -> Multiplicar BVD en PARALELO (p)
+        # -----------------------------------------------------------------
+        elif digits_actual > DIGITS_NIDT_MAX:
+            factor_N = math.ceil(digits_actual / DIGITS_NIDT_MAX)
+            
+            # Plantilla BVD escalada para conexión en PARALELO (/N capacitancias, xN inductancias y resistencias)
+            bvd_template = copy.copy(bvd_base)
+            bvd_template.cp = bvd_base.cp / factor_N
+            bvd_template.ca = bvd_base.ca / factor_N
+            bvd_template.la = bvd_base.la * factor_N
+            bvd_template.rs = bvd_base.rs * factor_N
+            bvd_template.rp = bvd_base.rp * factor_N
 
-            bvd_2 = copy.copy(bvd_1)
+            # Elementos parásitos adicionales
+            bvd_template.cadd_ser = bvd_base.cadd_ser / factor_N
+            bvd_template.cadd_shu = bvd_base.cadd_shu / factor_N
+            bvd_template.ladd_ser = bvd_base.ladd_ser * factor_N
+            bvd_template.ladd_shu = bvd_base.ladd_shu * factor_N
+            bvd_template.ladd_ground = bvd_base.ladd_ground * factor_N
 
-            bvd_1.name = bvd_base.name + "_1p"
-            bvd_2.name = bvd_base.name + "_2p"
+            # Recálculo de frecuencias y C0
+            bvd_template.c0 = bvd_template.cp + bvd_template.ca
+            bvd_template.fs = 1 / (2 * np.pi * np.sqrt(bvd_template.la * bvd_template.ca))
+            bvd_template.fp = 1 / (2 * np.pi) * np.sqrt((bvd_template.cp + bvd_template.ca) / (bvd_template.cp * bvd_template.ca * bvd_template.la))
 
-            bvd_1 = compute_admitance_BVD(bvd_1, frequency_plan)
-            bvd_2 = compute_admitance_BVD(bvd_2, frequency_plan)
-            list_BVD_duplicados.extend([bvd_1, bvd_2])
-        
+            # Calcular admitancia analítica una sola vez para la plantilla
+            bvd_template = compute_admitance_BVD(bvd_template, frequency_plan)
+
+            # Generar las N copias
+            for i in range(1, factor_N + 1):
+                sub_bvd = copy.copy(bvd_template)
+                sub_bvd.name = f"{bvd_base.name}_split_p_{i}of{factor_N}"
+                
+                # Metadatos del split
+                sub_bvd.split_info.mode = "p"
+                sub_bvd.split_info.index = i
+                sub_bvd.split_info.total = factor_N
+
+                list_BVD_duplicados.append(sub_bvd)
+
+        # -----------------------------------------------------------------
+        # CASO 3: Dentro del rango -> Mantener tal cual
+        # -----------------------------------------------------------------
         else:
+            bvd_base.split_info.mode = None
+            bvd_base.split_info.index = 1
+            bvd_base.split_info.total = 1
             list_BVD_duplicados.append(bvd_base)
-
-        idx += 1
 
     return list_BVD_duplicados
 
