@@ -679,22 +679,72 @@ def create_Schematic_ladder_filters(workspace_path: str, library_name: str, data
         assert isinstance(inst.parameters[0], db.ParamRepeated)
         del(inst.parameters[0].repeats[0])
 
+        # =========================================== Count all duplications ===========================================
         
+        startBVD_type = parameters["typeseriesshunt_ini"]
+        current_BVD_type = startBVD_type
+        num_BVD = 0
+
+        series_series_duplication_count = 0
+        series_shunt_duplication_count = 0
+        shunt_shunt_duplication_count = 0
+        shunt_series_duplication_count = 0
+
+        while num_BVD < len(list_BVD):
+            split_mode =  list_BVD[num_BVD].split_info.mode
+            split_total = list_BVD[num_BVD].split_info.total if split_mode else 1
+
+            # Caso en que se duplica en paralelo
+            if split_mode == "p":
+                if current_BVD_type == "series":
+                    k = 1
+                    while k < split_total:
+                        series_shunt_duplication_count += 1
+                        num_BVD += 1
+                        k += 1
+                else:
+                    k = 1
+                    while k < split_total:
+                        shunt_shunt_duplication_count += 1
+                        num_BVD += 1
+                        k += 1
+
+            # Caso en que se duplica en serie
+            elif split_mode == "s":
+                if current_BVD_type == "series":
+                    k = 1
+                    while k < split_total:
+                        series_series_duplication_count += 1
+                        num_BVD += 1
+                        k += 1
+                else:
+                    k = 1
+                    while k < split_total:
+                        shunt_series_duplication_count += 1
+                        num_BVD += 1
+                        k += 1
+
+            num_BVD += 1
+            
+            current_BVD_type = "series" if current_BVD_type == "shunt" else "shunt"
+
+        min_y_separation = max(max(series_shunt_duplication_count,shunt_series_duplication_count) * 4, 4)
+
         # =========================================== BVD ladder filter build ===========================================
         initial_xpos_BVD = 0
-        initial_ypos_BVD = 0
+        initial_ypos_BVD = -min_y_separation*0
         initial_TermG_BVD = BVD_FILTER_STARTING_PIN
         build_ladder_filter_circuit_BVD(design, initial_xpos_BVD, initial_ypos_BVD, initial_TermG_BVD, parameters, list_BVD, library_name)
 
         # =========================================== COM ladder filter build ===========================================
         initial_xpos_COM = 0
-        initial_ypos_COM = -20
+        initial_ypos_COM = -min_y_separation*1
         initial_TermG_COM = COM_FILTER_STARTING_PIN
         build_ladder_filter_circuit_COM(design, initial_xpos_COM, initial_ypos_COM, initial_TermG_COM, parameters, list_COM, library_name)
 
         # =========================================== busbar+COM ladder filter build ===========================================
         initial_xpos_busbarCOM = 0
-        initial_ypos_busbarCOM = -40
+        initial_ypos_busbarCOM = -min_y_separation*2 - 1
         initial_TermG_busbarCOM = BUSBAR_COM_STARTING_PIN
         build_ladder_filter_circuit_busbar_COM(design, initial_xpos_busbarCOM, initial_ypos_busbarCOM, initial_TermG_busbarCOM, parameters, list_COM, library_name)
 
