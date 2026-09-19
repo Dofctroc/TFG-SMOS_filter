@@ -863,8 +863,8 @@ def build_ladder_filter_circuit_BVD(design: db.Design, initial_xpos: int, initia
                 k = 1
                 while k < split_total:
                     num_BVD += 1
-                    advance_x(design, xpos, ypos-1.0, x_margin)
-                    xpos = advance_x(design, xpos, ypos, x_margin)
+                    advance_x(design, xpos, ypos-1.0, x_margin+1.5)
+                    xpos = advance_x(design, xpos, ypos, x_margin+1.5)
                     instantiate_BVD_in_schematic(design, library_name, list_BVD, num_BVD, angle_BVD, (xpos, ypos))
                     k += 1
                 xpos = advance_x(design, xpos, ypos, x_margin)
@@ -1053,8 +1053,8 @@ def build_ladder_filter_circuit_COM(design: db.Design, initial_xpos: int, initia
                 k = 1
                 while k < split_total:
                     num_COM += 1
-                    advance_x(design, xpos, ypos-1.0, x_margin)
-                    xpos = advance_x(design, xpos, ypos, x_margin)
+                    advance_x(design, xpos, ypos-1.0, x_margin+1.5)
+                    xpos = advance_x(design, xpos, ypos, x_margin+1.5)
                     instantiate_COM_in_schematic(design, library_name, list_COM, num_COM, angle_COM, (xpos, ypos))
                     k += 1
                 xpos = advance_x(design, xpos, ypos, x_margin)
