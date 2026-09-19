@@ -746,8 +746,8 @@ def build_ladder_filter_circuit_BVD(design: db.Design, initial_xpos: int, initia
     xpos = float(initial_xpos)
     ypos = float(initial_ypos)
 
-    ground_count = 1
     num_BVD = 0
+    ground_count = 1
 
     # =========================================== LADDER FILTER BVD ===========================================
     instantiate_term_g(design, f"TermG{initial_TermG}", initial_TermG, (xpos, ypos))
@@ -791,8 +791,6 @@ def build_ladder_filter_circuit_BVD(design: db.Design, initial_xpos: int, initia
 
         # Caso en que se duplica en paralelo
         if split_mode == "p":
-            instantiate_rflib_element(design, "L", f"PRUEBA_1_{num_BVD}", (-5, -5), input_l + "H", 0.0)
-
             # Si el resonador actual es SERIE
             if current_BVD_type == "series":
                 xpos -= 1.0
@@ -823,8 +821,6 @@ def build_ladder_filter_circuit_BVD(design: db.Design, initial_xpos: int, initia
 
         # Caso en que se duplica en serie
         elif split_mode == "s":
-            instantiate_rflib_element(design, "L", f"PRUEBA_2_{num_BVD}", (-5, -5), input_l + "H", 0.0)
-
             # Si el resonador actual es SERIE
             if current_BVD_type == "series":
                 k = 1
@@ -852,7 +848,6 @@ def build_ladder_filter_circuit_BVD(design: db.Design, initial_xpos: int, initia
 
         # Caso en que no se duplica        
         else:
-            instantiate_rflib_element(design, "L", f"PRUEBA_3_{num_BVD}", (-5, -5), input_l + "H", 0.0)
             # Si el resonador actual es SERIE
             if current_BVD_type == "series":
                 xpos = advance_x(design, xpos, ypos, x_margin)
@@ -935,16 +930,15 @@ def build_ladder_filter_circuit_COM(design: db.Design, initial_xpos: int, initia
     lfini2 = parameters["lfini2"]
     cfini1 = parameters["cfini1"]
     cfini2 = parameters["cfini2"]
-    
-    # Grid position parameters
-    xpos = initial_xpos
-    ypos = initial_ypos
 
     x_margin = 1.5
-    y_margin = 1.5
+    y_margin = 2.0
+    
+    xpos = float(initial_xpos)
+    ypos = float(initial_ypos)
 
     num_COM = 0
-    ground_count = 1  # Contador dedicado para tierras únicas (G1, G2, G3...)
+    ground_count = 1
 
     # =========================================== Ladder Filter of Lossy COMs ===========================================
     instantiate_term_g(design, f"TermG{initial_TermG}", initial_TermG, (xpos, ypos))
@@ -965,62 +959,98 @@ def build_ladder_filter_circuit_COM(design: db.Design, initial_xpos: int, initia
         xpos = advance_x(design, xpos, ypos, x_margin) # Sumamos 1.0 por el tamaño del inductor
 
     ypos = initial_ypos
-
-    # ÚNICO BUCLE COM LADDER (Maneja el primero y todos los demás)
     current_COM_type = startCOM_type
+
+    # BUCLE PRINCIPAL DE CONSTRUCCIÓN DE LA ESCALERA
     while num_COM < len(list_COM):
+        # Datos del tipo de duplicado si tiene
+        com_first = list_COM[num_COM]
+        split_mode = com_first.split_info.mode
+        split_total = com_first.split_info.total if split_mode else 1
+
         xpos = advance_x(design, xpos, ypos, x_margin)
 
+        # Angulo del resonador según el tipo
         angle_COM = 0.0 if current_COM_type == "series" else -90.0
         
         instantiate_COM_in_schematic(design, library_name, list_COM, num_COM, angle_COM, (xpos, ypos))
         
-        if current_COM_type == "shunt" and not list_COM[num_COM].name.endswith("_1s"):
-            instantiate_ground(design, f"G{ground_count}_COM", (xpos, ypos - 1.0))
-            ground_count += 1
-
+        # Nos movemos al puerto de salida del resonador instanciado
         xpos += 1.0 if current_COM_type == "series" else 0.0
         ypos -= 1.0 if current_COM_type == "shunt" else 0.0
 
-        duplicate = False
-
-        if list_COM[num_COM].name.endswith("_1s"):
-            duplicate = True
-            if current_COM_type == "series":
-                xpos = advance_x(design, xpos, ypos, x_margin)
-                angle_COM = 0.0
-            else:
-                design.add_wire([PointF(xpos, ypos), PointF(xpos, ypos - y_margin)])
-                ypos -= y_margin
-                instantiate_ground(design, f"G{ground_count}_COM", (xpos, ypos - 1.0))
-                ground_count += 1
-                angle_COM = -90.0
-
-        elif list_COM[num_COM].name.endswith("_1p"):
-            duplicate = True
+        # Caso en que se duplica en paralelo
+        if split_mode == "p":
+            # Si el resonador actual es SERIE
             if current_COM_type == "series":
                 xpos -= 1.0
-                design.add_wire([PointF(xpos, ypos), PointF(xpos, ypos - y_margin*2)])
-                design.add_wire([PointF(xpos + 1.0, ypos), PointF(xpos + 1.0, ypos - y_margin)])
-                ypos -= y_margin*2
-                angle_COM = 0.0
+                k = 1
+                while k < split_total:
+                    num_COM += 1
+                    advance_y(design, xpos+1.0, ypos, -y_margin)
+                    ypos = advance_y(design, xpos, ypos, -y_margin)
+                    instantiate_COM_in_schematic(design, library_name, list_COM, num_COM, angle_COM, (xpos, ypos))
+                    k += 1
+                ypos = float(initial_ypos)
+                xpos += 1.0
+                xpos = advance_x(design, xpos, ypos, x_margin)
+
+            # Si el resonador actual es SHUNT
             else:
+                instantiate_ground(design, f"G{ground_count}_COM", (xpos, ypos))
+                ground_count += 1
                 ypos += 1.0
-                xpos = advance_x(design, xpos, ypos, x_margin*2)
-                advance_x(design, xpos - x_margin*2, ypos - 1.0, x_margin*2) # Wire inferior
-                angle_COM = -90.0
+                k = 1
+                while k < split_total:
+                    num_COM += 1
+                    advance_x(design, xpos, ypos-1.0, x_margin)
+                    xpos = advance_x(design, xpos, ypos, x_margin)
+                    instantiate_COM_in_schematic(design, library_name, list_COM, num_COM, angle_COM, (xpos, ypos))
+                    k += 1
+                xpos = advance_x(design, xpos, ypos, x_margin)
 
-        if duplicate:
-            num_COM += 1
-            instantiate_COM_in_schematic(design, library_name, list_COM, num_COM, angle_COM, (xpos, ypos))
+        # Caso en que se duplica en serie
+        elif split_mode == "s":
+            # Si el resonador actual es SERIE
+            if current_COM_type == "series":
+                k = 1
+                while k < split_total:
+                    num_COM += 1
+                    xpos = advance_x(design, xpos, ypos, x_margin)
+                    instantiate_COM_in_schematic(design, library_name, list_COM, num_COM, angle_COM, (xpos, ypos))
+                    xpos += 1.0
+                    k += 1
+                xpos = advance_x(design, xpos, ypos, x_margin)
 
-        xpos += 1.0 if current_COM_type == "series" and list_COM[num_COM-1].name.endswith(("_1p", "_1s")) else 0.0
-        ypos += 1.0 if (current_COM_type == "series" and list_COM[num_COM-1].name.endswith("_1p")) or (current_COM_type == "shunt" and list_COM[num_COM-1].name.endswith("_1s")) else 0.0
+            # Si el resonador actual es SHUNT
+            else:
+                k = 1
+                while k < split_total:
+                    num_COM += 1
+                    ypos = advance_y(design, xpos, ypos, -y_margin)
+                    instantiate_COM_in_schematic(design, library_name, list_COM, num_COM, angle_COM, (xpos, ypos))
+                    ypos -= 1.0
+                    k += 1
+                instantiate_ground(design, f"G{ground_count}_COM", (xpos, ypos))
+                ground_count += 1
+                ypos = float(initial_ypos)
+                xpos = advance_x(design, xpos, ypos, x_margin)
 
-        ypos = initial_ypos
-        xpos = advance_x(design, xpos, ypos, x_margin)
+        # Caso en que no se duplica        
+        else:
+            # Si el resonador actual es SERIE
+            if current_COM_type == "series":
+                xpos = advance_x(design, xpos, ypos, x_margin)
+
+            # Si el resonador actual es SHUNT
+            else:
+                instantiate_ground(design, f"G{ground_count}_COM", (xpos, ypos))
+                ground_count += 1
+                ypos += 1.0
+                xpos = advance_x(design, xpos, ypos, x_margin)
+
+        current_COM_type = "series" if current_COM_type == "shunt" else "shunt"
         num_COM += 1
-        current_COM_type = "shunt" if current_COM_type == "series" else "series"
 
     # OUTPUT MATCHING NETWORK (Renombrados con _COM)
     xpos = advance_x(design, xpos, ypos, x_margin)

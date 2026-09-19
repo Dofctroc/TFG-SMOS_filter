@@ -481,9 +481,7 @@ def duplicar_resonadores_COM(list_BVD: list[BVD], list_COM: list[COM], frequency
                 sub_com.name = f"{com_base.name}_split_s_{i}of{factor_N}"
                 
                 # Opcional: Metadatos explícitos
-                sub_com.split_info.mode = "s"
-                sub_com.split_info.index = i
-                sub_com.split_info.total = factor_N
+                sub_com.split_info = Split_info(mode="s", index=i, total=factor_N)
 
                 list_COM_duplicados.append(sub_com)
 
@@ -512,9 +510,7 @@ def duplicar_resonadores_COM(list_BVD: list[BVD], list_COM: list[COM], frequency
                 sub_com.name = f"{com_base.name}_split_p_{i}of{factor_N}"
                 
                 # Opcional: Metadatos explícitos
-                sub_com.split_info.mode = "p"
-                sub_com.split_info.index = i
-                sub_com.split_info.total = factor_N
+                sub_com.split_info = Split_info(mode="p", index=i, total=factor_N)
 
                 list_COM_duplicados.append(sub_com)
 
@@ -522,9 +518,7 @@ def duplicar_resonadores_COM(list_BVD: list[BVD], list_COM: list[COM], frequency
         # CASO 3: Dentro del rango -> Mantener tal cual
         # -----------------------------------------------------------------
         else:
-            com_base.split_info.mode = None
-            com_base.split_info.index = 1
-            com_base.split_info.total = 1
+            com_base.split_info = Split_info(mode=None, index=1, total=1)
             list_COM_duplicados.append(com_base)
 
     return list_COM_duplicados
